@@ -12,7 +12,11 @@ from pydantic import BaseModel, Field
 
 from humanoid_training.catalog import load_robot_catalog
 from humanoid_training.datasets import inspect_lerobot_dataset
-from humanoid_training.demos import dataset_cache_dir, record_scripted_pick_place
+from humanoid_training.demos import (
+    dataset_cache_dir,
+    record_object_trajectories,
+    record_scripted_pick_place,
+)
 from humanoid_training.errors import RecipeError, SpecError, repo_root
 from humanoid_training.recipes import default_user_spec, expand_spec, list_recipes, load_recipe
 from humanoid_training.runner import default_runs_dir, load_manifest, new_run_id, run_job, _write_manifest
@@ -34,6 +38,7 @@ class RecordBody(BaseModel):
     dest: str = ""
     episodes: int = 4
     include_failure: bool = True
+    trajectories: list[Any] = Field(default_factory=list)
 
 
 def _public_spec(spec: dict[str, Any]) -> dict[str, Any]:
@@ -70,18 +75,21 @@ def api_inspect_dataset(body: DatasetBody) -> dict[str, Any]:
 def api_record_dataset(body: RecordBody) -> dict[str, Any]:
     try:
         expanded = expand_spec(body.spec)
+        dest = Path(body.dest).expanduser() if body.dest else dataset_cache_dir(str(expanded.get("name") or "dataset"))
+        if not dest.is_absolute():
+            dest = Path.cwd() / dest
+        if body.trajectories:
+            result = record_object_trajectories(expanded, dest, body.trajectories)
+        else:
+            result = record_scripted_pick_place(
+                expanded,
+                dest,
+                episodes=max(1, min(int(body.episodes), 12)),
+                include_failure=bool(body.include_failure),
+                seed=int((expanded.get("train") or {}).get("seed") or 1),
+            )
     except (SpecError, RecipeError) as err:
         raise HTTPException(status_code=400, detail=str(err)) from err
-    dest = Path(body.dest).expanduser() if body.dest else dataset_cache_dir(str(expanded.get("name") or "dataset"))
-    if not dest.is_absolute():
-        dest = Path.cwd() / dest
-    result = record_scripted_pick_place(
-        expanded,
-        dest,
-        episodes=max(1, min(int(body.episodes), 12)),
-        include_failure=bool(body.include_failure),
-        seed=int((expanded.get("train") or {}).get("seed") or 1),
-    )
     result["dest"] = str(dest)
     return result
 
@@ -169,6 +177,7 @@ def run_events(run_id: str):
                 "metrics": man.get("metrics") or {},
                 "error": man.get("error"),
                 "artifacts": man.get("artifacts") or {},
+                "notes": man.get("notes") or [],
             }
             yield f"data: {json.dumps(payload)}\n\n"
             if man.get("status") not in {None, "queued", "running"}:

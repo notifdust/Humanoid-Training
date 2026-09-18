@@ -314,6 +314,15 @@ video {
   color: var(--accent-ink);
 }
 
+.canvas-wrap.recording {
+  outline: 2px solid var(--accent);
+}
+
+.token.recording-target {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
 textarea.spec {
   width: 100%;
   min-height: 280px;

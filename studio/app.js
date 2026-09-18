@@ -13,6 +13,9 @@ const state = {
   dataset: null,
   datasetUri: "",
   keepEpisodes: [],
+  recording: false,
+  pendingTrajectories: [],
+  lastDemoMessage: "",
 };
 
 const main = document.getElementById("main");
@@ -155,15 +158,16 @@ function sceneHTML(spec) {
     `;
   }
   const tokens = objects
-    .map(
-      (obj) =>
-        `<button type="button" class="token" data-id="${escapeHtml(obj.id)}" style="${tokenStyle(obj)}">${escapeHtml(obj.id)}</button>`
-    )
+    .map((obj) => {
+      const target = recordTargetId();
+      const rec = state.recording && obj.id === target ? " recording-target" : "";
+      return `<button type="button" class="token${rec}" data-id="${escapeHtml(obj.id)}" style="${tokenStyle(obj)}">${escapeHtml(obj.id)}</button>`;
+    })
     .join("");
   return `
     <h2>Scene</h2>
     <p class="lede">Top-down counter. G1 stands at the near edge. Drag objects — that writes <code>scene.objects</code>.</p>
-    <div class="canvas-wrap" id="scene-canvas">
+    <div class="canvas-wrap${state.recording ? " recording" : ""}" id="scene-canvas">
       <span class="canvas-label">${escapeHtml(spec.scene.template || "scene")}</span>
       <span class="robot-mark">G1</span>
       ${tokens}
@@ -177,7 +181,18 @@ function renderRecipe() {
   const hasScene = Boolean(spec?.scene?.objects?.length);
   const trainLabel = r.imitate ? "Train from demos" : r.scene_preview ? "Preview scene" : "Train this recipe";
   const trainHint = r.imitate
-    ? `<p class="lede">Needs a LeRobot dataset. If you have not recorded one, Train writes scripted mustard→bowl demos first. That is object-space BC, not G1 grasping.</p>`
+    ? `<p class="lede">Needs a LeRobot dataset. Record by dragging mustard into the bowl, or let Train write scripted takes. Object-space BC, not G1 grasping.</p>`
+    : "";
+  const nTakes = state.pendingTrajectories.length;
+  const demoControls = r.imitate && hasScene
+    ? `<div class="actions" style="margin-top:12px">
+          <button class="ghost" id="toggle-record">${state.recording ? "Stop recording" : "Record a demo"}</button>
+          <button class="primary" id="save-demos" ${nTakes ? "" : "disabled"}>Save ${nTakes} demo${nTakes === 1 ? "" : "s"}</button>
+          ${nTakes ? `<button class="ghost" id="undo-demo">Undo last</button>` : ""}
+        </div>
+        <p class="lede">${state.recording ? "Drag mustard into the bowl. Each pointer-up is one take." : "Record a take on the canvas, then Save. Scripted demos still live in Data."}</p>
+        <p class="status" id="demo-status">${escapeHtml(state.lastDemoMessage || (nTakes ? `${nTakes} take(s) in memory` : ""))}</p>
+        <p class="error" id="demo-error"></p>`
     : "";
   main.innerHTML = `
     ${stepsHTML(hasScene ? "scene" : "train")}
@@ -189,6 +204,7 @@ function renderRecipe() {
         <p class="lede">${r.language || ""}</p>
         ${sceneHTML(spec)}
         ${trainHint}
+        ${demoControls}
         <div class="actions" style="margin-top:16px">
           <button class="primary" id="train">${trainLabel}</button>
           <button class="ghost" id="back">Back to tasks</button>
@@ -213,6 +229,23 @@ function renderRecipe() {
   document.getElementById("train").addEventListener("click", trainCurrent);
   document.getElementById("back").addEventListener("click", () => switchView("tasks"));
   document.getElementById("apply-spec").addEventListener("click", applySpecEditor);
+  document.getElementById("toggle-record")?.addEventListener("click", () => {
+    state.recording = !state.recording;
+    state.lastDemoMessage = state.recording
+      ? "recording — drag mustard into the bowl"
+      : state.pendingTrajectories.length
+        ? `${state.pendingTrajectories.length} take(s) in memory`
+        : "";
+    renderRecipe();
+  });
+  document.getElementById("save-demos")?.addEventListener("click", saveCanvasDemos);
+  document.getElementById("undo-demo")?.addEventListener("click", () => {
+    state.pendingTrajectories.pop();
+    state.lastDemoMessage = state.pendingTrajectories.length
+      ? `${state.pendingTrajectories.length} take(s) in memory`
+      : "";
+    renderRecipe();
+  });
   bindSceneDrag();
 }
 
@@ -228,6 +261,25 @@ async function applySpecEditor() {
   }
 }
 
+function recordTargetId() {
+  return state.expanded?.spec?.task?.success?.object || "mustard";
+}
+
+function canvasPoint(canvas, event) {
+  const box = canvas.getBoundingClientRect();
+  const nx = (event.clientX - box.left) / box.width;
+  const ny = (event.clientY - box.top) / box.height;
+  return {
+    y: Math.max(-0.28, Math.min(0.28, nx * 0.64 - 0.32)),
+    x: Math.max(-0.36, Math.min(0.36, 0.42 - ny * 0.84)),
+  };
+}
+
+function applyTokenStyle(token, obj) {
+  token.style.left = `${((obj.y + 0.32) / 0.64) * 100}%`;
+  token.style.top = `${((0.42 - obj.x) / 0.84) * 100}%`;
+}
+
 function bindSceneDrag() {
   const canvas = document.getElementById("scene-canvas");
   if (!canvas || !state.starter?.scene?.objects) return;
@@ -235,20 +287,35 @@ function bindSceneDrag() {
     token.addEventListener("pointerdown", (event) => {
       event.preventDefault();
       const id = token.dataset.id;
+      const recordingMustard = state.recording && id === recordTargetId();
+      const path = [];
+      if (recordingMustard) path.push(canvasPoint(canvas, event));
       const move = (ev) => {
-        const box = canvas.getBoundingClientRect();
-        const nx = (ev.clientX - box.left) / box.width;
-        const ny = (ev.clientY - box.top) / box.height;
+        const pt = canvasPoint(canvas, ev);
         const obj = state.starter.scene.objects.find((item) => item.id === id);
         if (!obj) return;
-        obj.y = Math.max(-0.28, Math.min(0.28, nx * 0.64 - 0.32));
-        obj.x = Math.max(-0.36, Math.min(0.36, 0.42 - ny * 0.84));
-        token.style.left = `${((obj.y + 0.32) / 0.64) * 100}%`;
-        token.style.top = `${((0.42 - obj.x) / 0.84) * 100}%`;
+        if (recordingMustard) {
+          path.push(pt);
+          applyTokenStyle(token, pt);
+          return;
+        }
+        obj.y = pt.y;
+        obj.x = pt.x;
+        applyTokenStyle(token, obj);
       };
       const up = () => {
         window.removeEventListener("pointermove", move);
         window.removeEventListener("pointerup", up);
+        if (recordingMustard) {
+          if (path.length >= 2) {
+            state.pendingTrajectories.push(path);
+            state.lastDemoMessage = `${state.pendingTrajectories.length} take(s) in memory`;
+          }
+          const start = state.starter.scene.objects.find((item) => item.id === id);
+          if (start) applyTokenStyle(token, start);
+          renderRecipe();
+          return;
+        }
         const editor = document.getElementById("spec-json");
         if (editor) editor.value = JSON.stringify(state.starter, null, 2);
       };
@@ -256,6 +323,41 @@ function bindSceneDrag() {
       window.addEventListener("pointerup", up);
     });
   });
+}
+
+async function saveCanvasDemos() {
+  const err = document.getElementById("demo-error");
+  const status = document.getElementById("demo-status");
+  if (!state.pendingTrajectories.length) return;
+  if (status) status.textContent = "saving…";
+  if (err) err.textContent = "";
+  try {
+    const result = await api("/api/datasets/record", {
+      method: "POST",
+      body: JSON.stringify({
+        spec: state.starter,
+        trajectories: state.pendingTrajectories,
+      }),
+    });
+    if (!result.ok) throw new Error(result.error || "record failed");
+    state.starter.data = state.starter.data || {};
+    state.starter.data.datasets = [result.path || result.dest];
+    state.datasetUri = result.path || result.dest;
+    state.dataset = result;
+    state.keepEpisodes = (result.episodes || [])
+      .filter((ep) => ep.success !== false)
+      .map((ep) => ep.episode_index);
+    if (state.dataset && state.dataset.ok) {
+      state.starter.data.keep_episodes = state.keepEpisodes;
+    }
+    state.pendingTrajectories = [];
+    state.recording = false;
+    state.lastDemoMessage = `wrote ${result.total_episodes} canvas demos → ${result.path || result.dest}`;
+    renderRecipe();
+  } catch (error) {
+    if (err) err.textContent = error.message;
+    if (status) status.textContent = "";
+  }
 }
 
 async function trainCurrent() {
@@ -275,7 +377,7 @@ async function trainCurrent() {
       state.starter = detail.starter_spec;
       state.selected = detail.recipe;
     }
-    if (state.keepEpisodes.length) {
+    if (state.dataset && state.dataset.ok) {
       state.starter.data = state.starter.data || {};
       state.starter.data.keep_episodes = state.keepEpisodes;
     }
@@ -335,7 +437,8 @@ function renderData() {
     <p class="lede">
       Demonstrations live in the LeRobot dataset format — we do not invent one.
       Record scripted mustard→bowl demos here, drop bad takes, then train.
-      Gamepad teleop is still later; these demos are object-space, not G1 grasping.
+      Or record by dragging mustard on the task scene. Gamepad teleop is still later;
+      these demos are object-space, not G1 grasping.
     </p>
     <section>
       <h2>On this job</h2>
@@ -391,7 +494,7 @@ async function recordDemos() {
     state.keepEpisodes = (result.episodes || [])
       .filter((ep) => ep.success !== false)
       .map((ep) => ep.episode_index);
-    if (state.keepEpisodes.length) {
+    if (state.dataset && state.dataset.ok) {
       state.starter.data.keep_episodes = state.keepEpisodes;
     }
     status.textContent = `wrote ${result.total_episodes} episodes`;
@@ -405,12 +508,16 @@ async function recordDemos() {
 async function inspectDataset() {
   const uri = document.getElementById("dataset-uri").value.trim();
   state.datasetUri = uri;
-  state.dataset = await api("/api/datasets/inspect", {
-    method: "POST",
-    body: JSON.stringify({ uri }),
-  });
-  if (state.dataset.ok) {
-    state.keepEpisodes = (state.dataset.episodes || []).map((ep) => ep.episode_index);
+  try {
+    state.dataset = await api("/api/datasets/inspect", {
+      method: "POST",
+      body: JSON.stringify({ uri }),
+    });
+    if (state.dataset.ok) {
+      state.keepEpisodes = (state.dataset.episodes || []).map((ep) => ep.episode_index);
+    }
+  } catch (error) {
+    state.dataset = { ok: false, error: error.message };
   }
   renderData();
 }
@@ -505,6 +612,7 @@ async function showRun(runId) {
       run.metrics = msg.metrics || run.metrics;
       run.error = msg.error;
       run.artifacts = msg.artifacts || run.artifacts;
+      if (msg.notes) run.notes = msg.notes;
       const logEl = document.getElementById("run-log");
       if (logEl) {
         logEl.textContent = logText;

@@ -41,6 +41,9 @@ def main(argv: list[str] | None = None) -> int:
     p_serve.add_argument("--host", default="127.0.0.1")
     p_serve.add_argument("--port", type=int, default=8000)
 
+    p_fetch = sub.add_parser("fetch-assets", help="Download MuJoCo Menagerie robots into the cache")
+    p_fetch.add_argument("robot", nargs="?", default="unitree_g1")
+
     p_record = sub.add_parser("record", help="Write a LeRobot dataset of scripted demos")
     p_record.add_argument("spec")
     p_record.add_argument("--out", type=Path, required=True, help="Dataset directory")
