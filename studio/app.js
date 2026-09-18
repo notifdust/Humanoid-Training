@@ -259,16 +259,21 @@ function bindSceneDrag() {
 }
 
 async function trainCurrent() {
-  const btn = document.getElementById("train");
-  const status = document.getElementById("train-status");
-  const err = document.getElementById("train-error");
-  btn.disabled = true;
-  status.textContent = "queued…";
-  err.textContent = "";
+  const btn = document.getElementById("train") || document.getElementById("train-from-data");
+  const status = document.getElementById("train-status") || document.getElementById("record-status");
+  const err = document.getElementById("train-error") || document.getElementById("record-error");
+  if (btn) btn.disabled = true;
+  if (status) status.textContent = "queued…";
+  if (err) err.textContent = "";
   try {
     const editor = document.getElementById("spec-json");
     if (editor) {
       state.starter = JSON.parse(editor.value);
+    }
+    if (!state.starter) {
+      const detail = await api("/api/recipes/pick-and-place");
+      state.starter = detail.starter_spec;
+      state.selected = detail.recipe;
     }
     if (state.keepEpisodes.length) {
       state.starter.data = state.starter.data || {};
@@ -281,9 +286,9 @@ async function trainCurrent() {
     state.view = "run";
     await showRun(run.run_id);
   } catch (error) {
-    err.textContent = error.message;
-    btn.disabled = false;
-    status.textContent = "";
+    if (err) err.textContent = error.message;
+    if (btn) btn.disabled = false;
+    if (status) status.textContent = "";
   }
 }
 
