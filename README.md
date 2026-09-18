@@ -12,17 +12,33 @@ Think Canva sitting on top of the print shop, not a new printing press.
 
 ## Read this first
 
-- **[Product vision](docs/VISION.md)** — what already exists, why the
-  "drag-and-drop RL" version of this idea fails, and the wedge we should
-  take (humanoid recipes, eval videos, compile-to-engine).
-- **[Architecture](docs/ARCHITECTURE.md)** — job spec as source of truth,
-  adapters for Playground / mjlab / Isaac Lab / LeRobot, runners, safety.
+- **[Roadmap](docs/ROADMAP.md)** — phases, exit tests, what is live now
+- **[Product vision](docs/VISION.md)** — landscape and why we compile instead of replacing engines
+- **[Architecture](docs/ARCHITECTURE.md)** — job spec, adapters, runners
 
-## Current status
+## What works today (Phase 0 + studio shell)
 
-Vision and architecture only. No studio app yet. The first code that
-should land is a frozen job-spec schema, one humanoid recipe, and one
-adapter that can train and emit an eval video.
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+
+ht recipes
+ht train spec/examples/cartpole-balance.json
+# writes runs/<id>/eval.mp4 and manifest.json
+
+ht train spec/examples/g1-walk.json --compile-only
+# writes Playground train.sh + Isaac OSMO YAML; does not need a GPU
+
+ht serve --host 0.0.0.0 --port 8000
+# open http://127.0.0.1:8000 — pick a recipe, click Train, watch the eval video
+```
+
+`cartpole-balance` is the CPU smoke test that proves the loop:
+**spec → adapter → train → eval video**. `g1-walk` compiles to
+`G1JoystickFlatTerrain` (MuJoCo Playground) and
+`Isaac-Velocity-Flat-G1-v0` (Isaac Lab). Live G1 training waits on a GPU
+box with those engines installed.
 
 ## Non-goals (for now)
 
@@ -30,6 +46,12 @@ adapter that can train and emit an eval video.
 - A new policy architecture or dataset format
 - Competing with LeLab on SO-ARM101 unboxing
 - Fleet operations (use Foxglove / Formant later)
+
+## Tests
+
+```bash
+pytest
+```
 
 ## License
 

@@ -1,0 +1,38 @@
+id: g1-walk
+version: 0.1.0
+phase: 0
+runnable: false
+title: G1 walk (flat)
+summary: Unitree G1 velocity tracking on flat terrain. Compiles to Playground and Isaac Lab.
+language: Walk forward on flat ground without falling.
+robot: unitree-g1-29dof
+success:
+  type: upright-duration
+  hold_s: 8
+train:
+  method: rl
+  policy: ppo
+  steps: 100000
+  seed: 1
+eval:
+  episodes: 10
+  record_video: true
+backend:
+  prefer: [playground, isaaclab]
+  compute: local-docker
+adapters:
+  playground:
+    env_name: G1JoystickFlatTerrain
+    train_command:
+      - train-jax-ppo
+      - --env_name
+      - G1JoystickFlatTerrain
+  isaaclab:
+    task: Isaac-Velocity-Flat-G1-v0
+    image: nvcr.io/nvidia/isaac-lab:2.2.0
+  gymnasium:
+    unsupported: "G1 locomotion is not a Gymnasium environment. Use playground or isaaclab."
+gold:
+  notes: |
+    Needs an NVIDIA GPU and either MuJoCo Playground (`pip install playground`)
+    or Isaac Lab. Phase 0 writes the engine payload; live training is Phase 1/3.

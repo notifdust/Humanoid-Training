@@ -1,0 +1,33 @@
+id: pick-and-place
+version: 0.1.0
+phase: 2
+runnable: false
+title: Pick and place
+summary: Put an object in a container. Needs demonstration data (Phase 2) and a manipulation engine.
+language: Pick up the object and put it in the container.
+robot: unitree-g1-29dof
+success:
+  type: object-in-container
+  hold_s: 0.5
+train:
+  method: imitation
+  policy: lerobot.act
+  steps: 80000
+  seed: 1
+eval:
+  episodes: 20
+  record_video: true
+backend:
+  prefer: [lerobot, mjlab, isaaclab]
+  compute: local-docker
+adapters:
+  gymnasium:
+    unsupported: "Pick-and-place needs LeRobot datasets and a manipulation engine (Phase 2)."
+  playground:
+    unsupported: "Pick-and-place from demos is Phase 2. Use a locomotion recipe or wait for the LeRobot adapter."
+  isaaclab:
+    unsupported: "Isaac Lab manipulation launch is Phase 3. Spec is kept so the mustard example still expands."
+gold:
+  notes: |
+    This package exists so spec/examples/g1-mustard-in-bowl.json expands.
+    It will not train until the LeRobot adapter lands.

@@ -1,0 +1,19 @@
+{
+  "spec_version": "0.1.0",
+  "name": "cartpole-balance",
+  "robot": {
+    "id": "cartpole",
+    "source": "catalog"
+  },
+  "task": {
+    "recipe": "cartpole-balance"
+  },
+  "train": {
+    "method": "rl",
+    "seed": 1
+  },
+  "backend": {
+    "prefer": ["gymnasium"],
+    "compute": "local"
+  }
+}
