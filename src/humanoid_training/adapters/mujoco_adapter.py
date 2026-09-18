@@ -18,8 +18,8 @@ from humanoid_training.compose import (
     table_layout,
 )
 from humanoid_training.datasets import load_lerobot_arrays, resolve_local_dataset
-from humanoid_training.demos import record_scripted_pick_place, scene_object
-from humanoid_training.errors import AdapterUnavailable
+from humanoid_training.demos import record_scripted_pick_place, require_pick_objects
+from humanoid_training.errors import AdapterUnavailable, RecipeError
 from humanoid_training.train_bc import fit_linear_bc, predict_linear_bc, save_bc
 from humanoid_training.video import write_eval_video
 
@@ -161,6 +161,7 @@ def _launch_hold(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: Any) -
         notes = [f"mean_pelvis_z={mean_z:.3f}", f"min_z={min_z}", f"hold_s={hold_s}"]
         if placement:
             notes.append(f"objects_placed={sum(r['ok'] for r in placement)}/{len(placement)}")
+    notes.extend(_video_notes(frames))
 
     return EvalResult(
         success_rate=success_rate,
@@ -185,14 +186,17 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
         n_ep = int((spec.get("data") or {}).get("min_episodes") or 4)
         n_ep = max(2, min(n_ep, 8))
         log("no local LeRobot dataset; recording scripted object-space demos")
-        meta = record_scripted_pick_place(
-            spec,
-            data_dir,
-            episodes=n_ep,
-            horizon=48,
-            include_failure=False,
-            seed=int((spec.get("train") or {}).get("seed") or 1),
-        )
+        try:
+            meta = record_scripted_pick_place(
+                spec,
+                data_dir,
+                episodes=n_ep,
+                horizon=48,
+                include_failure=False,
+                seed=int((spec.get("train") or {}).get("seed") or 1),
+            )
+        except RecipeError as err:
+            raise AdapterUnavailable(str(err)) from err
         log(f"wrote {meta.get('total_episodes')} episodes / {meta.get('total_frames')} frames")
 
     keep = (spec.get("data") or {}).get("keep_episodes")
@@ -204,7 +208,10 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
 
     success_cfg = (spec.get("task") or {}).get("success") or {}
     obj_id = str(success_cfg.get("object") or "mustard")
-    container_id = str(success_cfg.get("container") or "bowl")
+    try:
+        mustard, bowl = require_pick_objects(spec)
+    except RecipeError as err:
+        raise AdapterUnavailable(str(err)) from err
     scene = spec.get("scene") or {}
     xml_path = run_dir / "composed_scene.xml"
     log(f"composing mocap object '{obj_id}' into {mjcf}")
@@ -213,8 +220,6 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
     _reset(mujoco, model, data, int(cfg.get("keyframe", 0)), log)
 
     layout = table_layout(scene)
-    mustard = scene_object(spec, obj_id)
-    bowl = scene_object(spec, container_id)
     start = np.array(object_world_pos(mustard, layout), dtype=np.float64)
     bowl_xy = np.array(object_world_pos(bowl, layout)[:2], dtype=np.float64)
     mustard_id = _body_id(mujoco, model, obj_id)
@@ -279,6 +284,7 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
             f"frames={len(obs)} keep_episodes={keep if keep is not None else 'all'}",
             f"mustard_bowl_dist={dist:.3f}",
             f"mean_pelvis_z={mean_z:.3f}",
+            *_video_notes(frames),
         ],
     )
 
@@ -311,17 +317,13 @@ def _simulate(
     success_cfg = (spec.get("task") or {}).get("success") or {}
     min_z = float(success_cfg.get("min_z", 0.5))
     renderer = None
-    frames: list[np.ndarray] = []
     camera: Any = -1
     if model.ncam > 0:
         cam_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "ht_eval")
         if cam_id >= 0:
             camera = cam_id
     if record_video:
-        try:
-            renderer = mujoco.Renderer(model, 360, 640)
-        except Exception as err:
-            log(f"renderer unavailable ({err}); physics-only eval")
+        renderer = _make_renderer(mujoco, model, log)
 
     pelvis = _body_id(mujoco, model, "pelvis")
     if pelvis < 0:
@@ -332,6 +334,7 @@ def _simulate(
         for obj in objects
         if obj.get("id")
     }
+    frames: list[np.ndarray] = []
     upright: list[bool] = []
     zs: list[float] = []
     for step in range(horizon):
@@ -352,6 +355,28 @@ def _simulate(
         if step in {0, horizon // 2, horizon - 1}:
             log(f"step {step}/{horizon} pelvis_z={z:.3f}")
     return frames, zs, upright, object_ids
+
+
+def _make_renderer(mujoco: Any, model: Any, log: LogFn) -> Any:
+    """GLFW aborts the process on a headless runner. Never construct it without a display."""
+    if os.environ.get("HT_NO_RENDER") == "1":
+        log("HT_NO_RENDER=1; physics-only eval")
+        return None
+    gl = os.environ.get("MUJOCO_GL", "glfw").lower()
+    if gl in {"glfw", ""} and not os.environ.get("DISPLAY"):
+        log("no DISPLAY for MuJoCo GLFW; physics-only eval")
+        return None
+    try:
+        return mujoco.Renderer(model, 360, 640)
+    except Exception as err:
+        log(f"renderer unavailable ({err}); physics-only eval")
+        return None
+
+
+def _video_notes(frames: list[np.ndarray]) -> list[str]:
+    if frames:
+        return []
+    return ["no eval.mp4 (headless / HT_NO_RENDER); physics success still counted"]
 
 
 def _body_id(mujoco: Any, model: Any, name: str) -> int:

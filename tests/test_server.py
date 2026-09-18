@@ -54,6 +54,59 @@ def test_record_dataset_api(tmp_path: Path, monkeypatch) -> None:
     assert (Path(data["path"]) / "meta" / "info.json").is_file()
 
 
+def test_record_canvas_trajectories_api(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HT_CACHE", str(tmp_path / "cache"))
+    client = TestClient(app)
+    spec = {
+        "spec_version": "0.1.0",
+        "name": "pick-and-place",
+        "robot": {"id": "unitree-g1-29dof", "source": "catalog"},
+        "task": {"recipe": "pick-and-place"},
+        "train": {"method": "imitation"},
+        "scene": {
+            "template": "kitchen-counter-v1",
+            "objects": [
+                {"id": "mustard", "asset": "ycb-mustard", "x": -0.18, "y": 0.04},
+                {"id": "bowl", "asset": "bowl-white", "x": 0.16, "y": -0.02},
+            ],
+        },
+    }
+    mustard = spec["scene"]["objects"][0]
+    bowl = spec["scene"]["objects"][1]
+    traj = [
+        {
+            "x": mustard["x"] + (t / 11) * (bowl["x"] - mustard["x"]),
+            "y": mustard["y"] + (t / 11) * (bowl["y"] - mustard["y"]),
+        }
+        for t in range(12)
+    ]
+    body = client.post(
+        "/api/datasets/record",
+        json={"spec": spec, "trajectories": [traj]},
+    )
+    assert body.status_code == 200, body.text
+    data = body.json()
+    assert data["ok"] is True
+    assert data["total_episodes"] == 1
+    assert data["episodes"][0]["success"] is True
+
+
+def test_record_without_objects_is_400(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HT_CACHE", str(tmp_path / "cache"))
+    client = TestClient(app)
+    spec = {
+        "spec_version": "0.1.0",
+        "name": "pick-and-place",
+        "robot": {"id": "unitree-g1-29dof", "source": "catalog"},
+        "task": {"recipe": "pick-and-place"},
+        "train": {"method": "imitation"},
+        "scene": {"template": "kitchen-counter-v1", "objects": []},
+    }
+    body = client.post("/api/datasets/record", json={"spec": spec, "episodes": 2})
+    assert body.status_code == 400
+    assert "scene.objects" in body.text
+
+
 def test_api_train_cartpole(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("HT_RUNS_DIR", str(tmp_path))
     # Re-importing not needed: default_runs_dir reads env each call.
@@ -79,6 +132,7 @@ def test_api_train_cartpole(tmp_path: Path, monkeypatch) -> None:
             break
         time.sleep(0.2)
     assert body.get("status") in {"completed", "passed"}, body
+    assert body.get("notes")
     video = client.get(f"/api/runs/{run_id}/artifacts/eval.mp4")
     assert video.status_code == 200
     assert video.headers["content-type"].startswith("video/")

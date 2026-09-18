@@ -37,6 +37,7 @@ ht train spec/examples/g1-walk.json --compile-only
 ht record spec/examples/g1-mustard-in-bowl.json --out .cache/datasets/g1-mustard
 ht train spec/examples/g1-mustard-in-bowl.json
 # scripted LeRobot demos + CPU linear-BC → mustard in bowl eval video
+# Headless CI sets HT_NO_RENDER=1 (GLFW aborts without a display).
 
 ht serve --host 0.0.0.0 --port 8000
 # Robots → Task → Scene → Data → Train. Spec is under Advanced.
@@ -48,7 +49,7 @@ ht serve --host 0.0.0.0 --port 8000
 | `g1-stand` | MuJoCo G1 from Menagerie, hold stand pose, eval video |
 | `g1-walk` | Compile to Playground / mjlab / Isaac Lab (GPU to launch) |
 | `g1-reach` | Compile to mjlab / Isaac Lab |
-| `pick-and-place` | Drag scene; record LeRobot demos; CPU BC puts mustard in the bowl. Not G1 grasping, not ACT. |
+| `pick-and-place` | Drag scene; record scripted or canvas-drag LeRobot demos; CPU BC puts mustard in the bowl. Not G1 grasping, not ACT. |
 
 ## Non-goals (for now)
 
