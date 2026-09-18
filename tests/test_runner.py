@@ -145,12 +145,12 @@ def test_idle_stand_ctrl_raises_both_arms() -> None:
     end = _idle_stand_ctrl(hold, names, 99, 100)
     assert abs(start[0]) < 1e-9
     assert mid[0] < -0.8
+    assert end[0] < -0.8
     assert mid[3] < -0.5
-    assert abs(end[0]) < 0.05
 
 
 def test_named_pose_ctrl_blends_to_reach() -> None:
-    from humanoid_training.adapters.mujoco_adapter import _REACH_POSE, _named_pose_ctrl
+    from humanoid_training.adapters.mujoco_adapter import _PICK_POSE, _named_pose_ctrl
 
     hold = np.array([0.2, -0.2, 0.0, 1.28, 0.0, 0.0])
     names = {
@@ -161,10 +161,10 @@ def test_named_pose_ctrl_blends_to_reach() -> None:
         "waist_yaw_joint": 4,
         "waist_pitch_joint": 5,
     }
-    half = _named_pose_ctrl(hold, names, _REACH_POSE, 0.5)
-    assert abs(half[0] - 0.5 * (0.2 + -0.86)) < 1e-9
-    full = _named_pose_ctrl(hold, names, _REACH_POSE, 1.0)
-    assert abs(full[3] - _REACH_POSE["right_elbow_joint"]) < 1e-9
+    half = _named_pose_ctrl(hold, names, _PICK_POSE, 0.5)
+    assert abs(half[0] - 0.5 * (0.2 + _PICK_POSE["right_shoulder_pitch_joint"])) < 1e-9
+    full = _named_pose_ctrl(hold, names, _PICK_POSE, 1.0)
+    assert abs(full[3] - _PICK_POSE["right_elbow_joint"]) < 1e-9
 
 
 def test_mini_arm_has_no_freejoint_to_pin() -> None:

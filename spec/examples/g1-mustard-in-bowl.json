@@ -8,8 +8,8 @@
   "scene": {
     "template": "kitchen-counter-v1",
     "objects": [
-      { "id": "mustard", "asset": "ycb-mustard", "pose": "on:counter", "x": -0.10, "y": -0.05 },
-      { "id": "bowl", "asset": "bowl-white", "pose": "on:counter", "x": 0.08, "y": 0.04 }
+      { "id": "mustard", "asset": "ycb-mustard", "pose": "on:counter", "x": -0.08, "y": -0.04 },
+      { "id": "bowl", "asset": "bowl-white", "pose": "on:counter", "x": 0.06, "y": 0.02 }
     ]
   },
   "task": {

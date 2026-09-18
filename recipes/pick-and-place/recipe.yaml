@@ -12,13 +12,13 @@ scene:
     - id: mustard
       asset: ycb-mustard
       pose: "on:counter"
-      x: -0.10
-      y: -0.05
+      x: -0.08
+      y: -0.04
     - id: bowl
       asset: bowl-white
       pose: "on:counter"
-      x: 0.08
-      y: 0.04
+      x: 0.06
+      y: 0.02
 success:
   type: object-in-container
   object: mustard
@@ -60,7 +60,7 @@ adapters:
 gold:
   notes: |
     Train writes scripted object-space demos if none are imported, fits
-    linear BC, then G1 reaches (seed pose + right-arm IK), carries the
+    linear BC, then G1 plays pick/lift/place arm poses, carries the
     mocap mustard, and sets it in the bowl. The counter sits in the
-    standing G1 wrist workspace. The pelvis is pinned — this is not a
-    balance policy. Not finger grasping and not ACT.
+    standing G1 wrist workspace. The pelvis is pinned and the arm is
+    qpos-playback — not a torque policy or finger grasping, and not ACT.
