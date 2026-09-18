@@ -68,6 +68,7 @@ class GymnasiumAdapter:
         import os
 
         os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+        os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
         cfg = recipe_adapter_config(spec, self.name)
         env_id = str(cfg.get("env_id") or payload.env_name)
         train_cfg = spec.get("train") or {}

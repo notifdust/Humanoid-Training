@@ -5,8 +5,8 @@ build a simulator. Each phase has an exit test: if that test fails, the
 phase is not done, even if the UI looks finished.
 
 ```
-Phase 0  contract + one real train loop     ← this PR starts here
-Phase 1  studio shell (pick recipe → video)
+Phase 0  contract + one real train loop     ← done
+Phase 1  studio shell (pick recipe → video) ← v1 done; scene canvas later
 Phase 2  demonstration data (LeRobot)
 Phase 3  Isaac Lab as a second engine
 Phase 4  real G1/H1 deploy with safety gates
@@ -14,7 +14,7 @@ Phase 4  real G1/H1 deploy with safety gates
 
 ---
 
-## Phase 0 — Contract (in progress)
+## Phase 0 — Contract (done in this PR)
 
 **Goal.** A versioned job spec, recipe expansion, adapter interface, and a
 local runner that can train *something* and write an eval video plus a
@@ -32,13 +32,13 @@ pytest -q
 | Deliverable | Status |
 |---|---|
 | JSON Schema for the job spec | done |
-| Recipe packages + expansion (user spec overlays defaults) | this PR |
-| Adapter protocol: compile / launch / eval, fail closed | this PR |
-| `gymnasium` adapter: CartPole RL + eval video on CPU | this PR |
-| `playground` adapter: compile G1 walk to `G1JoystickFlatTerrain` | this PR (compile; launch needs GPU + Playground) |
-| `isaaclab` adapter: compile G1 walk to `Isaac-Velocity-Flat-G1-v0` | this PR (compile only) |
-| Local in-process runner + CLI `ht` | this PR |
-| Run manifest (spec hash, adapter, seed, metrics, artifacts) | this PR |
+| Recipe packages + expansion (user spec overlays defaults) | done |
+| Adapter protocol: compile / launch / eval, fail closed | done |
+| `gymnasium` adapter: CartPole RL + eval video on CPU | done |
+| `playground` adapter: compile G1 walk to `G1JoystickFlatTerrain` | done (compile; launch needs GPU + Playground) |
+| `isaaclab` adapter: compile G1 walk to `Isaac-Velocity-Flat-G1-v0` | done (compile only) |
+| Local in-process runner + CLI `ht` | done |
+| Run manifest (spec hash, adapter, seed, metrics, artifacts) | done |
 
 **Not in Phase 0:** Docker GPUs, hosted compute, a 3D scene editor.
 
@@ -55,8 +55,8 @@ click Train, watch eval clips. The UI is a projection of the spec.
 
 | Deliverable | Status |
 |---|---|
-| `ht serve` API: recipes, validate, expand, runs, artifacts | this PR |
-| Studio UI: Recipes, Spec, Train, Runs + video | this PR (v1) |
+| `ht serve` API: recipes, validate, expand, runs, artifacts | done |
+| Studio UI: Recipes, Spec, Train, Runs + video | done (v1) |
 | Live log streaming (SSE) | later |
 | Local Docker runner | later |
 | Scene canvas (object placement) | later |
