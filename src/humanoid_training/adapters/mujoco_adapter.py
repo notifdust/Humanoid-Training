@@ -122,6 +122,9 @@ def _launch_hold(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: Any) -
     ctrl = None if hold is None else np.array(hold, copy=True)
     names = _actuator_name_map(mujoco, model)
     horizon = int(cfg.get("horizon", 180))
+    pin_base = _snapshot_freejoint(model, data)
+    if pin_base is not None:
+        log("pinning floating base so arm idle cannot tip the G1")
 
     def stand_idle(_model: Any, _data: Any, step: int) -> None:
         if ctrl is None:
@@ -140,6 +143,7 @@ def _launch_hold(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: Any) -
         render_every=int(cfg.get("render_every", 3)),
         log=log,
         step_fn=stand_idle if ctrl is not None and names else None,
+        pin_base=pin_base,
     )
     video_path = None
     if frames:
@@ -177,6 +181,7 @@ def _launch_hold(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: Any) -
             f"min_z={min_z}",
             f"hold_s={hold_s}",
             "both arms raise and wave on the stand keyframe — not walking",
+            *(["pelvis pinned (no balance policy)"] if pin_base is not None else []),
         ]
         if placement:
             notes.append(f"objects_placed={sum(r['ok'] for r in placement)}/{len(placement)}")
