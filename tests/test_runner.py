@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
+
 from humanoid_training.recipes import expand_spec
 from humanoid_training.runner import run_job
 from humanoid_training.spec import load_spec
@@ -123,6 +125,101 @@ def test_pick_and_place_imitation_puts_mustard_in_bowl(tmp_path: Path) -> None:
     notes = " ".join(manifest.get("notes") or [])
     assert "linear BC" in notes
     assert "mustard_bowl_dist" in notes
+
+
+def test_idle_stand_ctrl_raises_both_arms() -> None:
+    from humanoid_training.adapters.mujoco_adapter import _idle_stand_ctrl
+
+    hold = np.zeros(7)
+    names = {
+        "right_shoulder_pitch_joint": 0,
+        "right_elbow_joint": 1,
+        "waist_yaw_joint": 2,
+        "left_shoulder_pitch_joint": 3,
+        "left_elbow_joint": 4,
+        "right_shoulder_roll_joint": 5,
+        "right_shoulder_yaw_joint": 6,
+    }
+    start = _idle_stand_ctrl(hold, names, 0, 100)
+    mid = _idle_stand_ctrl(hold, names, 50, 100)
+    end = _idle_stand_ctrl(hold, names, 99, 100)
+    assert abs(start[0]) < 1e-9
+    assert mid[0] < -0.8
+    assert mid[3] < -0.5
+    assert abs(end[0]) < 0.05
+
+
+def test_named_pose_ctrl_blends_to_reach() -> None:
+    from humanoid_training.adapters.mujoco_adapter import _REACH_POSE, _named_pose_ctrl
+
+    hold = np.array([0.2, -0.2, 0.0, 1.28, 0.0, 0.0])
+    names = {
+        "right_shoulder_pitch_joint": 0,
+        "right_shoulder_roll_joint": 1,
+        "right_shoulder_yaw_joint": 2,
+        "right_elbow_joint": 3,
+        "waist_yaw_joint": 4,
+        "waist_pitch_joint": 5,
+    }
+    half = _named_pose_ctrl(hold, names, _REACH_POSE, 0.5)
+    assert abs(half[0] - 0.5 * (0.2 + -0.86)) < 1e-9
+    full = _named_pose_ctrl(hold, names, _REACH_POSE, 1.0)
+    assert abs(full[3] - _REACH_POSE["right_elbow_joint"]) < 1e-9
+
+
+def test_mini_arm_ik_moves_hand() -> None:
+    import mujoco
+
+    from humanoid_training.adapters.mujoco_adapter import (
+        _arm_actuator_ids,
+        _find_hand,
+        _hold_ctrl,
+        _ik_toward,
+    )
+
+    mjcf = Path(__file__).resolve().parent / "fixtures" / "mini_arm.xml"
+    model = mujoco.MjModel.from_xml_path(str(mjcf))
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    hand = _find_hand(mujoco, model)
+    arms = _arm_actuator_ids(mujoco, model)
+    assert hand >= 0
+    assert arms
+    hold = _hold_ctrl(model, data)
+    start = np.array(data.xpos[hand], dtype=float)
+    target = start + np.array([-0.08, 0.0, -0.10])
+    before = float(np.linalg.norm(data.xpos[hand] - target))
+    for _ in range(80):
+        data.ctrl[:] = _ik_toward(mujoco, model, data, hand, target, arms, hold, gain=1.0)
+        mujoco.mj_step(model, data)
+    after = float(np.linalg.norm(data.xpos[hand] - target))
+    assert after < before * 0.6
+
+
+def test_pick_and_place_arm_fixture_moves_joints(tmp_path: Path) -> None:
+    fixture = Path(__file__).resolve().parent / "fixtures" / "mini_arm.xml"
+    spec = {
+        "spec_version": "0.1.0",
+        "name": "pick-and-place",
+        "robot": {"id": "unitree-g1-29dof", "source": "catalog"},
+        "task": {"recipe": "pick-and-place"},
+        "train": {"method": "imitation", "seed": 1},
+        "backend": {"prefer": ["mujoco"], "compute": "local"},
+        "adapters": {
+            "mujoco": {
+                "mjcf": str(fixture),
+                "horizon": 80,
+                "render_every": 5,
+            }
+        },
+        "eval": {"episodes": 1, "record_video": True},
+        "data": {"min_episodes": 3},
+    }
+    manifest = run_job(spec, runs_dir=tmp_path)
+    notes = " ".join(manifest.get("notes") or [])
+    assert "arm_ik=on" in notes, notes
+    log = (Path(manifest["run_dir"]) / "run.log").read_text(encoding="utf-8")
+    assert "right-arm IK" in log
 
 
 def test_imitation_physics_only_without_display(tmp_path: Path, monkeypatch) -> None:

@@ -62,8 +62,8 @@ function recipesForRobot() {
 
 const START_HERE = [
   ["cartpole-balance", "1. Cartpole", "~30s CPU eval video"],
-  ["g1-stand", "2. G1 stand", "downloads Menagerie once"],
-  ["pick-and-place", "3. Pick and place", "drag mustard → bowl, then train"],
+  ["g1-stand", "2. G1 stand", "arms raise on the stand pose"],
+  ["pick-and-place", "3. Pick and place", "G1 reaches and carries mustard"],
 ];
 
 function renderRobots() {

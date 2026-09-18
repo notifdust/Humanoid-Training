@@ -59,10 +59,10 @@ Headless (CI / SSH): `HT_NO_RENDER=1 ht train spec/examples/g1-stand.json` still
 | Recipe | What happens |
 |---|---|
 | `cartpole-balance` | Gymnasium RL on CPU, eval video |
-| `g1-stand` | MuJoCo G1 from Menagerie, hold stand pose, eval video |
+| `g1-stand` | MuJoCo G1 from Menagerie, stand + both-arm idle, eval video |
 | `g1-walk` | Compile to Playground / mjlab / Isaac Lab (GPU to launch) |
 | `g1-reach` | Compile to mjlab / Isaac Lab |
-| `pick-and-place` | Drag scene; record scripted or canvas-drag LeRobot demos; CPU BC puts mustard in the bowl. Not G1 grasping, not ACT. |
+| `pick-and-place` | Drag scene; record demos; G1 reaches, carries mocap mustard into the bowl. Not finger grasping, not ACT. |
 
 ## Non-goals (for now)
 

@@ -1,9 +1,9 @@
 id: g1-stand
-version: 0.1.0
+version: 0.2.0
 phase: 1
 runnable: true
 title: G1 stand
-summary: Hold the Unitree G1 home pose in MuJoCo and record an eval video. CPU preview, not walking RL.
+summary: Hold the Unitree G1 home pose in MuJoCo while both arms raise and the waist yaw-waves, and record an eval video. CPU preview, not walking RL.
 language: Stand upright without falling.
 robot: unitree-g1-29dof
 success:
@@ -13,7 +13,7 @@ success:
 train:
   method: hold
   policy: keyframe-pd
-  steps: 180
+  steps: 1200
   seed: 1
 eval:
   episodes: 1
@@ -25,8 +25,8 @@ adapters:
   mujoco:
     mjcf: menagerie:unitree_g1/scene.xml
     keyframe: 0
-    horizon: 180
-    render_every: 3
+    horizon: 1200
+    render_every: 8
   playground:
     unsupported: "Use mujoco for the CPU stand preview. Playground is for G1 walk on GPU."
   isaaclab:
@@ -35,4 +35,6 @@ adapters:
 gold:
   notes: |
     First run downloads Unitree G1 from MuJoCo Menagerie (~30MB).
-    Success is pelvis height while holding the stand keyframe.
+    Success is pelvis height while holding the stand keyframe. Both arms
+    raise and the waist yaw-waves so the eval is not a still frame. This
+    is not walking RL. G1 actuators need ~2s of physics to show that motion.
