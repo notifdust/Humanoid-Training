@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from humanoid_training.datasets import inspect_lerobot_dataset, load_lerobot_arrays
@@ -93,6 +94,18 @@ def test_record_canvas_trajectory_reaches_bowl(tmp_path: Path) -> None:
     assert meta["ok"] is True
     assert meta["total_episodes"] == 1
     assert meta["episodes"][0]["success"] is True
+    obs, act = load_lerobot_arrays(tmp_path / "canvas")
+    weights = fit_linear_bc(obs, act)
+    from humanoid_training.compose import object_world_pos, primitive_for, table_layout
+
+    layout = table_layout(spec["scene"])
+    start = np.array(object_world_pos(mustard, layout)[:2], dtype=float)
+    goal = np.array(object_world_pos(bowl, layout)[:2], dtype=float)
+    pos = start.copy()
+    for _ in range(80):
+        pos = pos + predict_linear_bc(weights, [pos[0], pos[1], goal[0], goal[1]])
+    radius = float(primitive_for(bowl)["size"][0])
+    assert float(np.hypot(pos[0] - goal[0], pos[1] - goal[1])) <= radius
 
 
 def test_record_empty_trajectories_raises(tmp_path: Path) -> None:
