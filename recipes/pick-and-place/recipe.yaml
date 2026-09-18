@@ -62,4 +62,5 @@ gold:
     Train writes scripted object-space demos if none are imported, fits
     linear BC, then G1 reaches (seed pose + right-arm IK), carries the
     mocap mustard, and sets it in the bowl. The counter sits in the
-    standing G1 wrist workspace. Not finger grasping and not ACT.
+    standing G1 wrist workspace. The pelvis is pinned — this is not a
+    balance policy. Not finger grasping and not ACT.
