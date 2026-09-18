@@ -89,6 +89,7 @@ def test_record_canvas_trajectories_api(tmp_path: Path, monkeypatch) -> None:
     assert data["ok"] is True
     assert data["total_episodes"] == 1
     assert data["episodes"][0]["success"] is True
+    assert "canvas" in data["path"]
 
 
 def test_record_without_objects_is_400(tmp_path: Path, monkeypatch) -> None:

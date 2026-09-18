@@ -75,7 +75,9 @@ def api_inspect_dataset(body: DatasetBody) -> dict[str, Any]:
 def api_record_dataset(body: RecordBody) -> dict[str, Any]:
     try:
         expanded = expand_spec(body.spec)
-        dest = Path(body.dest).expanduser() if body.dest else dataset_cache_dir(str(expanded.get("name") or "dataset"))
+        dest = Path(body.dest).expanduser() if body.dest else dataset_cache_dir(
+            str(expanded.get("name") or "dataset") + ("-canvas" if body.trajectories else "")
+        )
         if not dest.is_absolute():
             dest = Path.cwd() / dest
         if body.trajectories:
