@@ -23,13 +23,12 @@
     }
   },
   "data": {
-    "datasets": ["hf:example/g1-mustard-demos"],
-    "min_episodes": 30
+    "min_episodes": 4
   },
   "train": {
     "method": "imitation",
-    "policy": "lerobot.act",
-    "steps": 80000,
+    "policy": "linear-bc",
+    "steps": 180,
     "seed": 1
   },
   "backend": {

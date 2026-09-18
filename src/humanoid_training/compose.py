@@ -103,6 +103,7 @@ def compose_mjcf(
     mjcf_path: Path,
     scene: dict[str, Any] | None,
     dest_xml: Path | None = None,
+    movable: list[str] | None = None,
 ) -> tuple[Any, str]:
     """Inject a table, catalog objects, and an eval camera into an MJCF via MjSpec."""
     import mujoco
@@ -111,6 +112,7 @@ def compose_mjcf(
     spec = mujoco.MjSpec.from_file(str(mjcf_path))
     layout = table_layout(scene)
     world = spec.worldbody
+    movable_ids = {str(name) for name in (movable or [])}
 
     table = world.add_body(name="ht_table", pos=list(layout["table_pos"]))
     table.add_geom(
@@ -125,7 +127,10 @@ def compose_mjcf(
         name = _safe_name(str(obj.get("id") or "object"))
         prim = primitive_for(obj)
         pos = object_world_pos(obj, layout)
-        body = world.add_body(name=name, pos=list(pos))
+        kwargs: dict[str, Any] = {"name": name, "pos": list(pos)}
+        if name in movable_ids:
+            kwargs["mocap"] = True
+        body = world.add_body(**kwargs)
         geom_type = int(
             getattr(
                 mujoco.mjtGeom,

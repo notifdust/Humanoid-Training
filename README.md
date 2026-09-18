@@ -34,9 +34,12 @@ ht train spec/examples/g1-stand.json
 ht train spec/examples/g1-walk.json --compile-only
 # Playground + mjlab + Isaac Lab payloads; GPU launch later
 
+ht record spec/examples/g1-mustard-in-bowl.json --out .cache/datasets/g1-mustard
+ht train spec/examples/g1-mustard-in-bowl.json
+# scripted LeRobot demos + CPU linear-BC → mustard in bowl eval video
+
 ht serve --host 0.0.0.0 --port 8000
-# Robots → Task → Scene → Train. Spec is under Advanced.
-# Pick-and-place previews the composed MuJoCo kitchen, not a trained pick.
+# Robots → Task → Scene → Data → Train. Spec is under Advanced.
 ```
 
 | Recipe | What happens |
@@ -45,7 +48,7 @@ ht serve --host 0.0.0.0 --port 8000
 | `g1-stand` | MuJoCo G1 from Menagerie, hold stand pose, eval video |
 | `g1-walk` | Compile to Playground / mjlab / Isaac Lab (GPU to launch) |
 | `g1-reach` | Compile to mjlab / Isaac Lab |
-| `pick-and-place` | Drag mustard/bowl; CPU MuJoCo scene preview + `composed_scene.xml`. Imitation is Phase 2. |
+| `pick-and-place` | Drag scene; record LeRobot demos; CPU BC puts mustard in the bowl. Not G1 grasping, not ACT. |
 
 ## Non-goals (for now)
 

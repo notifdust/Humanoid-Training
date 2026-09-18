@@ -31,6 +31,7 @@ async function api(path, options) {
 }
 
 function pill(recipe) {
+  if (recipe.imitate) return `<span class="pill live">imitation</span>`;
   if (recipe.scene_preview) return `<span class="pill live">scene preview</span>`;
   if (recipe.runnable) return `<span class="pill live">runnable</span>`;
   return `<span class="pill blocked">compile / later phase</span>`;
@@ -174,7 +175,10 @@ function renderRecipe() {
   const r = state.selected;
   const spec = state.expanded?.spec || state.starter;
   const hasScene = Boolean(spec?.scene?.objects?.length);
-  const trainLabel = r.scene_preview ? "Preview scene" : "Train this recipe";
+  const trainLabel = r.imitate ? "Train from demos" : r.scene_preview ? "Preview scene" : "Train this recipe";
+  const trainHint = r.imitate
+    ? `<p class="lede">Needs a LeRobot dataset. If you have not recorded one, Train writes scripted mustard→bowl demos first. That is object-space BC, not G1 grasping.</p>`
+    : "";
   main.innerHTML = `
     ${stepsHTML(hasScene ? "scene" : "train")}
     <h1>${r.title}</h1>
@@ -184,6 +188,7 @@ function renderRecipe() {
         <p>${pill(r)} &nbsp; robot <code>${escapeHtml(r.robot)}</code></p>
         <p class="lede">${r.language || ""}</p>
         ${sceneHTML(spec)}
+        ${trainHint}
         <div class="actions" style="margin-top:16px">
           <button class="primary" id="train">${trainLabel}</button>
           <button class="ghost" id="back">Back to tasks</button>
@@ -296,21 +301,26 @@ function renderData() {
       .map((ep) => {
         const idx = ep.episode_index;
         const checked = !state.keepEpisodes.length || state.keepEpisodes.includes(idx);
+        const ok = ep.success === false ? "miss" : ep.success ? "ok" : "—";
         return `<tr>
           <td><input type="checkbox" data-ep="${idx}" ${checked ? "checked" : ""} /></td>
           <td>${idx}</td>
           <td>${ep.length ?? "—"}</td>
           <td>${escapeHtml((ep.tasks || []).join(", ") || "—")}</td>
+          <td>${ok}</td>
         </tr>`;
       })
       .join("");
     body = `
       <p class="status completed">${escapeHtml(inspected.format)} · ${inspected.total_episodes} episodes · fps=${inspected.fps ?? "—"} · robot=${escapeHtml(inspected.robot_type || "—")}</p>
       <table class="data-table">
-        <thead><tr><th>keep</th><th>#</th><th>length</th><th>tasks</th></tr></thead>
+        <thead><tr><th>keep</th><th>#</th><th>length</th><th>tasks</th><th>success</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <p class="lede">Keep/drop writes <code>data.keep_episodes</code> on the current spec. It does not train ACT yet.</p>
+      <p class="lede">Keep/drop writes <code>data.keep_episodes</code>. Train from demos fits linear BC on the kept frames.</p>
+      <div class="actions">
+        <button class="primary" id="train-from-data">Train from demos</button>
+      </div>
     `;
   } else if (inspected && inspected.error) {
     body = `<p class="error">${escapeHtml(inspected.error)}</p>`;
@@ -319,11 +329,17 @@ function renderData() {
     <h1>Data</h1>
     <p class="lede">
       Demonstrations live in the LeRobot dataset format — we do not invent one.
-      Teleop recording is next; today you can inspect a local dataset and drop bad takes.
+      Record scripted mustard→bowl demos here, drop bad takes, then train.
+      Gamepad teleop is still later; these demos are object-space, not G1 grasping.
     </p>
     <section>
       <h2>On this job</h2>
       ${datasetList}
+      <div class="actions" style="margin-top:12px">
+        <button class="primary" id="record-ds">Record scripted demos</button>
+      </div>
+      <p class="status" id="record-status"></p>
+      <p class="error" id="record-error"></p>
     </section>
     <section style="margin-top:24px">
       <h2>Inspect local dataset</h2>
@@ -336,9 +352,49 @@ function renderData() {
     </section>
   `;
   document.getElementById("inspect-ds").addEventListener("click", inspectDataset);
+  document.getElementById("record-ds")?.addEventListener("click", recordDemos);
+  document.getElementById("train-from-data")?.addEventListener("click", trainCurrent);
   main.querySelectorAll("[data-ep]").forEach((box) => {
     box.addEventListener("change", syncKeepEpisodes);
   });
+}
+
+async function recordDemos() {
+  const status = document.getElementById("record-status");
+  const err = document.getElementById("record-error");
+  status.textContent = "recording…";
+  err.textContent = "";
+  try {
+    if (!state.starter) {
+      const detail = await api("/api/recipes/pick-and-place");
+      state.starter = detail.starter_spec;
+      state.selected = detail.recipe;
+    }
+    const result = await api("/api/datasets/record", {
+      method: "POST",
+      body: JSON.stringify({
+        spec: state.starter,
+        episodes: 4,
+        include_failure: true,
+      }),
+    });
+    if (!result.ok) throw new Error(result.error || "record failed");
+    state.starter.data = state.starter.data || {};
+    state.starter.data.datasets = [result.path || result.dest];
+    state.datasetUri = result.path || result.dest;
+    state.dataset = result;
+    state.keepEpisodes = (result.episodes || [])
+      .filter((ep) => ep.success !== false)
+      .map((ep) => ep.episode_index);
+    if (state.keepEpisodes.length) {
+      state.starter.data.keep_episodes = state.keepEpisodes;
+    }
+    status.textContent = `wrote ${result.total_episodes} episodes`;
+    renderData();
+  } catch (error) {
+    err.textContent = error.message;
+    status.textContent = "";
+  }
 }
 
 async function inspectDataset() {
