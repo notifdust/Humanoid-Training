@@ -8,6 +8,8 @@ from humanoid_training.adapters.common import (
 )
 from humanoid_training.adapters.gym_adapter import GymnasiumAdapter
 from humanoid_training.adapters.isaaclab import IsaacLabAdapter
+from humanoid_training.adapters.mjlab import MJLabAdapter
+from humanoid_training.adapters.mujoco_adapter import MujocoAdapter
 from humanoid_training.adapters.playground import PlaygroundAdapter
 from humanoid_training.errors import NoAdapter
 
@@ -15,7 +17,9 @@ from humanoid_training.errors import NoAdapter
 def registry() -> dict[str, Adapter]:
     adapters: list[Adapter] = [
         GymnasiumAdapter(),
+        MujocoAdapter(),
         PlaygroundAdapter(),
+        MJLabAdapter(),
         IsaacLabAdapter(),
     ]
     return {a.name: a for a in adapters}

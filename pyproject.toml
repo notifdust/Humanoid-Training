@@ -13,6 +13,7 @@ dependencies = [
   "PyYAML>=6.0",
   "numpy>=1.26",
   "gymnasium[classic-control]>=0.29",
+  "mujoco>=3.2",
   "fastapi>=0.115",
   "uvicorn[standard]>=0.32",
 ]
@@ -21,6 +22,9 @@ dependencies = [
 dev = [
   "pytest>=8.0",
   "httpx>=0.27",
+]
+mujoco = [
+  "mujoco>=3.2",
 ]
 
 [project.scripts]

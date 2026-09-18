@@ -8,6 +8,7 @@ const state = {
   runs: [],
   run: null,
   poll: null,
+  stream: null,
 };
 
 const main = document.getElementById("main");
@@ -47,8 +48,8 @@ function renderRecipes() {
   main.innerHTML = `
     <h1>Recipes</h1>
     <p class="lede">
-      Pick a known-good task. Beginners train a template. The job spec is
-      the source of truth — Isaac Lab and MuJoCo are engines, not the product.
+      Pick a known-good task. Drag objects when a scene exists. Train writes
+      a job spec and an eval video — MuJoCo and Isaac Lab stay engines.
     </p>
     <div class="grid">${cards}</div>
   `;
@@ -61,13 +62,37 @@ async function openRecipe(id) {
   const detail = await api(`/api/recipes/${id}`);
   state.selected = detail.recipe;
   state.starter = detail.starter_spec;
-  state.expanded = await api("/api/specs/expand", {
-    method: "POST",
-    body: JSON.stringify({ spec: detail.starter_spec }),
-  });
+  await refreshExpanded();
   state.view = "recipe";
   setActive("recipes");
   renderRecipe();
+}
+
+async function refreshExpanded() {
+  state.expanded = await api("/api/specs/expand", {
+    method: "POST",
+    body: JSON.stringify({ spec: state.starter }),
+  });
+}
+
+function sceneHTML(spec) {
+  const objects = spec?.scene?.objects;
+  if (!objects || !objects.length) return "";
+  const tokens = objects
+    .map((obj) => {
+      const left = ((Number(obj.x) || 0) + 0.6) / 1.2 * 100;
+      const top = ((Number(obj.y) || 0) + 0.3) / 0.6 * 100;
+      return `<button type="button" class="token" data-id="${escapeHtml(obj.id)}" style="left:${left}%;top:${top}%">${escapeHtml(obj.id)}</button>`;
+    })
+    .join("");
+  return `
+    <h2>Scene</h2>
+    <p class="lede">Drag objects on the counter. That writes <code>scene.objects</code> in the spec.</p>
+    <div class="canvas-wrap" id="scene-canvas">
+      <span class="canvas-label">${escapeHtml(spec.scene.template || "scene")}</span>
+      ${tokens}
+    </div>
+  `;
 }
 
 function renderRecipe() {
@@ -80,20 +105,70 @@ function renderRecipe() {
       <section>
         <p>${pill(r)} &nbsp; robot <code>${r.robot}</code></p>
         <p class="lede">${r.language || ""}</p>
-        <div class="actions">
+        ${sceneHTML(spec)}
+        <div class="actions" style="margin-top:16px">
           <button class="primary" id="train">Train this recipe</button>
-          <button class="ghost" data-view="recipes">Back to catalog</button>
+          <button class="ghost" data-view="recipes" id="back">Back to catalog</button>
         </div>
         <p class="status" id="train-status"></p>
         <p class="error" id="train-error"></p>
       </section>
       <section>
-        <h2>Expanded spec</h2>
+        <h2>Job spec</h2>
+        <p class="lede">Edit freely. Apply re-expands recipe defaults under your overlay.</p>
+        <textarea class="spec" id="spec-json">${escapeHtml(JSON.stringify(state.starter, null, 2))}</textarea>
+        <div class="actions" style="margin-top:8px">
+          <button class="ghost" id="apply-spec">Apply spec</button>
+        </div>
+        <h2>Expanded</h2>
         <pre>${escapeHtml(JSON.stringify(spec, null, 2))}</pre>
       </section>
     </div>
   `;
   document.getElementById("train").addEventListener("click", trainCurrent);
+  document.getElementById("back").addEventListener("click", () => switchView("recipes"));
+  document.getElementById("apply-spec").addEventListener("click", applySpecEditor);
+  bindSceneDrag();
+}
+
+async function applySpecEditor() {
+  const err = document.getElementById("train-error");
+  try {
+    state.starter = JSON.parse(document.getElementById("spec-json").value);
+    await refreshExpanded();
+    renderRecipe();
+  } catch (error) {
+    err.textContent = error.message;
+  }
+}
+
+function bindSceneDrag() {
+  const canvas = document.getElementById("scene-canvas");
+  if (!canvas || !state.starter?.scene?.objects) return;
+  canvas.querySelectorAll(".token").forEach((token) => {
+    token.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      const id = token.dataset.id;
+      const move = (ev) => {
+        const box = canvas.getBoundingClientRect();
+        const nx = ((ev.clientX - box.left) / box.width) * 1.2 - 0.6;
+        const ny = ((ev.clientY - box.top) / box.height) * 0.6 - 0.3;
+        const obj = state.starter.scene.objects.find((item) => item.id === id);
+        if (!obj) return;
+        obj.x = Math.max(-0.55, Math.min(0.55, nx));
+        obj.y = Math.max(-0.28, Math.min(0.28, ny));
+        token.style.left = `${((obj.x + 0.6) / 1.2) * 100}%`;
+        token.style.top = `${((obj.y + 0.3) / 0.6) * 100}%`;
+      };
+      const up = () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        document.getElementById("spec-json").value = JSON.stringify(state.starter, null, 2);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+    });
+  });
 }
 
 async function trainCurrent() {
@@ -104,10 +179,13 @@ async function trainCurrent() {
   status.textContent = "queued…";
   err.textContent = "";
   try {
-    const spec = state.starter;
+    const editor = document.getElementById("spec-json");
+    if (editor) {
+      state.starter = JSON.parse(editor.value);
+    }
     const run = await api("/api/runs", {
       method: "POST",
-      body: JSON.stringify({ spec }),
+      body: JSON.stringify({ spec: state.starter }),
     });
     state.view = "run";
     await showRun(run.run_id);
@@ -143,43 +221,76 @@ function renderRuns() {
   });
 }
 
+function paintRun(run, logText) {
+  const video = run.artifacts && run.artifacts["eval.mp4"]
+    ? `<video controls autoplay muted src="/api/runs/${run.run_id}/artifacts/eval.mp4?t=${Date.now()}"></video>`
+    : `<p class="lede">No eval video yet.</p>`;
+  const hasMetrics = run.metrics && run.metrics.eval_episodes != null;
+  const metrics = hasMetrics
+    ? `<p class="status ${run.status}">success_rate=${fmt(run.metrics.success_rate)} mean_return=${fmt(run.metrics.mean_return)} passed=${run.metrics.passed ?? "—"}</p>`
+    : "";
+  main.innerHTML = `
+    <h1>Run</h1>
+    <p class="lede">${run.run_id}</p>
+    <p class="status ${run.status}">${run.status}</p>
+    ${metrics}
+    ${run.error ? `<p class="error">${escapeHtml(run.error)}</p>` : ""}
+    <div class="detail">
+      <section>
+        <h2>Eval</h2>
+        ${video}
+      </section>
+      <section>
+        <h2>Log</h2>
+        <pre class="log" id="run-log">${escapeHtml(logText || run.log || "")}</pre>
+      </section>
+    </div>
+  `;
+}
+
 async function showRun(runId) {
   stopPoll();
   state.view = "run";
   setActive("runs");
-  const paint = async () => {
-    const run = await api(`/api/runs/${runId}`);
-    state.run = run;
-    const video = run.artifacts && run.artifacts["eval.mp4"]
-      ? `<video controls src="/api/runs/${run.run_id}/artifacts/eval.mp4"></video>`
-      : `<p class="lede">No eval video yet.</p>`;
-    const hasMetrics = run.metrics && run.metrics.eval_episodes != null;
-    const metrics = hasMetrics
-      ? `<p class="status ${run.status}">success_rate=${fmt(run.metrics.success_rate)} mean_return=${fmt(run.metrics.mean_return)} passed=${run.metrics.passed ?? "—"}</p>`
-      : "";
-    main.innerHTML = `
-      <h1>Run</h1>
-      <p class="lede">${run.run_id}</p>
-      <p class="status ${run.status}">${run.status}</p>
-      ${metrics}
-      ${run.error ? `<p class="error">${escapeHtml(run.error)}</p>` : ""}
-      <div class="detail">
-        <section>
-          <h2>Eval</h2>
-          ${video}
-        </section>
-        <section>
-          <h2>Log</h2>
-          <pre class="log">${escapeHtml(run.log || "")}</pre>
-        </section>
-      </div>
-    `;
-    const live = ["queued", "running"].includes(run.status);
-    if (live) {
-      state.poll = setTimeout(paint, 800);
-    }
-  };
-  await paint();
+  const run = await api(`/api/runs/${runId}`);
+  state.run = run;
+  let logText = run.log || "";
+  paintRun(run, logText);
+  if (!["queued", "running"].includes(run.status)) return;
+
+  if (window.EventSource) {
+    state.stream = new EventSource(`/api/runs/${runId}/events`);
+    state.stream.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.chunk) logText += msg.chunk;
+      run.status = msg.status || run.status;
+      run.metrics = msg.metrics || run.metrics;
+      run.error = msg.error;
+      run.artifacts = msg.artifacts || run.artifacts;
+      const logEl = document.getElementById("run-log");
+      if (logEl) {
+        logEl.textContent = logText;
+        logEl.scrollTop = logEl.scrollHeight;
+      } else {
+        paintRun(run, logText);
+      }
+      const statusEl = document.querySelector("main .status");
+      if (statusEl) statusEl.textContent = run.status;
+      if (!["queued", "running"].includes(run.status)) {
+        stopPoll();
+        paintRun(run, logText);
+      }
+    };
+  } else {
+    const paint = async () => {
+      const latest = await api(`/api/runs/${runId}`);
+      paintRun(latest, latest.log || "");
+      if (["queued", "running"].includes(latest.status)) {
+        state.poll = setTimeout(paint, 400);
+      }
+    };
+    state.poll = setTimeout(paint, 400);
+  }
 }
 
 function renderSpecHelp() {
@@ -187,16 +298,15 @@ function renderSpecHelp() {
     <h1>Job spec</h1>
     <p class="lede">
       The UI is a projection of a versioned JSON document. Adapters compile
-      that document into Gymnasium, MuJoCo Playground, or Isaac Lab payloads.
-      Unknown fields are preserved.
+      it into Gymnasium, MuJoCo, Playground, mjlab, or Isaac Lab.
     </p>
     <pre>${escapeHtml(`{
   "spec_version": "0.1.0",
-  "name": "cartpole-balance",
-  "robot": { "id": "cartpole", "source": "catalog" },
-  "task": { "recipe": "cartpole-balance" },
-  "train": { "method": "rl" },
-  "backend": { "prefer": ["gymnasium"], "compute": "local" }
+  "name": "g1-stand",
+  "robot": { "id": "unitree-g1-29dof", "source": "catalog" },
+  "task": { "recipe": "g1-stand" },
+  "train": { "method": "hold" },
+  "backend": { "prefer": ["mujoco"], "compute": "local" }
 }`)}</pre>
   `;
 }
@@ -218,6 +328,10 @@ function stopPoll() {
   if (state.poll) {
     clearTimeout(state.poll);
     state.poll = null;
+  }
+  if (state.stream) {
+    state.stream.close();
+    state.stream = null;
   }
 }
 

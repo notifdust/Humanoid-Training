@@ -6,7 +6,7 @@ phase is not done, even if the UI looks finished.
 
 ```
 Phase 0  contract + one real train loop     ← done
-Phase 1  studio shell (pick recipe → video) ← v1 done; scene canvas later
+Phase 1  studio shell (pick recipe → video) ← v1 done; G1 stand + scene canvas + SSE in this slice
 Phase 2  demonstration data (LeRobot)
 Phase 3  Isaac Lab as a second engine
 Phase 4  real G1/H1 deploy with safety gates
@@ -56,10 +56,11 @@ click Train, watch eval clips. The UI is a projection of the spec.
 | Deliverable | Status |
 |---|---|
 | `ht serve` API: recipes, validate, expand, runs, artifacts | done |
-| Studio UI: Recipes, Spec, Train, Runs + video | done (v1) |
-| Live log streaming (SSE) | later |
+| Studio UI: Recipes, Spec, Train, Runs + video | done |
+| Live log streaming (SSE) | done |
+| Scene canvas (object placement writes the spec) | done (pick-and-place) |
+| Spec editor in the recipe view | done |
 | Local Docker runner | later |
-| Scene canvas (object placement) | later |
 
 ---
 
@@ -91,9 +92,9 @@ shows the same eval-video UI as CartPole, with a backend badge.
 
 | Deliverable | Status |
 |---|---|
-| Isaac Lab compile (OSMO YAML / train command) | this PR (payload only) |
+| Isaac Lab compile (OSMO YAML / train command) | done (payload only) |
+| mjlab adapter | done (compile only) |
 | Launch via Docker / OSMO / cloud | not started |
-| mjlab adapter | not started |
 | Backend downgrade messaging in the UI | partial |
 
 ---
@@ -120,10 +121,10 @@ a v1 feature.
 | Recipe | Phase | Runnable today |
 |---|---|---|
 | `cartpole-balance` | 0 smoke test | yes (CPU) |
-| `g1-walk` | 0 compile / 1–3 train | compile only until Playground or Isaac Lab is present |
-| `g1-stand` | 1 | not started |
-| `g1-reach` | 1–2 | not started |
-| `pick-and-place` | 2 | spec only |
+| `g1-stand` | 1 | yes (CPU MuJoCo, Menagerie G1) |
+| `g1-walk` | 0 compile / 3 train | compile only until Playground, mjlab, or Isaac Lab is present |
+| `g1-reach` | 1 compile | compile only |
+| `pick-and-place` | 2 | scene in the studio; train later |
 | imitation-from-demos | 2 | not started |
 
 ---
