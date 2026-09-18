@@ -18,7 +18,7 @@ eval:
   episodes: 10
   record_video: true
 backend:
-  prefer: [playground, isaaclab]
+  prefer: [playground, mjlab, isaaclab]
   compute: local-docker
 adapters:
   playground:
@@ -27,11 +27,15 @@ adapters:
       - train-jax-ppo
       - --env_name
       - G1JoystickFlatTerrain
+  mjlab:
+    task: Velocity-G1-Flat-v0
   isaaclab:
     task: Isaac-Velocity-Flat-G1-v0
     image: nvcr.io/nvidia/isaac-lab:2.2.0
   gymnasium:
-    unsupported: "G1 locomotion is not a Gymnasium environment. Use playground or isaaclab."
+    unsupported: "G1 locomotion is not a Gymnasium environment. Use playground, mjlab, or isaaclab."
+  mujoco:
+    unsupported: "Walking RL is not the CPU hold adapter. Use g1-stand for a MuJoCo preview, or playground for walk."
 gold:
   notes: |
     Needs an NVIDIA GPU and either MuJoCo Playground (`pip install playground`)

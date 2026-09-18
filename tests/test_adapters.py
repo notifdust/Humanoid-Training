@@ -49,3 +49,20 @@ def test_g1_walk_rejects_gymnasium() -> None:
     expanded = expand_spec(spec)
     with pytest.raises(NoAdapter, match="G1 locomotion"):
         select_adapter(expanded)
+
+
+def test_g1_stand_selects_mujoco() -> None:
+    spec = _expand("g1-stand.json")
+    adapter = select_adapter(spec)
+    assert adapter.name == "mujoco"
+    payload = adapter.compile(spec)
+    assert "unitree_g1" in payload.env_name
+
+
+def test_g1_reach_compiles_mjlab() -> None:
+    spec = _expand("g1-reach.json")
+    adapter = select_adapter(spec)
+    assert adapter.name == "mjlab"
+    payload = adapter.compile(spec)
+    assert payload.env_name == "G1Reach-v0"
+    assert "train_mjlab.sh" in payload.files

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -89,7 +89,10 @@ def list_runs() -> dict[str, Any]:
     for child in sorted(root.iterdir(), reverse=True):
         manifest_path = child / "manifest.json"
         if manifest_path.is_file():
-            items.append(json.loads(manifest_path.read_text(encoding="utf-8")))
+            try:
+                items.append(load_manifest(child))
+            except Exception:
+                continue
     return {"runs": items}
 
 
@@ -100,6 +103,45 @@ def get_run(run_id: str) -> dict[str, Any]:
     log_path = path / "run.log"
     manifest["log"] = log_path.read_text(encoding="utf-8") if log_path.is_file() else ""
     return manifest
+
+
+@app.get("/api/runs/{run_id}/events")
+def run_events(run_id: str):
+    path = _find_run(run_id)
+    log_path = path / "run.log"
+
+    def generate():
+        import time
+
+        pos = 0
+        while True:
+            chunk = ""
+            if log_path.is_file():
+                text = log_path.read_text(encoding="utf-8")
+                if len(text) > pos:
+                    chunk = text[pos:]
+                    pos = len(text)
+            try:
+                man = load_manifest(path)
+            except Exception:
+                man = {"status": "running"}
+            payload = {
+                "status": man.get("status"),
+                "chunk": chunk,
+                "metrics": man.get("metrics") or {},
+                "error": man.get("error"),
+                "artifacts": man.get("artifacts") or {},
+            }
+            yield f"data: {json.dumps(payload)}\n\n"
+            if man.get("status") not in {None, "queued", "running"}:
+                break
+            time.sleep(0.25)
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.get("/api/runs/{run_id}/artifacts/{name}")

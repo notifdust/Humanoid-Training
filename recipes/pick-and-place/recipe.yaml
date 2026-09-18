@@ -6,6 +6,19 @@ title: Pick and place
 summary: Put an object in a container. Needs demonstration data (Phase 2) and a manipulation engine.
 language: Pick up the object and put it in the container.
 robot: unitree-g1-29dof
+scene:
+  template: kitchen-counter-v1
+  objects:
+    - id: mustard
+      asset: ycb-mustard
+      pose: "on:counter"
+      x: -0.18
+      y: 0.04
+    - id: bowl
+      asset: bowl-white
+      pose: "on:counter"
+      x: 0.16
+      y: -0.02
 success:
   type: object-in-container
   hold_s: 0.5

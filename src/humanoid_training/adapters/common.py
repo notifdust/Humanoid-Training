@@ -13,7 +13,11 @@ def recipe_adapter_config(spec: dict[str, Any], adapter_name: str) -> dict[str, 
         raise RecipeError("task.recipe is required")
     recipe = load_recipe(str(recipe_id))
     adapters = recipe.data.get("adapters") or {}
-    return dict(adapters.get(adapter_name) or {})
+    cfg = dict(adapters.get(adapter_name) or {})
+    overlay = ((spec.get("adapters") or {}).get(adapter_name) or {})
+    if isinstance(overlay, dict):
+        cfg.update(overlay)
+    return cfg
 
 
 def ignored_scene_fields(spec: dict[str, Any], honors_scene: bool) -> list[str]:

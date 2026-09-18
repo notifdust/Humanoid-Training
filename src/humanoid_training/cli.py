@@ -41,6 +41,9 @@ def main(argv: list[str] | None = None) -> int:
     p_serve.add_argument("--host", default="127.0.0.1")
     p_serve.add_argument("--port", type=int, default=8000)
 
+    p_fetch = sub.add_parser("fetch-assets", help="Download MuJoCo Menagerie robots into the cache")
+    p_fetch.add_argument("robot", nargs="?", default="unitree_g1")
+
     args = parser.parse_args(argv)
     try:
         if args.cmd == "recipes":
@@ -55,6 +58,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_train(args.spec, args.out, args.compile_only)
         if args.cmd == "serve":
             return _cmd_serve(args.host, args.port)
+        if args.cmd == "fetch-assets":
+            return _cmd_fetch(args.robot)
     except (SpecError, RecipeError, AdapterError, FileNotFoundError) as err:
         print(err, file=sys.stderr)
         return 2
@@ -114,6 +119,14 @@ def _cmd_train(path: str, out: Path | None, compile_only: bool) -> int:
     if status == "blocked":
         return 12
     return 1
+
+
+def _cmd_fetch(robot: str) -> int:
+    from humanoid_training.assets import ensure_menagerie_robot
+
+    path = ensure_menagerie_robot(robot, log=print)
+    print(path)
+    return 0
 
 
 def _cmd_serve(host: str, port: int) -> int:

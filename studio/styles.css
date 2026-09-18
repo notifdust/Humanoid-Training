@@ -276,6 +276,56 @@ video {
   white-space: pre-wrap;
 }
 
+.canvas-wrap {
+  position: relative;
+  width: min(100%, 520px);
+  height: 260px;
+  background:
+    linear-gradient(#2a2318, #2a2318) center/100% 54% no-repeat,
+    #1a1f18;
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.canvas-label {
+  position: absolute;
+  left: 10px;
+  top: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.token {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-width: 72px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: var(--bg-3);
+  color: var(--ink);
+  font: 500 12px var(--font);
+  cursor: grab;
+}
+
+.token:active {
+  cursor: grabbing;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+textarea.spec {
+  width: 100%;
+  min-height: 280px;
+  background: #0b0e0a;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 12px;
+}
+
 @media (max-width: 860px) {
   .shell,
   .detail {

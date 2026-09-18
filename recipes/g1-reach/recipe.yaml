@@ -1,0 +1,37 @@
+id: g1-reach
+version: 0.1.0
+phase: 1
+runnable: false
+title: G1 reach
+summary: Reach a target with a G1 arm. Compiles to Playground / mjlab / Isaac Lab; live train is GPU work.
+language: Reach the target with the right hand.
+robot: unitree-g1-29dof
+success:
+  type: reached-pose
+  hold_s: 0.5
+train:
+  method: rl
+  policy: ppo
+  steps: 100000
+  seed: 1
+eval:
+  episodes: 10
+  record_video: true
+backend:
+  prefer: [playground, mjlab, isaaclab]
+  compute: local-docker
+adapters:
+  playground:
+    env_name: G1JoystickFlatTerrain
+    unsupported: "A dedicated G1 reach env is not in Playground yet. This recipe compiles locomotion as a placeholder until a reach env is pinned."
+  mjlab:
+    task: G1Reach-v0
+  isaaclab:
+    task: Isaac-Reach-G1-v0
+  gymnasium:
+    unsupported: "G1 reach is not a Gymnasium environment."
+  mujoco:
+    unsupported: "CPU hold-pose cannot express a reach task. Use a GPU engine."
+gold:
+  notes: |
+    Compile-only until a real reach environment id is verified on a GPU box.

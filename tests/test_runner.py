@@ -39,3 +39,21 @@ def test_g1_walk_compile_only(tmp_path: Path) -> None:
     manifest = run_job(spec, runs_dir=tmp_path, compile_only=True)
     assert manifest["status"] == "compiled"
     assert expand_spec(spec)["task"]["recipe"] == "g1-walk"
+    assert (Path(manifest["run_dir"]) / "engines" / "mjlab" / "train_mjlab.sh").is_file()
+
+
+def test_g1_stand_hold_mini_humanoid(tmp_path: Path) -> None:
+    fixture = Path(__file__).resolve().parent / "fixtures" / "mini_humanoid.xml"
+    spec = load_spec(Path(__file__).resolve().parents[1] / "spec" / "examples" / "g1-stand.json")
+    spec["adapters"] = {
+        "mujoco": {
+            "mjcf": str(fixture),
+            "horizon": 60,
+            "render_every": 5,
+        }
+    }
+    spec["eval"] = {"episodes": 1, "record_video": True}
+    manifest = run_job(spec, runs_dir=tmp_path)
+    assert manifest["status"] in {"completed", "passed"}, manifest.get("error")
+    assert manifest["adapter"]["adapter"] == "mujoco"
+    assert manifest["metrics"]["passed"] is True

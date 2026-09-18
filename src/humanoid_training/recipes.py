@@ -121,4 +121,8 @@ def default_user_spec(recipe_id: str) -> dict[str, Any]:
         "task": {"recipe": recipe.id},
         "train": {"method": (recipe.data.get("train") or {}).get("method", "rl")},
     }
+    if recipe.data.get("scene"):
+        spec["scene"] = dict(recipe.data["scene"])
+    if recipe.data.get("backend"):
+        spec["backend"] = dict(recipe.data["backend"])
     return spec
