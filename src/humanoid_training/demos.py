@@ -93,20 +93,24 @@ def record_object_trajectories(
         points = [(float(p.get("x", 0.0)), float(p.get("y", 0.0))) for p in raw if isinstance(p, dict)]
         if not points:
             continue
-        resampled = _resample_points(points)
+        resampled = _resample_points(points, n_min=48, n_max=80)
         world = np.array([_table_to_world_xy(x, y, layout) for x, y in resampled], dtype=np.float64)
+        dist = float(np.hypot(world[-1, 0] - bowl_xy[0], world[-1, 1] - bowl_xy[1]))
+        success = dist <= radius
+        # P-control toward the bowl (or the path end if the take missed). Constant
+        # deltas overshoot when eval is longer than the demo; this matches the scripted expert.
+        target = bowl_xy if success else world[-1]
+        gain = 0.35
         frames = []
-        for i, pos in enumerate(world):
-            nxt = world[i + 1] if i + 1 < len(world) else pos
-            action = nxt - pos
+        for pos in world:
+            action = gain * (target - pos)
             frames.append(
                 {
                     "observation": [float(pos[0]), float(pos[1]), float(bowl_xy[0]), float(bowl_xy[1])],
                     "action": [float(action[0]), float(action[1])],
                 }
             )
-        dist = float(np.hypot(world[-1, 0] - bowl_xy[0], world[-1, 1] - bowl_xy[1]))
-        recorded.append({"frames": frames, "success": dist <= radius})
+        recorded.append({"frames": frames, "success": success})
     if not recorded:
         raise RecipeError("No canvas trajectories to save. Drag the mustard into the bowl first.")
     return _write_pick_dataset(spec, dest, recorded)
