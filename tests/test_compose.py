@@ -30,3 +30,18 @@ def test_compose_adds_table_objects_and_camera() -> None:
     assert np.hypot(got[0] - want[0], got[1] - want[1]) < 0.01
     cam = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "ht_eval")
     assert cam >= 0
+
+
+def test_compose_mocap_mustard() -> None:
+    mjcf = Path(__file__).resolve().parent / "fixtures" / "mini_humanoid.xml"
+    scene = {
+        "template": "kitchen-counter-v1",
+        "objects": [
+            {"id": "mustard", "asset": "ycb-mustard", "x": -0.18, "y": 0.04},
+            {"id": "bowl", "asset": "bowl-white", "x": 0.16, "y": -0.02},
+        ],
+    }
+    model, xml = compose_mjcf(mjcf, scene, movable=["mustard"])
+    assert "mocap" in xml.lower()
+    mustard = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "mustard")
+    assert int(model.body_mocapid[mustard]) >= 0

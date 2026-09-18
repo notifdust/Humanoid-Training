@@ -41,8 +41,11 @@ def main(argv: list[str] | None = None) -> int:
     p_serve.add_argument("--host", default="127.0.0.1")
     p_serve.add_argument("--port", type=int, default=8000)
 
-    p_fetch = sub.add_parser("fetch-assets", help="Download MuJoCo Menagerie robots into the cache")
-    p_fetch.add_argument("robot", nargs="?", default="unitree_g1")
+    p_record = sub.add_parser("record", help="Write a LeRobot dataset of scripted demos")
+    p_record.add_argument("spec")
+    p_record.add_argument("--out", type=Path, required=True, help="Dataset directory")
+    p_record.add_argument("--episodes", type=int, default=4)
+    p_record.add_argument("--include-failure", action="store_true")
 
     args = parser.parse_args(argv)
     try:
@@ -60,6 +63,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_serve(args.host, args.port)
         if args.cmd == "fetch-assets":
             return _cmd_fetch(args.robot)
+        if args.cmd == "record":
+            return _cmd_record(args.spec, args.out, args.episodes, args.include_failure)
     except (SpecError, RecipeError, AdapterError, FileNotFoundError) as err:
         print(err, file=sys.stderr)
         return 2
@@ -127,6 +132,22 @@ def _cmd_fetch(robot: str) -> int:
     path = ensure_menagerie_robot(robot, log=print)
     print(path)
     return 0
+
+
+def _cmd_record(path: str, out: Path, episodes: int, include_failure: bool) -> int:
+    from humanoid_training.demos import record_scripted_pick_place
+
+    spec = load_spec(path)
+    expanded = expand_spec(spec)
+    result = record_scripted_pick_place(
+        expanded,
+        out,
+        episodes=episodes,
+        include_failure=include_failure,
+        seed=int((expanded.get("train") or {}).get("seed") or 1),
+    )
+    print(json.dumps({k: result.get(k) for k in ("ok", "path", "total_episodes", "total_frames", "format")}, indent=2))
+    return 0 if result.get("ok") else 1
 
 
 def _cmd_serve(host: str, port: int) -> int:

@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from humanoid_training.catalog import load_robot_catalog
 from humanoid_training.datasets import inspect_lerobot_dataset
+from humanoid_training.demos import dataset_cache_dir, record_scripted_pick_place
 from humanoid_training.errors import RecipeError, SpecError, repo_root
 from humanoid_training.recipes import default_user_spec, expand_spec, list_recipes, load_recipe
 from humanoid_training.runner import default_runs_dir, load_manifest, new_run_id, run_job, _write_manifest
@@ -26,6 +27,13 @@ class SpecBody(BaseModel):
 
 class DatasetBody(BaseModel):
     uri: str = ""
+
+
+class RecordBody(BaseModel):
+    spec: dict[str, Any] = Field(default_factory=dict)
+    dest: str = ""
+    episodes: int = 4
+    include_failure: bool = True
 
 
 def _public_spec(spec: dict[str, Any]) -> dict[str, Any]:
@@ -56,6 +64,26 @@ def robots() -> dict[str, Any]:
 @app.post("/api/datasets/inspect")
 def api_inspect_dataset(body: DatasetBody) -> dict[str, Any]:
     return inspect_lerobot_dataset(body.uri)
+
+
+@app.post("/api/datasets/record")
+def api_record_dataset(body: RecordBody) -> dict[str, Any]:
+    try:
+        expanded = expand_spec(body.spec)
+    except (SpecError, RecipeError) as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
+    dest = Path(body.dest).expanduser() if body.dest else dataset_cache_dir(str(expanded.get("name") or "dataset"))
+    if not dest.is_absolute():
+        dest = Path.cwd() / dest
+    result = record_scripted_pick_place(
+        expanded,
+        dest,
+        episodes=max(1, min(int(body.episodes), 12)),
+        include_failure=bool(body.include_failure),
+        seed=int((expanded.get("train") or {}).get("seed") or 1),
+    )
+    result["dest"] = str(dest)
+    return result
 
 
 @app.get("/api/recipes")

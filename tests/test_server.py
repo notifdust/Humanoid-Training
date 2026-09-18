@@ -33,6 +33,27 @@ def test_inspect_dataset_fixture() -> None:
     assert data["total_episodes"] == 2
 
 
+def test_record_dataset_api(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HT_CACHE", str(tmp_path / "cache"))
+    client = TestClient(app)
+    spec = {
+        "spec_version": "0.1.0",
+        "name": "pick-and-place",
+        "robot": {"id": "unitree-g1-29dof", "source": "catalog"},
+        "task": {"recipe": "pick-and-place"},
+        "train": {"method": "imitation"},
+    }
+    body = client.post(
+        "/api/datasets/record",
+        json={"spec": spec, "episodes": 3, "include_failure": True},
+    )
+    assert body.status_code == 200, body.text
+    data = body.json()
+    assert data["ok"] is True
+    assert data["total_episodes"] == 3
+    assert (Path(data["path"]) / "meta" / "info.json").is_file()
+
+
 def test_api_train_cartpole(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("HT_RUNS_DIR", str(tmp_path))
     # Re-importing not needed: default_runs_dir reads env each call.

@@ -7,7 +7,7 @@ phase is not done, even if the UI looks finished.
 ```
 Phase 0  contract + one real train loop     ← done
 Phase 1  studio shell (pick recipe → video) ← rooms + G1 stand + composed pick-and-place scene
-Phase 2  demonstration data (LeRobot)       ← inspect + keep/drop started; teleop/train later
+Phase 2  demonstration data (LeRobot)       ← scripted record + keep/drop + CPU linear-BC
 Phase 3  Isaac Lab as a second engine
 Phase 4  real G1/H1 deploy with safety gates
 ```
@@ -76,10 +76,10 @@ train an imitation recipe, get an eval video.
 
 | Deliverable | Status |
 |---|---|
-| LeRobot adapter (dataset I/O + ACT / similar) | inspect local `meta/info.json`; train launch still blocked |
-| Episode review (keep / drop) | keep_episodes on the spec; no video editor yet |
-| `pick-and-place` recipe backed by real data | CPU **scene preview** in MuJoCo; imitation later |
-| Teleop session into the studio | not started |
+| LeRobot adapter (dataset I/O + ACT / similar) | write/inspect local LeRobot v2 layout; ACT launch still blocked |
+| Episode review (keep / drop) | keep_episodes filters BC training frames |
+| `pick-and-place` recipe backed by real data | scripted object-space demos + CPU linear-BC → mustard-in-bowl eval |
+| Teleop session into the studio | not started (scripted expert stands in) |
 
 ---
 
@@ -125,7 +125,7 @@ a v1 feature.
 | `g1-stand` | 1 | yes (CPU MuJoCo, Menagerie G1) |
 | `g1-walk` | 0 compile / 3 train | compile only until Playground, mjlab, or Isaac Lab is present |
 | `g1-reach` | 1 compile | compile only |
-| `pick-and-place` | 2 | yes — CPU scene preview (G1 + table + dragged objects). Imitation from demos not trained. |
+| `pick-and-place` | 2 | yes — record LeRobot demos, linear-BC, mustard-in-bowl eval video. Not G1 grasping. |
 | imitation-from-demos | 2 | not started |
 
 ---

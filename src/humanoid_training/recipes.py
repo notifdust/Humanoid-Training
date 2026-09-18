@@ -41,6 +41,7 @@ class Recipe:
             "scene_preview": bool(
                 ((self.data.get("adapters") or {}).get("mujoco") or {}).get("scene_preview")
             ),
+            "imitate": (self.data.get("train") or {}).get("method") == "imitation",
             "adapters": sorted((self.data.get("adapters") or {}).keys()),
         }
 
@@ -129,4 +130,6 @@ def default_user_spec(recipe_id: str) -> dict[str, Any]:
         spec["scene"] = dict(recipe.data["scene"])
     if recipe.data.get("backend"):
         spec["backend"] = dict(recipe.data["backend"])
+    if recipe.data.get("data"):
+        spec["data"] = dict(recipe.data["data"])
     return spec

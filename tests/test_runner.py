@@ -66,7 +66,7 @@ def test_pick_and_place_preview_composes_scene(tmp_path: Path) -> None:
         "name": "pick-and-place",
         "robot": {"id": "unitree-g1-29dof", "source": "catalog"},
         "task": {"recipe": "pick-and-place"},
-        "train": {"method": "imitation"},
+        "train": {"method": "hold"},
         "scene": {
             "template": "kitchen-counter-v1",
             "objects": [
@@ -94,3 +94,32 @@ def test_pick_and_place_preview_composes_scene(tmp_path: Path) -> None:
     assert "mustard" in text
     assert "ht_table" in text
     assert manifest["artifacts"].get("composed_scene.xml")
+
+
+def test_pick_and_place_imitation_puts_mustard_in_bowl(tmp_path: Path) -> None:
+    fixture = Path(__file__).resolve().parent / "fixtures" / "mini_humanoid.xml"
+    spec = {
+        "spec_version": "0.1.0",
+        "name": "pick-and-place",
+        "robot": {"id": "unitree-g1-29dof", "source": "catalog"},
+        "task": {"recipe": "pick-and-place"},
+        "train": {"method": "imitation", "seed": 1},
+        "backend": {"prefer": ["mujoco"], "compute": "local"},
+        "adapters": {
+            "mujoco": {
+                "mjcf": str(fixture),
+                "horizon": 80,
+                "render_every": 5,
+            }
+        },
+        "eval": {"episodes": 1, "record_video": True},
+        "data": {"min_episodes": 3},
+    }
+    manifest = run_job(spec, runs_dir=tmp_path)
+    assert manifest["status"] == "passed", manifest.get("error") or manifest.get("notes")
+    run_dir = Path(manifest["run_dir"])
+    assert (run_dir / "checkpoint.npz").is_file()
+    assert (run_dir / "lerobot_dataset" / "meta" / "info.json").is_file()
+    notes = " ".join(manifest.get("notes") or [])
+    assert "linear BC" in notes
+    assert "mustard_bowl_dist" in notes
