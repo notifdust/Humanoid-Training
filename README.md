@@ -35,7 +35,8 @@ ht train spec/examples/g1-walk.json --compile-only
 # Playground + mjlab + Isaac Lab payloads; GPU launch later
 
 ht serve --host 0.0.0.0 --port 8000
-# pick a recipe, drag scene objects, edit the spec, click Train
+# Robots → Task → Scene → Train. Spec is under Advanced.
+# Pick-and-place previews the composed MuJoCo kitchen, not a trained pick.
 ```
 
 | Recipe | What happens |
@@ -44,7 +45,7 @@ ht serve --host 0.0.0.0 --port 8000
 | `g1-stand` | MuJoCo G1 from Menagerie, hold stand pose, eval video |
 | `g1-walk` | Compile to Playground / mjlab / Isaac Lab (GPU to launch) |
 | `g1-reach` | Compile to mjlab / Isaac Lab |
-| `pick-and-place` | Scene you can drag in the studio; train is Phase 2 |
+| `pick-and-place` | Drag mustard/bowl; CPU MuJoCo scene preview + `composed_scene.xml`. Imitation is Phase 2. |
 
 ## Non-goals (for now)
 

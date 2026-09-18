@@ -57,3 +57,40 @@ def test_g1_stand_hold_mini_humanoid(tmp_path: Path) -> None:
     assert manifest["status"] in {"completed", "passed"}, manifest.get("error")
     assert manifest["adapter"]["adapter"] == "mujoco"
     assert manifest["metrics"]["passed"] is True
+
+
+def test_pick_and_place_preview_composes_scene(tmp_path: Path) -> None:
+    fixture = Path(__file__).resolve().parent / "fixtures" / "mini_humanoid.xml"
+    spec = {
+        "spec_version": "0.1.0",
+        "name": "pick-and-place",
+        "robot": {"id": "unitree-g1-29dof", "source": "catalog"},
+        "task": {"recipe": "pick-and-place"},
+        "train": {"method": "imitation"},
+        "scene": {
+            "template": "kitchen-counter-v1",
+            "objects": [
+                {"id": "mustard", "asset": "ycb-mustard", "x": -0.18, "y": 0.04},
+                {"id": "bowl", "asset": "bowl-white", "x": 0.16, "y": -0.02},
+            ],
+        },
+        "backend": {"prefer": ["mujoco"], "compute": "local"},
+        "adapters": {
+            "mujoco": {
+                "mjcf": str(fixture),
+                "horizon": 40,
+                "render_every": 5,
+            }
+        },
+        "eval": {"episodes": 1, "record_video": True},
+    }
+    manifest = run_job(spec, runs_dir=tmp_path)
+    assert manifest["status"] in {"completed", "passed"}, manifest.get("error")
+    assert manifest["adapter"]["adapter"] == "mujoco"
+    assert "scene.objects" not in (manifest.get("ignored_fields") or [])
+    xml = Path(manifest["run_dir"]) / "composed_scene.xml"
+    assert xml.is_file()
+    text = xml.read_text(encoding="utf-8")
+    assert "mustard" in text
+    assert "ht_table" in text
+    assert manifest["artifacts"].get("composed_scene.xml")

@@ -1,7 +1,8 @@
 const state = {
-  view: "recipes",
+  view: "tasks",
   recipes: [],
   robots: [],
+  robot: null,
   selected: null,
   starter: null,
   expanded: null,
@@ -9,6 +10,9 @@ const state = {
   run: null,
   poll: null,
   stream: null,
+  dataset: null,
+  datasetUri: "",
+  keepEpisodes: [],
 };
 
 const main = document.getElementById("main");
@@ -27,12 +31,69 @@ async function api(path, options) {
 }
 
 function pill(recipe) {
+  if (recipe.scene_preview) return `<span class="pill live">scene preview</span>`;
   if (recipe.runnable) return `<span class="pill live">runnable</span>`;
   return `<span class="pill blocked">compile / later phase</span>`;
 }
 
+function stepsHTML(active) {
+  const items = [
+    ["robots", "Robot"],
+    ["task", "Task"],
+    ["scene", "Scene"],
+    ["train", "Train"],
+  ];
+  return `<ol class="steps">${items
+    .map(
+      ([id, label]) =>
+        `<li class="${id === active ? "active" : ""}">${escapeHtml(label)}</li>`
+    )
+    .join("")}</ol>`;
+}
+
+function recipesForRobot() {
+  if (!state.robot) return state.recipes;
+  return state.recipes.filter((r) => r.robot === state.robot.id);
+}
+
+function renderRobots() {
+  const cards = state.robots
+    .map((robot) => {
+      const selected = state.robot && state.robot.id === robot.id;
+      return `
+      <article class="card robot-card ${selected ? "selected" : ""}">
+        <h2>${escapeHtml(robot.name)}</h2>
+        <p class="meta">${escapeHtml(robot.id)} · ${escapeHtml(robot.kind)} · ${robot.dofs} DoF</p>
+        <p>${escapeHtml(robot.summary || "")}</p>
+        <div class="actions">
+          <button class="primary" data-robot="${escapeHtml(robot.id)}">Use this robot</button>
+        </div>
+      </article>`;
+    })
+    .join("");
+  main.innerHTML = `
+    ${stepsHTML("robots")}
+    <h1>Robots</h1>
+    <p class="lede">
+      Pick a body from the catalog. The studio compiles a job spec for that
+      robot — it does not import a new physics engine.
+    </p>
+    <div class="grid">${cards}</div>
+  `;
+  main.querySelectorAll("[data-robot]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.robot = state.robots.find((r) => r.id === btn.dataset.robot) || null;
+      switchView("tasks");
+    });
+  });
+}
+
 function renderRecipes() {
-  const cards = state.recipes
+  const list = recipesForRobot();
+  const filter = state.robot
+    ? `Showing tasks for <code>${escapeHtml(state.robot.id)}</code>.`
+    : "Pick a known-good task. Drag objects when a scene exists.";
+  const cards = list
     .map(
       (r) => `
       <article class="card">
@@ -46,12 +107,10 @@ function renderRecipes() {
     )
     .join("");
   main.innerHTML = `
-    <h1>Recipes</h1>
-    <p class="lede">
-      Pick a known-good task. Drag objects when a scene exists. Train writes
-      a job spec and an eval video — MuJoCo and Isaac Lab stay engines.
-    </p>
-    <div class="grid">${cards}</div>
+    ${stepsHTML("task")}
+    <h1>Tasks</h1>
+    <p class="lede">${filter} Train writes a job spec and an eval video.</p>
+    <div class="grid">${cards || `<p class="lede">No recipes for this robot yet.</p>`}</div>
   `;
   main.querySelectorAll("[data-open]").forEach((btn) => {
     btn.addEventListener("click", () => openRecipe(btn.dataset.open));
@@ -62,9 +121,12 @@ async function openRecipe(id) {
   const detail = await api(`/api/recipes/${id}`);
   state.selected = detail.recipe;
   state.starter = detail.starter_spec;
+  if (state.robot) {
+    state.starter.robot = { id: state.robot.id, source: "catalog" };
+  }
   await refreshExpanded();
   state.view = "recipe";
-  setActive("recipes");
+  setActive("tasks");
   renderRecipe();
 }
 
@@ -75,21 +137,34 @@ async function refreshExpanded() {
   });
 }
 
+function tokenStyle(obj) {
+  const y = Number(obj.y) || 0;
+  const x = Number(obj.x) || 0;
+  const left = ((y + 0.32) / 0.64) * 100;
+  const top = ((0.42 - x) / 0.84) * 100;
+  return `left:${left}%;top:${top}%`;
+}
+
 function sceneHTML(spec) {
   const objects = spec?.scene?.objects;
-  if (!objects || !objects.length) return "";
+  if (!objects || !objects.length) {
+    return `
+      <h2>Scene</h2>
+      <p class="lede">This recipe has no movable objects. Train still writes eval video.</p>
+    `;
+  }
   const tokens = objects
-    .map((obj) => {
-      const left = ((Number(obj.x) || 0) + 0.6) / 1.2 * 100;
-      const top = ((Number(obj.y) || 0) + 0.3) / 0.6 * 100;
-      return `<button type="button" class="token" data-id="${escapeHtml(obj.id)}" style="left:${left}%;top:${top}%">${escapeHtml(obj.id)}</button>`;
-    })
+    .map(
+      (obj) =>
+        `<button type="button" class="token" data-id="${escapeHtml(obj.id)}" style="${tokenStyle(obj)}">${escapeHtml(obj.id)}</button>`
+    )
     .join("");
   return `
     <h2>Scene</h2>
-    <p class="lede">Drag objects on the counter. That writes <code>scene.objects</code> in the spec.</p>
+    <p class="lede">Top-down counter. G1 stands at the near edge. Drag objects — that writes <code>scene.objects</code>.</p>
     <div class="canvas-wrap" id="scene-canvas">
       <span class="canvas-label">${escapeHtml(spec.scene.template || "scene")}</span>
+      <span class="robot-mark">G1</span>
       ${tokens}
     </div>
   `;
@@ -98,35 +173,40 @@ function sceneHTML(spec) {
 function renderRecipe() {
   const r = state.selected;
   const spec = state.expanded?.spec || state.starter;
+  const hasScene = Boolean(spec?.scene?.objects?.length);
+  const trainLabel = r.scene_preview ? "Preview scene" : "Train this recipe";
   main.innerHTML = `
+    ${stepsHTML(hasScene ? "scene" : "train")}
     <h1>${r.title}</h1>
     <p class="lede">${r.summary}</p>
     <div class="detail">
       <section>
-        <p>${pill(r)} &nbsp; robot <code>${r.robot}</code></p>
+        <p>${pill(r)} &nbsp; robot <code>${escapeHtml(r.robot)}</code></p>
         <p class="lede">${r.language || ""}</p>
         ${sceneHTML(spec)}
         <div class="actions" style="margin-top:16px">
-          <button class="primary" id="train">Train this recipe</button>
-          <button class="ghost" data-view="recipes" id="back">Back to catalog</button>
+          <button class="primary" id="train">${trainLabel}</button>
+          <button class="ghost" id="back">Back to tasks</button>
         </div>
         <p class="status" id="train-status"></p>
         <p class="error" id="train-error"></p>
       </section>
       <section>
-        <h2>Job spec</h2>
-        <p class="lede">Edit freely. Apply re-expands recipe defaults under your overlay.</p>
-        <textarea class="spec" id="spec-json">${escapeHtml(JSON.stringify(state.starter, null, 2))}</textarea>
-        <div class="actions" style="margin-top:8px">
-          <button class="ghost" id="apply-spec">Apply spec</button>
-        </div>
-        <h2>Expanded</h2>
-        <pre>${escapeHtml(JSON.stringify(spec, null, 2))}</pre>
+        <details class="advanced" id="advanced">
+          <summary>Advanced · job spec</summary>
+          <p class="lede">The UI is a projection of this document. Edit only if you need to.</p>
+          <textarea class="spec" id="spec-json">${escapeHtml(JSON.stringify(state.starter, null, 2))}</textarea>
+          <div class="actions" style="margin-top:8px">
+            <button class="ghost" id="apply-spec">Apply spec</button>
+          </div>
+          <h2>Expanded</h2>
+          <pre>${escapeHtml(JSON.stringify(spec, null, 2))}</pre>
+        </details>
       </section>
     </div>
   `;
   document.getElementById("train").addEventListener("click", trainCurrent);
-  document.getElementById("back").addEventListener("click", () => switchView("recipes"));
+  document.getElementById("back").addEventListener("click", () => switchView("tasks"));
   document.getElementById("apply-spec").addEventListener("click", applySpecEditor);
   bindSceneDrag();
 }
@@ -137,6 +217,7 @@ async function applySpecEditor() {
     state.starter = JSON.parse(document.getElementById("spec-json").value);
     await refreshExpanded();
     renderRecipe();
+    document.getElementById("advanced")?.setAttribute("open", "");
   } catch (error) {
     err.textContent = error.message;
   }
@@ -151,19 +232,20 @@ function bindSceneDrag() {
       const id = token.dataset.id;
       const move = (ev) => {
         const box = canvas.getBoundingClientRect();
-        const nx = ((ev.clientX - box.left) / box.width) * 1.2 - 0.6;
-        const ny = ((ev.clientY - box.top) / box.height) * 0.6 - 0.3;
+        const nx = (ev.clientX - box.left) / box.width;
+        const ny = (ev.clientY - box.top) / box.height;
         const obj = state.starter.scene.objects.find((item) => item.id === id);
         if (!obj) return;
-        obj.x = Math.max(-0.55, Math.min(0.55, nx));
-        obj.y = Math.max(-0.28, Math.min(0.28, ny));
-        token.style.left = `${((obj.x + 0.6) / 1.2) * 100}%`;
-        token.style.top = `${((obj.y + 0.3) / 0.6) * 100}%`;
+        obj.y = Math.max(-0.28, Math.min(0.28, nx * 0.64 - 0.32));
+        obj.x = Math.max(-0.36, Math.min(0.36, 0.42 - ny * 0.84));
+        token.style.left = `${((obj.y + 0.32) / 0.64) * 100}%`;
+        token.style.top = `${((0.42 - obj.x) / 0.84) * 100}%`;
       };
       const up = () => {
         window.removeEventListener("pointermove", move);
         window.removeEventListener("pointerup", up);
-        document.getElementById("spec-json").value = JSON.stringify(state.starter, null, 2);
+        const editor = document.getElementById("spec-json");
+        if (editor) editor.value = JSON.stringify(state.starter, null, 2);
       };
       window.addEventListener("pointermove", move);
       window.addEventListener("pointerup", up);
@@ -183,6 +265,10 @@ async function trainCurrent() {
     if (editor) {
       state.starter = JSON.parse(editor.value);
     }
+    if (state.keepEpisodes.length) {
+      state.starter.data = state.starter.data || {};
+      state.starter.data.keep_episodes = state.keepEpisodes;
+    }
     const run = await api("/api/runs", {
       method: "POST",
       body: JSON.stringify({ spec: state.starter }),
@@ -193,6 +279,90 @@ async function trainCurrent() {
     err.textContent = error.message;
     btn.disabled = false;
     status.textContent = "";
+  }
+}
+
+function renderData() {
+  const datasets = state.starter?.data?.datasets || state.expanded?.spec?.data?.datasets || [];
+  const datasetList = datasets.length
+    ? `<ul class="runs">${datasets
+        .map((d) => `<li class="run-row"><code>${escapeHtml(d)}</code></li>`)
+        .join("")}</ul>`
+    : `<p class="lede">No datasets on the current spec. Pick-and-place imitation needs a LeRobot folder with <code>meta/info.json</code>.</p>`;
+  const inspected = state.dataset;
+  let body = "";
+  if (inspected && inspected.ok) {
+    const rows = (inspected.episodes || [])
+      .map((ep) => {
+        const idx = ep.episode_index;
+        const checked = !state.keepEpisodes.length || state.keepEpisodes.includes(idx);
+        return `<tr>
+          <td><input type="checkbox" data-ep="${idx}" ${checked ? "checked" : ""} /></td>
+          <td>${idx}</td>
+          <td>${ep.length ?? "—"}</td>
+          <td>${escapeHtml((ep.tasks || []).join(", ") || "—")}</td>
+        </tr>`;
+      })
+      .join("");
+    body = `
+      <p class="status completed">${escapeHtml(inspected.format)} · ${inspected.total_episodes} episodes · fps=${inspected.fps ?? "—"} · robot=${escapeHtml(inspected.robot_type || "—")}</p>
+      <table class="data-table">
+        <thead><tr><th>keep</th><th>#</th><th>length</th><th>tasks</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p class="lede">Keep/drop writes <code>data.keep_episodes</code> on the current spec. It does not train ACT yet.</p>
+    `;
+  } else if (inspected && inspected.error) {
+    body = `<p class="error">${escapeHtml(inspected.error)}</p>`;
+  }
+  main.innerHTML = `
+    <h1>Data</h1>
+    <p class="lede">
+      Demonstrations live in the LeRobot dataset format — we do not invent one.
+      Teleop recording is next; today you can inspect a local dataset and drop bad takes.
+    </p>
+    <section>
+      <h2>On this job</h2>
+      ${datasetList}
+    </section>
+    <section style="margin-top:24px">
+      <h2>Inspect local dataset</h2>
+      <p class="lede">Path to a directory that contains <code>meta/info.json</code>.</p>
+      <div class="actions">
+        <input class="path-input" id="dataset-uri" placeholder="file:/path/to/lerobot_dataset" value="${escapeHtml(state.datasetUri)}" />
+        <button class="primary" id="inspect-ds">Inspect</button>
+      </div>
+      <div id="dataset-body">${body}</div>
+    </section>
+  `;
+  document.getElementById("inspect-ds").addEventListener("click", inspectDataset);
+  main.querySelectorAll("[data-ep]").forEach((box) => {
+    box.addEventListener("change", syncKeepEpisodes);
+  });
+}
+
+async function inspectDataset() {
+  const uri = document.getElementById("dataset-uri").value.trim();
+  state.datasetUri = uri;
+  state.dataset = await api("/api/datasets/inspect", {
+    method: "POST",
+    body: JSON.stringify({ uri }),
+  });
+  if (state.dataset.ok) {
+    state.keepEpisodes = (state.dataset.episodes || []).map((ep) => ep.episode_index);
+  }
+  renderData();
+}
+
+function syncKeepEpisodes() {
+  const keep = [];
+  main.querySelectorAll("[data-ep]").forEach((box) => {
+    if (box.checked) keep.push(Number(box.dataset.ep));
+  });
+  state.keepEpisodes = keep;
+  if (state.starter) {
+    state.starter.data = state.starter.data || {};
+    state.starter.data.keep_episodes = keep;
   }
 }
 
@@ -225,20 +395,27 @@ function paintRun(run, logText) {
   const video = run.artifacts && run.artifacts["eval.mp4"]
     ? `<video controls autoplay muted src="/api/runs/${run.run_id}/artifacts/eval.mp4?t=${Date.now()}"></video>`
     : `<p class="lede">No eval video yet.</p>`;
+  const scene = run.artifacts && run.artifacts["composed_scene.xml"]
+    ? `<p class="lede"><a href="/api/runs/${run.run_id}/artifacts/composed_scene.xml">composed_scene.xml</a> — open in native MuJoCo.</p>`
+    : "";
+  const notes = (run.notes || []).map((n) => escapeHtml(n)).join(" · ");
   const hasMetrics = run.metrics && run.metrics.eval_episodes != null;
   const metrics = hasMetrics
     ? `<p class="status ${run.status}">success_rate=${fmt(run.metrics.success_rate)} mean_return=${fmt(run.metrics.mean_return)} passed=${run.metrics.passed ?? "—"}</p>`
     : "";
   main.innerHTML = `
+    ${stepsHTML("train")}
     <h1>Run</h1>
     <p class="lede">${run.run_id}</p>
     <p class="status ${run.status}">${run.status}</p>
     ${metrics}
+    ${notes ? `<p class="lede">${notes}</p>` : ""}
     ${run.error ? `<p class="error">${escapeHtml(run.error)}</p>` : ""}
     <div class="detail">
       <section>
         <h2>Eval</h2>
         ${video}
+        ${scene}
       </section>
       <section>
         <h2>Log</h2>
@@ -293,24 +470,6 @@ async function showRun(runId) {
   }
 }
 
-function renderSpecHelp() {
-  main.innerHTML = `
-    <h1>Job spec</h1>
-    <p class="lede">
-      The UI is a projection of a versioned JSON document. Adapters compile
-      it into Gymnasium, MuJoCo, Playground, mjlab, or Isaac Lab.
-    </p>
-    <pre>${escapeHtml(`{
-  "spec_version": "0.1.0",
-  "name": "g1-stand",
-  "robot": { "id": "unitree-g1-29dof", "source": "catalog" },
-  "task": { "recipe": "g1-stand" },
-  "train": { "method": "hold" },
-  "backend": { "prefer": ["mujoco"], "compute": "local" }
-}`)}</pre>
-  `;
-}
-
 function fmt(value) {
   if (value === undefined || value === null) return "—";
   if (typeof value === "number") return value.toFixed(2);
@@ -344,14 +503,16 @@ function setActive(view) {
 async function switchView(view) {
   stopPoll();
   state.view = view;
-  setActive(view);
-  if (view === "recipes") {
+  setActive(view === "recipe" ? "tasks" : view);
+  if (view === "robots") {
+    renderRobots();
+  } else if (view === "tasks" || view === "recipes") {
     renderRecipes();
+  } else if (view === "data") {
+    renderData();
   } else if (view === "runs") {
     state.runs = (await api("/api/runs")).runs;
     renderRuns();
-  } else {
-    renderSpecHelp();
   }
 }
 

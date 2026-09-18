@@ -126,9 +126,10 @@ def run_job(
         artifacts = {}
         if result.video_path and Path(result.video_path).is_file():
             artifacts["eval.mp4"] = str(result.video_path)
-        ckpt = run_dir / "checkpoint.npz"
-        if ckpt.is_file():
-            artifacts["checkpoint.npz"] = str(ckpt)
+        for name in ("checkpoint.npz", "composed_scene.xml"):
+            path = run_dir / name
+            if path.is_file():
+                artifacts[name] = str(path)
         manifest["artifacts"] = artifacts
         emit(
             f"eval success_rate={result.success_rate:.2f} "

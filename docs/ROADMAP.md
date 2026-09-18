@@ -6,8 +6,8 @@ phase is not done, even if the UI looks finished.
 
 ```
 Phase 0  contract + one real train loop     ← done
-Phase 1  studio shell (pick recipe → video) ← v1 done; G1 stand + scene canvas + SSE in this slice
-Phase 2  demonstration data (LeRobot)
+Phase 1  studio shell (pick recipe → video) ← rooms + G1 stand + composed pick-and-place scene
+Phase 2  demonstration data (LeRobot)       ← inspect + keep/drop started; teleop/train later
 Phase 3  Isaac Lab as a second engine
 Phase 4  real G1/H1 deploy with safety gates
 ```
@@ -56,10 +56,11 @@ click Train, watch eval clips. The UI is a projection of the spec.
 | Deliverable | Status |
 |---|---|
 | `ht serve` API: recipes, validate, expand, runs, artifacts | done |
-| Studio UI: Recipes, Spec, Train, Runs + video | done |
+| Studio UI: Recipes, Spec, Train, Runs + video | done (Spec is Advanced; rooms are Robots / Tasks / Data / Runs) |
 | Live log streaming (SSE) | done |
 | Scene canvas (object placement writes the spec) | done (pick-and-place) |
-| Spec editor in the recipe view | done |
+| Dragged objects compiled into MuJoCo | done (MjSpec: table + primitives + eval camera) |
+| Spec editor in the recipe view | done (collapsed behind Advanced) |
 | Local Docker runner | later |
 
 ---
@@ -75,9 +76,9 @@ train an imitation recipe, get an eval video.
 
 | Deliverable | Status |
 |---|---|
-| LeRobot adapter (dataset I/O + ACT / similar) | not started |
-| Episode review (keep / drop) | not started |
-| `pick-and-place` recipe backed by real data | spec example only |
+| LeRobot adapter (dataset I/O + ACT / similar) | inspect local `meta/info.json`; train launch still blocked |
+| Episode review (keep / drop) | keep_episodes on the spec; no video editor yet |
+| `pick-and-place` recipe backed by real data | CPU **scene preview** in MuJoCo; imitation later |
 | Teleop session into the studio | not started |
 
 ---
@@ -124,7 +125,7 @@ a v1 feature.
 | `g1-stand` | 1 | yes (CPU MuJoCo, Menagerie G1) |
 | `g1-walk` | 0 compile / 3 train | compile only until Playground, mjlab, or Isaac Lab is present |
 | `g1-reach` | 1 compile | compile only |
-| `pick-and-place` | 2 | scene in the studio; train later |
+| `pick-and-place` | 2 | yes — CPU scene preview (G1 + table + dragged objects). Imitation from demos not trained. |
 | imitation-from-demos | 2 | not started |
 
 ---

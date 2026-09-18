@@ -37,6 +37,10 @@ class Recipe:
             "language": self.data.get("language"),
             "robot": self.data.get("robot"),
             "runnable": bool(self.data.get("runnable", False)),
+            "has_scene": bool(self.data.get("scene")),
+            "scene_preview": bool(
+                ((self.data.get("adapters") or {}).get("mujoco") or {}).get("scene_preview")
+            ),
             "adapters": sorted((self.data.get("adapters") or {}).keys()),
         }
 

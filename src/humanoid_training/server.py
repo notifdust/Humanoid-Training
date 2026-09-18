@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from humanoid_training.catalog import load_robot_catalog
+from humanoid_training.datasets import inspect_lerobot_dataset
 from humanoid_training.errors import RecipeError, SpecError, repo_root
 from humanoid_training.recipes import default_user_spec, expand_spec, list_recipes, load_recipe
 from humanoid_training.runner import default_runs_dir, load_manifest, new_run_id, run_job, _write_manifest
@@ -21,6 +22,10 @@ app = FastAPI(title="Humanoid Training Studio", version="0.1.0")
 
 class SpecBody(BaseModel):
     spec: dict[str, Any] = Field(default_factory=dict)
+
+
+class DatasetBody(BaseModel):
+    uri: str = ""
 
 
 def _public_spec(spec: dict[str, Any]) -> dict[str, Any]:
@@ -46,6 +51,11 @@ def health() -> dict[str, Any]:
 @app.get("/api/robots")
 def robots() -> dict[str, Any]:
     return {"robots": load_robot_catalog()}
+
+
+@app.post("/api/datasets/inspect")
+def api_inspect_dataset(body: DatasetBody) -> dict[str, Any]:
+    return inspect_lerobot_dataset(body.uri)
 
 
 @app.get("/api/recipes")
@@ -146,12 +156,21 @@ def run_events(run_id: str):
 
 @app.get("/api/runs/{run_id}/artifacts/{name}")
 def get_artifact(run_id: str, name: str):
-    if name not in {"eval.mp4", "manifest.json", "spec.json", "run.log", "checkpoint.npz"}:
+    if name not in {
+        "eval.mp4",
+        "manifest.json",
+        "spec.json",
+        "run.log",
+        "checkpoint.npz",
+        "composed_scene.xml",
+    }:
         raise HTTPException(status_code=400, detail="Unknown artifact")
     path = _find_run(run_id) / name
     if not path.is_file():
         raise HTTPException(status_code=404, detail=f"{name} not produced for this run")
-    media = "video/mp4" if name.endswith(".mp4") else "application/octet-stream"
+    media = "video/mp4" if name.endswith(".mp4") else (
+        "application/xml" if name.endswith(".xml") else "application/octet-stream"
+    )
     return FileResponse(path, media_type=media, filename=name)
 
 
