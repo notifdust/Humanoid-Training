@@ -1,0 +1,16 @@
+robots:
+  - id: cartpole
+    name: CartPole
+    kind: classic
+    dofs: 2
+    summary: Gymnasium smoke-test body. Proves the train → eval video loop on a laptop CPU.
+  - id: unitree-g1-29dof
+    name: Unitree G1 (29 DoF)
+    kind: humanoid
+    dofs: 29
+    summary: Primary humanoid target. Train via MuJoCo Playground or Isaac Lab, not Gymnasium.
+  - id: unitree-h1
+    name: Unitree H1
+    kind: humanoid
+    dofs: 19
+    summary: Cataloged for later recipes. No runnable adapter in Phase 0.

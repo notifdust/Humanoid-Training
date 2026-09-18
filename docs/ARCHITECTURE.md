@@ -241,19 +241,16 @@ Until Phase 4, the deploy button only targets simulation.
 Suggested layout when code exists:
 
 ```
-studio/                 # web app
-studio_server/          # spec validation, recipe expansion, runner API
-spec/                   # JSON schema for the job spec
-adapters/
-  playground/
-  mjlab/
-  isaaclab/
-  lerobot/
-recipes/
-docs/
+studio/                      # browser shell (Phase 1)
+src/humanoid_training/       # spec, recipes, adapters, runner, API
+  adapters/                  # gymnasium · playground · isaaclab
+spec/                        # JSON schema + example job specs
+recipes/                     # versioned task packages
+robots/catalog.yaml
+docs/ROADMAP.md
 ```
 
-Phase 0 of [VISION.md](./VISION.md) is `spec/` + one adapter + one recipe.
-The studio is Phase 1.
+Phase 0 of [VISION.md](./VISION.md) is live as `ht train`. The studio
+shell is `ht serve`. See [ROADMAP.md](./ROADMAP.md).
 
 Nothing in this architecture requires inventing physics.

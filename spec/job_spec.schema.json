@@ -121,12 +121,12 @@
           "type": "array",
           "items": {
             "type": "string",
-            "enum": ["playground", "mjlab", "isaaclab", "lerobot"]
+            "enum": ["gymnasium", "playground", "mjlab", "isaaclab", "lerobot"]
           }
         },
         "compute": {
           "type": "string",
-          "enum": ["local-docker", "hf-jobs", "osmo", "hosted"]
+          "enum": ["local", "local-docker", "hf-jobs", "osmo", "hosted"]
         }
       }
     },

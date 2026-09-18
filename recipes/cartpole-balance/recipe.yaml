@@ -1,0 +1,34 @@
+id: cartpole-balance
+version: 0.1.0
+phase: 0
+runnable: true
+title: Cartpole balance
+summary: CPU smoke test. Proves spec → train → eval video before we wrap G1 engines.
+language: Keep the pole balanced upright on the cart.
+robot: cartpole
+success:
+  type: upright-duration
+  min_return: 400
+  hold_s: 8
+train:
+  method: rl
+  policy: linear-pg
+  steps: 400
+  seed: 1
+eval:
+  episodes: 5
+  record_video: true
+backend:
+  prefer: [gymnasium]
+  compute: local
+adapters:
+  gymnasium:
+    env_id: CartPole-v1
+  playground:
+    unsupported: "CartPole is the studio smoke test. Use the gymnasium adapter."
+  isaaclab:
+    unsupported: "CartPole is the studio smoke test. Use the gymnasium adapter."
+gold:
+  notes: |
+    On CPU this usually crosses a 400 return in a few hundred episodes.
+    It is not a humanoid task. It exists so the compiler loop is real.
