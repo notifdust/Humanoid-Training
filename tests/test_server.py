@@ -19,6 +19,18 @@ def test_health_and_recipes() -> None:
     page = client.get("/")
     assert page.status_code == 200
     assert "Humanoid Training" in page.text
+    assert "Robots" in page.text
+    assert "Data" in page.text
+
+
+def test_inspect_dataset_fixture() -> None:
+    client = TestClient(app)
+    path = Path(__file__).resolve().parent / "fixtures" / "lerobot_tiny"
+    body = client.post("/api/datasets/inspect", json={"uri": str(path)})
+    assert body.status_code == 200
+    data = body.json()
+    assert data["ok"] is True
+    assert data["total_episodes"] == 2
 
 
 def test_api_train_cartpole(tmp_path: Path, monkeypatch) -> None:

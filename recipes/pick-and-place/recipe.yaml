@@ -1,9 +1,9 @@
 id: pick-and-place
-version: 0.1.0
+version: 0.2.0
 phase: 2
-runnable: false
+runnable: true
 title: Pick and place
-summary: Put an object in a container. Needs demonstration data (Phase 2) and a manipulation engine.
+summary: Drop G1 at a kitchen counter, drag mustard and bowl, preview the composed MuJoCo scene. Imitation from demos is still Phase 2.
 language: Pick up the object and put it in the container.
 robot: unitree-g1-29dof
 scene:
@@ -22,6 +22,7 @@ scene:
 success:
   type: object-in-container
   hold_s: 0.5
+  min_z: 0.5
 train:
   method: imitation
   policy: lerobot.act
@@ -31,16 +32,29 @@ eval:
   episodes: 20
   record_video: true
 backend:
-  prefer: [lerobot, mjlab, isaaclab]
-  compute: local-docker
+  prefer: [mujoco, lerobot, mjlab, isaaclab]
+  compute: local
 adapters:
+  mujoco:
+    mjcf: menagerie:unitree_g1/scene.xml
+    keyframe: 0
+    horizon: 180
+    render_every: 3
+    honors_scene: true
+    scene_preview: true
   gymnasium:
-    unsupported: "Pick-and-place needs LeRobot datasets and a manipulation engine (Phase 2)."
+    unsupported: "Pick-and-place is not a Gymnasium environment."
   playground:
-    unsupported: "Pick-and-place from demos is Phase 2. Use a locomotion recipe or wait for the LeRobot adapter."
+    unsupported: "Playground has no mustard-in-bowl env yet. CPU preview uses mujoco; imitation is Phase 2."
   isaaclab:
     unsupported: "Isaac Lab manipulation launch is Phase 3. Spec is kept so the mustard example still expands."
+  mjlab:
+    unsupported: "mjlab pick-and-place launch is Phase 3. CPU scene preview uses mujoco."
+  lerobot:
+    policy: act
+    unsupported: "Imitation from demos is Phase 2. Import a LeRobot dataset in the Data room. This recipe previews the scene on CPU MuJoCo."
 gold:
   notes: |
-    This package exists so spec/examples/g1-mustard-in-bowl.json expands.
-    It will not train until the LeRobot adapter lands.
+    Runnable today = G1 + table + dragged primitives in MuJoCo, eval.mp4.
+    That is a scene preview, not a trained pick. Success is "objects where you
+    put them and the robot still standing," not "mustard in bowl."

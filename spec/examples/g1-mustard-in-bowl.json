@@ -8,8 +8,8 @@
   "scene": {
     "template": "kitchen-counter-v1",
     "objects": [
-      { "id": "mustard", "asset": "ycb-mustard", "pose": "on:counter" },
-      { "id": "bowl", "asset": "bowl-white", "pose": "on:counter" }
+      { "id": "mustard", "asset": "ycb-mustard", "pose": "on:counter", "x": -0.18, "y": 0.04 },
+      { "id": "bowl", "asset": "bowl-white", "pose": "on:counter", "x": 0.16, "y": -0.02 }
     ]
   },
   "task": {
@@ -33,8 +33,8 @@
     "seed": 1
   },
   "backend": {
-    "prefer": ["mjlab", "isaaclab"],
-    "compute": "local-docker"
+    "prefer": ["mujoco", "lerobot", "mjlab", "isaaclab"],
+    "compute": "local"
   },
   "eval": {
     "episodes": 20,

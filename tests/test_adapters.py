@@ -66,3 +66,13 @@ def test_g1_reach_compiles_mjlab() -> None:
     payload = adapter.compile(spec)
     assert payload.env_name == "G1Reach-v0"
     assert "train_mjlab.sh" in payload.files
+
+
+def test_pick_and_place_selects_mujoco_preview() -> None:
+    spec = _expand("g1-mustard-in-bowl.json")
+    adapter = select_adapter(spec)
+    assert adapter.name == "mujoco"
+    payload = adapter.compile(spec)
+    assert payload.ignored_fields == []
+    assert payload.extra.get("honors_scene") is True
+    assert payload.extra.get("scene_preview") is True

@@ -251,6 +251,9 @@ docs/ROADMAP.md
 ```
 
 Phase 0 of [VISION.md](./VISION.md) is live as `ht train`. The studio
-shell is `ht serve`. See [ROADMAP.md](./ROADMAP.md).
+shell is `ht serve` with Robots / Tasks / Data / Runs rooms. Dragged
+`scene.objects` compile into MuJoCo via MjSpec (`composed_scene.xml`).
+The Data room inspects local LeRobot datasets; imitation launch is still
+Phase 2.
 
 Nothing in this architecture requires inventing physics.
