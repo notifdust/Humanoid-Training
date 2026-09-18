@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from humanoid_training.catalog import load_robot_catalog
 from humanoid_training.errors import RecipeError, SpecError, repo_root
 from humanoid_training.recipes import default_user_spec, expand_spec, list_recipes, load_recipe
-from humanoid_training.runner import default_runs_dir, load_manifest, new_run_id, run_job
+from humanoid_training.runner import default_runs_dir, load_manifest, new_run_id, run_job, _write_manifest
 from humanoid_training.spec import validate_spec
 
 app = FastAPI(title="Humanoid Training Studio", version="0.1.0")
@@ -133,7 +133,7 @@ def start_run(body: SpecBody) -> dict[str, Any]:
         "metrics": {},
         "artifacts": {},
     }
-    (run_dir / "manifest.json").write_text(json.dumps(queued, indent=2), encoding="utf-8")
+    _write_manifest(run_dir, queued)
 
     def _work() -> None:
         run_job(body.spec, runs_dir=runs_dir, log=None, run_id=run_id)

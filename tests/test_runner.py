@@ -31,6 +31,7 @@ def test_g1_walk_is_blocked_without_playground(tmp_path: Path) -> None:
     run_dir = Path(manifest["run_dir"])
     assert (run_dir / "train.sh").is_file()
     assert (run_dir / "engine_payload.json").is_file()
+    assert (run_dir / "engines" / "isaaclab" / "osmo_workflow.yaml").is_file()
 
 
 def test_g1_walk_compile_only(tmp_path: Path) -> None:

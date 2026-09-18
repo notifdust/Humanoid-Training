@@ -153,7 +153,8 @@ async function showRun(runId) {
     const video = run.artifacts && run.artifacts["eval.mp4"]
       ? `<video controls src="/api/runs/${run.run_id}/artifacts/eval.mp4"></video>`
       : `<p class="lede">No eval video yet.</p>`;
-    const metrics = run.metrics
+    const hasMetrics = run.metrics && run.metrics.eval_episodes != null;
+    const metrics = hasMetrics
       ? `<p class="status ${run.status}">success_rate=${fmt(run.metrics.success_rate)} mean_return=${fmt(run.metrics.mean_return)} passed=${run.metrics.passed ?? "—"}</p>`
       : "";
     main.innerHTML = `

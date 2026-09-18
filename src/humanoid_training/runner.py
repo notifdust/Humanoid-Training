@@ -10,7 +10,7 @@ from typing import Any, Callable
 from uuid import uuid4
 
 from humanoid_training import __version__
-from humanoid_training.adapters import select_adapter, write_payload_files
+from humanoid_training.adapters import registry, select_adapter, write_payload_files
 from humanoid_training.errors import AdapterUnavailable, NoAdapter, repo_root
 from humanoid_training.recipes import expand_spec
 from humanoid_training.spec import spec_hash
@@ -90,7 +90,18 @@ def run_job(
         adapter = select_adapter(expanded)
         payload = adapter.compile(expanded)
         write_payload_files(run_dir, payload)
+        compiled_engines = [payload.adapter]
+        for name, candidate in registry().items():
+            if name == payload.adapter:
+                continue
+            if not candidate.support(expanded).ok:
+                continue
+            extra = candidate.compile(expanded)
+            write_payload_files(run_dir / "engines" / name, extra)
+            compiled_engines.append(name)
+            emit(f"also compiled {name} -> engines/{name}/")
         manifest["adapter"] = payload.as_dict()
+        manifest["compiled_engines"] = compiled_engines
         manifest["ignored_fields"] = payload.ignored_fields
         _write_manifest(run_dir, manifest)
         emit(f"compiled adapter={payload.adapter} env={payload.env_name}")
@@ -143,12 +154,22 @@ def run_job(
     return manifest
 
 
-def _write_manifest(run_dir: Path, manifest: dict[str, Any]) -> None:
-    (run_dir / "manifest.json").write_text(
-        json.dumps(manifest, indent=2),
-        encoding="utf-8",
-    )
-
-
 def load_manifest(run_dir: Path) -> dict[str, Any]:
-    return json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    path = run_dir / "manifest.json"
+    last_error: Exception | None = None
+    for _ in range(10):
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, FileNotFoundError) as err:
+            last_error = err
+            import time
+
+            time.sleep(0.02)
+    raise last_error  # type: ignore[misc]
+
+
+def _write_manifest(run_dir: Path, manifest: dict[str, Any]) -> None:
+    path = run_dir / "manifest.json"
+    tmp = run_dir / ".manifest.json.tmp"
+    tmp.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    tmp.replace(path)
