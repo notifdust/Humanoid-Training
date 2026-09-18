@@ -167,6 +167,18 @@ def test_named_pose_ctrl_blends_to_reach() -> None:
     assert abs(full[3] - _REACH_POSE["right_elbow_joint"]) < 1e-9
 
 
+def test_mini_arm_has_no_freejoint_to_pin() -> None:
+    import mujoco
+
+    from humanoid_training.adapters.mujoco_adapter import _snapshot_freejoint
+
+    mjcf = Path(__file__).resolve().parent / "fixtures" / "mini_arm.xml"
+    model = mujoco.MjModel.from_xml_path(str(mjcf))
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    assert _snapshot_freejoint(model, data) is None
+
+
 def test_mini_arm_ik_moves_hand() -> None:
     import mujoco
 

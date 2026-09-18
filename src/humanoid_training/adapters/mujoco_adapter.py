@@ -268,6 +268,9 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
             f"right-arm IK on body id={hand_id} actuators={len(arm_acts)} "
             f"seed_steps={seed_steps} carry_clip={carry_clip:.4f}"
         )
+    pin_base = _snapshot_freejoint(model, data) if use_arm else None
+    if pin_base is not None:
+        log("pinning floating base — no standing balancer on this CPU path")
     grasped = False
     released = False
     waypoint = start.copy()
@@ -322,11 +325,8 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
                     log(f"place at step {_step} hand_bowl_dist={hand_dist:.3f}m")
                 return
             _data.mocap_pos[mocap] = pos
-            retract = pos.copy()
-            retract[2] += 0.10
-            ctrl[:] = _ik_toward(
-                mujoco, _model, _data, hand_id, retract, arm_acts, hold, gain=0.75
-            )
+            recover = min(1.0, float(_step - max(place_step, 0)) / 220.0)
+            ctrl[:] = _named_pose_ctrl(hold, names, _REACH_POSE, 1.0 - recover)
             return
         obs_t = np.array([pos[0], pos[1], bowl_xy[0], bowl_xy[1]], dtype=np.float64)
         delta = predict_linear_bc(weights, obs_t)
@@ -348,6 +348,7 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
         render_every=int(cfg.get("render_every", 3)),
         log=log,
         step_fn=step_fn,
+        pin_base=pin_base,
     )
     video_path = None
     if frames:
@@ -376,6 +377,7 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
             f"mustard_bowl_dist={dist:.3f}",
             f"mean_pelvis_z={mean_z:.3f}",
             "arm_ik=on" if use_arm else "arm_ik=off (no hand body)",
+            *(["pelvis pinned (no balance policy)"] if pin_base is not None else []),
             f"grasped_step={grasp_step} placed_step={place_step}",
             *_video_notes(frames),
         ],
@@ -404,6 +406,7 @@ def _simulate(
     render_every: int,
     log: LogFn,
     step_fn: Any,
+    pin_base: tuple[int, int, np.ndarray] | None = None,
 ) -> tuple[list[np.ndarray], list[float], list[bool], dict[str, int]]:
     eval_cfg = spec.get("eval") or {}
     record_video = bool(eval_cfg.get("record_video", True))
@@ -431,6 +434,11 @@ def _simulate(
     upright: list[bool] = []
     zs: list[float] = []
     for step in range(horizon):
+        if pin_base is not None:
+            qadr, dadr, q0 = pin_base
+            data.qpos[qadr : qadr + 7] = q0
+            data.qvel[dadr : dadr + 6] = 0.0
+            mujoco.mj_forward(model, data)
         if step_fn is not None:
             step_fn(model, data, step)
         if ctrl is not None:
@@ -497,6 +505,17 @@ def _placement_report(
     return rows
 
 
+def _snapshot_freejoint(model: Any, data: Any) -> tuple[int, int, np.ndarray] | None:
+    """Stand-keyframe pose of a freejoint, if the model has one."""
+    for i in range(int(model.njnt)):
+        if int(model.jnt_type[i]) != 0:  # mjJNT_FREE
+            continue
+        qadr = int(model.jnt_qposadr[i])
+        dadr = int(model.jnt_dofadr[i])
+        return qadr, dadr, np.array(data.qpos[qadr : qadr + 7], dtype=np.float64, copy=True)
+    return None
+
+
 def _hold_ctrl(model: Any, data: Any) -> np.ndarray | None:
     if model.nu == 0:
         return None
@@ -537,8 +556,6 @@ _ARM_ACTUATOR_BITS = (
     "right_elbow",
     "right_wrist",
     "waist_yaw",
-    "waist_pitch",
-    "waist_roll",
 )
 
 
@@ -573,8 +590,7 @@ _REACH_POSE = {
     "right_shoulder_roll_joint": 0.0,
     "right_shoulder_yaw_joint": -0.12,
     "right_elbow_joint": 1.70,
-    "waist_yaw_joint": 0.40,
-    "waist_pitch_joint": 0.30,
+    "waist_yaw_joint": 0.25,
 }
 
 

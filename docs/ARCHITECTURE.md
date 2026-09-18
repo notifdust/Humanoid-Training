@@ -255,7 +255,7 @@ shell is `ht serve` with Robots / Tasks / Data / Runs rooms. Dragged
 `scene.objects` compile into MuJoCo via MjSpec (`composed_scene.xml`).
 The Data room records and inspects local LeRobot datasets. Pick-and-place
 imitation is linear BC on object-space demos (mustard→bowl) plus a G1
-right-arm seed pose and Jacobian IK to carry mocap mustard. Not ACT,
-not finger grasping.
+right-arm seed pose and Jacobian IK to carry mocap mustard. The pelvis is
+pinned on that CPU path (no balance policy). Not ACT, not finger grasping.
 
 Nothing in this architecture requires inventing physics.
