@@ -32,6 +32,20 @@ def test_compose_adds_table_objects_and_camera() -> None:
     assert cam >= 0
 
 
+def test_kitchen_counter_sits_in_standing_g1_workspace() -> None:
+    from humanoid_training.compose import KITCHEN_COUNTER, object_world_pos, table_layout
+
+    layout = table_layout({})
+    assert layout["table_pos"] == KITCHEN_COUNTER["table_pos"]
+    mustard = object_world_pos(
+        {"id": "mustard", "asset": "ycb-mustard", "x": -0.10, "y": -0.05},
+        layout,
+    )
+    # Standing G1 wrist workspace is roughly x∈[0.15, 0.45], z∈[0.70, 0.95].
+    assert 0.15 <= mustard[0] <= 0.40
+    assert 0.70 <= mustard[2] <= 0.90
+
+
 def test_compose_mocap_mustard() -> None:
     mjcf = Path(__file__).resolve().parent / "fixtures" / "mini_humanoid.xml"
     scene = {

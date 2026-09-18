@@ -5,13 +5,19 @@ from typing import Any
 
 import numpy as np
 
-# Table-frame offsets from the studio canvas land on this counter.
+# Standing G1 wrist workspace is roughly x∈[0.15, 0.45], z∈[0.70, 0.95].
+# A floor-height counter at x=0.50 is not reachable with arm/waist only.
 KITCHEN_COUNTER = {
-    "table_pos": (0.72, 0.0, 0.40),
-    "table_size": (0.42, 0.32, 0.02),
+    "table_pos": (0.36, 0.0, 0.62),
+    "table_size": (0.16, 0.14, 0.02),
     "table_rgba": (0.45, 0.32, 0.18, 1.0),
-    "camera_pos": (1.85, -1.35, 1.20),
-    "camera_target": (0.45, 0.0, 0.55),
+    "camera_pos": (1.25, -1.05, 1.15),
+    "camera_target": (0.10, 0.0, 0.72),
+}
+
+STAND_CAMERA = {
+    "camera_pos": (1.55, -1.20, 1.10),
+    "camera_target": (0.02, 0.0, 0.72),
 }
 
 PRIMITIVES: dict[str, dict[str, Any]] = {

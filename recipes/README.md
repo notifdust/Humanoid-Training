@@ -6,10 +6,10 @@ blank reward function. See [ROADMAP.md](../docs/ROADMAP.md).
 | id | Runnable now | Engine |
 |---|---|---|
 | `cartpole-balance` | yes (CPU) | gymnasium |
-| `g1-stand` | yes (CPU) | mujoco + Menagerie G1 |
+| `g1-stand` | yes (CPU) | mujoco + Menagerie G1, stand + arm idle |
 | `g1-walk` | compile only | playground / mjlab / isaaclab |
 | `g1-reach` | compile only | mjlab / isaaclab |
-| `pick-and-place` | yes (CPU BC) | mujoco + LeRobot dataset (scripted or canvas drag); ACT later |
+| `pick-and-place` | yes (CPU BC) | mujoco + LeRobot dataset; G1 reaches/carries mustard (not ACT) |
 
 Each folder is:
 

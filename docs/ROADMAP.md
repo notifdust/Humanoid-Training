@@ -122,10 +122,10 @@ a v1 feature.
 | Recipe | Phase | Runnable today |
 |---|---|---|
 | `cartpole-balance` | 0 smoke test | yes (CPU) |
-| `g1-stand` | 1 | yes (CPU MuJoCo, Menagerie G1) |
+| `g1-stand` | 1 | yes (CPU MuJoCo, stand + both-arm idle, not walking) |
 | `g1-walk` | 0 compile / 3 train | compile only until Playground, mjlab, or Isaac Lab is present |
 | `g1-reach` | 1 compile | compile only |
-| `pick-and-place` | 2 | yes — record LeRobot demos (scripted or canvas drag), linear-BC, mustard-in-bowl eval. Not G1 grasping. |
+| `pick-and-place` | 2 | yes — demos + linear-BC + G1 reach/carry (seed pose + IK) to put mustard in the bowl. Not finger grasping. |
 | imitation-from-demos | 2 | same loop as pick-and-place; ACT / gamepad still later |
 
 ---

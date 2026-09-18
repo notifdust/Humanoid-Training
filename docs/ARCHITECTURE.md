@@ -254,6 +254,8 @@ Phase 0 of [VISION.md](./VISION.md) is live as `ht train`. The studio
 shell is `ht serve` with Robots / Tasks / Data / Runs rooms. Dragged
 `scene.objects` compile into MuJoCo via MjSpec (`composed_scene.xml`).
 The Data room records and inspects local LeRobot datasets. Pick-and-place
-imitation is linear BC on object-space demos (mustard→bowl), not ACT.
+imitation is linear BC on object-space demos (mustard→bowl) plus a G1
+right-arm seed pose and Jacobian IK to carry mocap mustard. Not ACT,
+not finger grasping.
 
 Nothing in this architecture requires inventing physics.
