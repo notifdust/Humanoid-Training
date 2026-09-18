@@ -156,6 +156,12 @@ def _cmd_record(path: str, out: Path, episodes: int, include_failure: bool) -> i
 def _cmd_serve(host: str, port: int) -> int:
     import uvicorn
 
+    open_host = "127.0.0.1" if host in {"0.0.0.0", "::", "[::]"} else host
+    print(f"Humanoid Training studio")
+    print(f"  Open http://{open_host}:{port}")
+    print("  Start here: Cartpole balance (~30s) → eval video")
+    print("  Then G1 stand, then Pick and place (drag mustard into the bowl).")
+    print("  Spec is under Advanced. This is not Isaac Lab.")
     uvicorn.run("humanoid_training.server:app", host=host, port=port, reload=False)
     return 0
 

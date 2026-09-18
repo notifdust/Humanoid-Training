@@ -42,6 +42,7 @@ class Recipe:
                 ((self.data.get("adapters") or {}).get("mujoco") or {}).get("scene_preview")
             ),
             "imitate": (self.data.get("train") or {}).get("method") == "imitation",
+            "start_here": self.id in {"cartpole-balance", "g1-stand", "pick-and-place"},
             "adapters": sorted((self.data.get("adapters") or {}).keys()),
         }
 

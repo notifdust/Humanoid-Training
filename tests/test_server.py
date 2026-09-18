@@ -21,6 +21,10 @@ def test_health_and_recipes() -> None:
     assert "Humanoid Training" in page.text
     assert "Robots" in page.text
     assert "Data" in page.text
+    js = client.get("/app.js")
+    assert js.status_code == 200
+    assert "Start here" in js.text
+    assert "Train again" in js.text
 
 
 def test_inspect_dataset_fixture() -> None:

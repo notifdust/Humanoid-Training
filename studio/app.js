@@ -60,6 +60,12 @@ function recipesForRobot() {
   return state.recipes.filter((r) => r.robot === state.robot.id);
 }
 
+const START_HERE = [
+  ["cartpole-balance", "1. Cartpole", "~30s CPU eval video"],
+  ["g1-stand", "2. G1 stand", "downloads Menagerie once"],
+  ["pick-and-place", "3. Pick and place", "drag mustard → bowl, then train"],
+];
+
 function renderRobots() {
   const cards = state.robots
     .map((robot) => {
@@ -97,6 +103,17 @@ function renderRecipes() {
   const filter = state.robot
     ? `Showing tasks for <code>${escapeHtml(state.robot.id)}</code>.`
     : "Pick a known-good task. Drag objects when a scene exists.";
+  const start = state.robot
+    ? ""
+    : `<div class="start-here" id="start-here">
+        <p>Start here — train writes an eval video. Spec is under Advanced.</p>
+        <div class="actions">
+          ${START_HERE.map(
+            ([id, label, hint]) =>
+              `<button class="primary" data-open="${id}">${label}</button><span class="meta">${hint}</span>`
+          ).join("")}
+        </div>
+      </div>`;
   const cards = list
     .map(
       (r) => `
@@ -114,6 +131,7 @@ function renderRecipes() {
     ${stepsHTML("task")}
     <h1>Tasks</h1>
     <p class="lede">${filter} Train writes a job spec and an eval video.</p>
+    ${start}
     <div class="grid">${cards || `<p class="lede">No recipes for this robot yet.</p>`}</div>
   `;
   main.querySelectorAll("[data-open]").forEach((btn) => {
@@ -149,6 +167,23 @@ function tokenStyle(obj) {
   return `left:${left}%;top:${top}%`;
 }
 
+function tableToPct(pt) {
+  const y = Number(pt.y) || 0;
+  const x = Number(pt.x) || 0;
+  return [((y + 0.32) / 0.64) * 100, ((0.42 - x) / 0.84) * 100];
+}
+
+function trailPolylines(extra) {
+  const paths = [...state.pendingTrajectories];
+  if (extra && extra.length) paths.push(extra);
+  return paths
+    .map((path) => {
+      const pts = path.map((p) => tableToPct(p).join(",")).join(" ");
+      return `<polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.2" />`;
+    })
+    .join("");
+}
+
 function sceneHTML(spec) {
   const objects = spec?.scene?.objects;
   if (!objects || !objects.length) {
@@ -168,6 +203,7 @@ function sceneHTML(spec) {
     <h2>Scene</h2>
     <p class="lede">Top-down counter. G1 stands at the near edge. Drag objects — that writes <code>scene.objects</code>.</p>
     <div class="canvas-wrap${state.recording ? " recording" : ""}" id="scene-canvas">
+      <svg class="trail" id="scene-trail" viewBox="0 0 100 100" preserveAspectRatio="none">${trailPolylines()}</svg>
       <span class="canvas-label">${escapeHtml(spec.scene.template || "scene")}</span>
       <span class="robot-mark">G1</span>
       ${tokens}
@@ -182,15 +218,20 @@ function renderRecipe() {
   const trainLabel = r.imitate ? "Train from demos" : r.scene_preview ? "Preview scene" : "Train this recipe";
   const trainHint = r.imitate
     ? `<p class="lede">Needs a LeRobot dataset. Record by dragging mustard into the bowl, or let Train write scripted takes. Object-space BC, not G1 grasping.</p>`
-    : "";
+    : r.runnable
+      ? ""
+      : `<p class="lede">Compile only on this CPU. Train still runs and will block with a next-step sentence (usually Playground / Isaac Lab + GPU).</p>`;
   const nTakes = state.pendingTrajectories.length;
+  const saveBtn = nTakes
+    ? `<button class="primary" id="save-demos">Save ${nTakes} demo${nTakes === 1 ? "" : "s"}</button>
+       <button class="ghost" id="undo-demo">Undo last</button>`
+    : "";
   const demoControls = r.imitate && hasScene
-    ? `<div class="actions" style="margin-top:12px">
+    ? `<div class="actions recipe-bar">
           <button class="ghost" id="toggle-record">${state.recording ? "Stop recording" : "Record a demo"}</button>
-          <button class="primary" id="save-demos" ${nTakes ? "" : "disabled"}>Save ${nTakes} demo${nTakes === 1 ? "" : "s"}</button>
-          ${nTakes ? `<button class="ghost" id="undo-demo">Undo last</button>` : ""}
+          ${saveBtn}
         </div>
-        <p class="lede">${state.recording ? "Drag mustard into the bowl. Each pointer-up is one take." : "Record a take on the canvas, then Save. Scripted demos still live in Data."}</p>
+        <p class="lede">${state.recording ? "Drag mustard into the bowl. Each pointer-up is one take. The yellow trail is what will be saved." : "Record a take on the canvas, then Save. Scripted demos still live in Data."}</p>
         <p class="status" id="demo-status">${escapeHtml(state.lastDemoMessage || (nTakes ? `${nTakes} take(s) in memory` : ""))}</p>
         <p class="error" id="demo-error"></p>`
     : "";
@@ -202,15 +243,15 @@ function renderRecipe() {
       <section>
         <p>${pill(r)} &nbsp; robot <code>${escapeHtml(r.robot)}</code></p>
         <p class="lede">${r.language || ""}</p>
-        ${sceneHTML(spec)}
-        ${trainHint}
-        ${demoControls}
-        <div class="actions" style="margin-top:16px">
+        <div class="actions recipe-bar">
           <button class="primary" id="train">${trainLabel}</button>
           <button class="ghost" id="back">Back to tasks</button>
         </div>
         <p class="status" id="train-status"></p>
         <p class="error" id="train-error"></p>
+        ${trainHint}
+        ${demoControls}
+        ${sceneHTML(spec)}
       </section>
       <section>
         <details class="advanced" id="advanced">
@@ -297,6 +338,8 @@ function bindSceneDrag() {
         if (recordingMustard) {
           path.push(pt);
           applyTokenStyle(token, pt);
+          const svg = document.getElementById("scene-trail");
+          if (svg) svg.innerHTML = trailPolylines(path);
           return;
         }
         obj.y = pt.y;
@@ -361,7 +404,10 @@ async function saveCanvasDemos() {
 }
 
 async function trainCurrent() {
-  const btn = document.getElementById("train") || document.getElementById("train-from-data");
+  const btn =
+    document.getElementById("train") ||
+    document.getElementById("train-from-data") ||
+    document.getElementById("train-again");
   const status = document.getElementById("train-status") || document.getElementById("record-status");
   const err = document.getElementById("train-error") || document.getElementById("record-error");
   if (btn) btn.disabled = true;
@@ -371,9 +417,13 @@ async function trainCurrent() {
     const editor = document.getElementById("spec-json");
     if (editor) {
       state.starter = JSON.parse(editor.value);
+    } else if (state.run?.run_id) {
+      const specRes = await fetch(`/api/runs/${state.run.run_id}/artifacts/spec.json`);
+      if (specRes.ok) state.starter = await specRes.json();
     }
     if (!state.starter) {
-      const detail = await api("/api/recipes/pick-and-place");
+      const recipeId = state.run?.recipe || "cartpole-balance";
+      const detail = await api(`/api/recipes/${recipeId}`);
       state.starter = detail.starter_spec;
       state.selected = detail.recipe;
     }
@@ -542,7 +592,7 @@ function renderRuns() {
         <div class="run-row" data-run="${run.run_id}">
           <div>
             <strong>${run.recipe || run.run_id}</strong>
-            <div class="meta">${run.run_id}</div>
+            <div class="meta">${run.run_id}${run.artifacts && run.artifacts["eval.mp4"] ? " · eval.mp4" : ""}</div>
           </div>
           <div class="status ${run.status || ""}">${run.status}</div>
         </div>
@@ -551,8 +601,8 @@ function renderRuns() {
     .join("");
   main.innerHTML = `
     <h1>Runs</h1>
-    <p class="lede">Every run writes a manifest, engine payload, and — when the adapter can — an eval video.</p>
-    <ul class="runs">${rows || "<li class='lede'>No runs yet.</li>"}</ul>
+    <p class="lede">Every run writes a manifest, engine payload, and — when the adapter can — an eval video. Click a row to play it.</p>
+    <ul class="runs">${rows || "<li class='lede'>No runs yet. Train Cartpole from Tasks.</li>"}</ul>
   `;
   main.querySelectorAll("[data-run]").forEach((el) => {
     el.addEventListener("click", () => showRun(el.dataset.run));
@@ -579,6 +629,10 @@ function paintRun(run, logText) {
     ${metrics}
     ${notes ? `<p class="lede">${notes}</p>` : ""}
     ${run.error ? `<p class="error">${escapeHtml(run.error)}</p>` : ""}
+    <div class="actions recipe-bar">
+      <button class="primary" id="train-again">Train again</button>
+      <button class="ghost" id="back-tasks">Back to tasks</button>
+    </div>
     <div class="detail">
       <section>
         <h2>Eval</h2>
@@ -591,6 +645,8 @@ function paintRun(run, logText) {
       </section>
     </div>
   `;
+  document.getElementById("train-again")?.addEventListener("click", trainCurrent);
+  document.getElementById("back-tasks")?.addEventListener("click", () => switchView("tasks"));
 }
 
 async function showRun(runId) {

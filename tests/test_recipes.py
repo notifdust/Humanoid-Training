@@ -45,3 +45,11 @@ def test_pick_and_place_has_scene_objects() -> None:
     expanded = expand_spec(spec)
     ids = {obj["id"] for obj in expanded["scene"]["objects"]}
     assert ids == {"mustard", "bowl"}
+
+
+def test_start_here_recipes() -> None:
+    flags = {r.id: r.as_public_dict()["start_here"] for r in list_recipes()}
+    assert flags["cartpole-balance"] is True
+    assert flags["g1-stand"] is True
+    assert flags["pick-and-place"] is True
+    assert flags["g1-walk"] is False

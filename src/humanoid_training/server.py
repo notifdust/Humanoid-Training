@@ -207,9 +207,14 @@ def get_artifact(run_id: str, name: str):
     path = _find_run(run_id) / name
     if not path.is_file():
         raise HTTPException(status_code=404, detail=f"{name} not produced for this run")
-    media = "video/mp4" if name.endswith(".mp4") else (
-        "application/xml" if name.endswith(".xml") else "application/octet-stream"
-    )
+    if name.endswith(".mp4"):
+        media = "video/mp4"
+    elif name.endswith(".xml"):
+        media = "application/xml"
+    elif name.endswith(".json"):
+        media = "application/json"
+    else:
+        media = "application/octet-stream"
     return FileResponse(path, media_type=media, filename=name)
 
 
