@@ -57,14 +57,13 @@ class MujocoAdapter:
             notes.append("scene.objects are compiled into the MJCF (table + primitives).")
         if method == "imitation":
             notes.append(
-                "Imitation: linear BC on object-space demos, G1 right arm reaches "
-                "with a seed pose + Jacobian IK, then carries mocap mustard. "
-                "Not finger grasping, not ACT."
+                "Imitation: G1 right arm plays pick/lift/place poses (qpos playback) "
+                "and carries mocap mustard. Not finger grasping, not ACT, not a "
+                "torque policy."
             )
         else:
             notes.append(
-                "Stand holds the keyframe while both arms raise and the waist "
-                "yaw-waves — not walking RL."
+                "Stand holds the keyframe while both arms raise and wave — not walking RL."
             )
         payload = EnginePayload(
             adapter=self.name,
@@ -128,6 +127,7 @@ def _launch_hold(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: Any) -
         if ctrl is None:
             return
         ctrl[:] = _idle_stand_ctrl(hold, names, step, horizon)
+        _drive_ctrl_subset(_model, _data, names, ctrl)
 
     frames, zs, upright, object_ids = _simulate(
         mujoco,
@@ -176,7 +176,7 @@ def _launch_hold(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: Any) -
             f"mean_pelvis_z={mean_z:.3f}",
             f"min_z={min_z}",
             f"hold_s={hold_s}",
-            "both arms raise and waist yaw-waves on the stand keyframe — not walking",
+            "both arms raise and wave on the stand keyframe — not walking",
         ]
         if placement:
             notes.append(f"objects_placed={sum(r['ok'] for r in placement)}/{len(placement)}")
@@ -259,45 +259,92 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
     names = _actuator_name_map(mujoco, model)
     use_arm = hand_id >= 0 and bool(arm_acts) and ctrl is not None
     horizon = int(cfg.get("horizon", 180))
+    pin_base = _snapshot_freejoint(model, data) if use_arm else None
     seed_steps = min(280, max(12, horizon // 5))
-    grasp_close = 0.13
-    grasp_late = 0.18
-    carry_clip = 0.012 if horizon < 200 else 0.0035
+    puppet = pin_base is not None
     if use_arm:
         log(
-            f"right-arm IK on body id={hand_id} actuators={len(arm_acts)} "
-            f"seed_steps={seed_steps} carry_clip={carry_clip:.4f}"
+            f"right-arm {'playback' if puppet else 'IK'} on body id={hand_id} "
+            f"actuators={len(arm_acts)}"
         )
-    pin_base = _snapshot_freejoint(model, data) if use_arm else None
-    if pin_base is not None:
-        log("pinning floating base — no standing balancer on this CPU path")
+    if puppet:
+        log("pinning floating base — arm qpos playback, not a torque/balance policy")
     grasped = False
     released = False
     waypoint = start.copy()
     grasp_step = -1
     place_step = -1
+    hold_pose = {name: float(hold[idx]) for name, idx in names.items()} if hold is not None else {}
+    reach_end = max(80, int(horizon * 0.28))
+    settle_end = reach_end + max(30, int(horizon * 0.05))
+    lift_end = settle_end + max(60, int(horizon * 0.12))
+    carry_end = lift_end + max(100, int(horizon * 0.22))
+    place_end = carry_end + max(30, int(horizon * 0.05))
 
     def step_fn(_model: Any, _data: Any, _step: int = 0) -> None:
         nonlocal pos, grasped, released, waypoint, grasp_step, place_step
+        if use_arm and puppet:
+            if not grasped:
+                alpha = _phase_alpha(_step, 0, reach_end)
+                pose = _blend_poses(hold_pose, _PICK_POSE, alpha)
+                if _step >= reach_end:
+                    pose = dict(_PICK_POSE)
+                _drive_named_pose(_model, _data, names, pose)
+                ctrl[:] = _named_pose_ctrl(hold, names, pose, 1.0)
+                _data.mocap_pos[mocap] = start
+                pos = start.copy()
+                hand = np.asarray(_data.xpos[hand_id], dtype=np.float64)
+                dist_h = float(np.linalg.norm(hand - start))
+                if _step >= settle_end - 1 and dist_h < 0.12:
+                    grasped = True
+                    grasp_step = _step
+                    log(f"grasp at step {_step} hand_mustard_dist={dist_h:.3f}m")
+                return
+            if grasped and not released:
+                if _step < lift_end:
+                    pose = _blend_poses(_PICK_POSE, _LIFT_POSE, _phase_alpha(_step, settle_end, lift_end))
+                else:
+                    pose = _blend_poses(_LIFT_POSE, _PLACE_POSE, _phase_alpha(_step, lift_end, carry_end))
+                _drive_named_pose(_model, _data, names, pose)
+                ctrl[:] = _named_pose_ctrl(hold, names, pose, 1.0)
+                hand = np.asarray(_data.xpos[hand_id], dtype=np.float64)
+                _data.mocap_pos[mocap] = hand
+                pos = hand.copy()
+                hand_dist = float(np.hypot(hand[0] - bowl_xy[0], hand[1] - bowl_xy[1]))
+                if _step >= carry_end and hand_dist <= radius + 0.06:
+                    released = True
+                    place_step = _step
+                    pos = np.array([bowl_xy[0], bowl_xy[1], table_z], dtype=np.float64)
+                    _data.mocap_pos[mocap] = pos
+                    log(f"place at step {_step} hand_bowl_dist={hand_dist:.3f}m")
+                elif _step >= place_end:
+                    released = True
+                    place_step = _step
+                    pos = np.array([bowl_xy[0], bowl_xy[1], table_z], dtype=np.float64)
+                    _data.mocap_pos[mocap] = pos
+                    log(f"place at step {_step} (timeout) hand_bowl_dist={hand_dist:.3f}m")
+                return
+            pose = _blend_poses(_PLACE_POSE, hold_pose, _phase_alpha(_step, place_end, min(horizon, place_end + 250)))
+            _drive_named_pose(_model, _data, names, pose)
+            ctrl[:] = _named_pose_ctrl(hold, names, pose, 1.0)
+            _data.mocap_pos[mocap] = pos
+            return
         if use_arm:
             hand = np.asarray(_data.xpos[hand_id], dtype=np.float64)
             if not grasped and not released:
                 if _step < seed_steps:
                     alpha = float(_step + 1) / float(max(seed_steps, 1))
-                    ctrl[:] = _named_pose_ctrl(hold, names, _REACH_POSE, alpha)
+                    ctrl[:] = _named_pose_ctrl(hold, names, _PICK_POSE, alpha)
                 else:
                     hover = start.copy()
-                    hover[2] = table_z + (0.06 if _step < seed_steps + 80 else 0.0)
+                    hover[2] = table_z + (0.06 if _step < seed_steps + 40 else 0.0)
                     ctrl[:] = _ik_toward(
                         mujoco, _model, _data, hand_id, hover, arm_acts, hold, gain=0.75
                     )
                 _data.mocap_pos[mocap] = start
                 pos = start.copy()
                 dist_h = float(np.linalg.norm(hand - start))
-                close_enough = dist_h < grasp_close or (
-                    _step >= seed_steps + 40 and dist_h < grasp_late
-                )
-                if close_enough:
+                if _step >= seed_steps and dist_h < 0.08:
                     grasped = True
                     grasp_step = _step
                     log(f"grasp at step {_step} hand_mustard_dist={dist_h:.3f}m")
@@ -307,8 +354,9 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
                     [waypoint[0], waypoint[1], bowl_xy[0], bowl_xy[1]], dtype=np.float64
                 )
                 delta = predict_linear_bc(weights, obs_t)
-                waypoint[0] += float(np.clip(delta[0], -carry_clip, carry_clip))
-                waypoint[1] += float(np.clip(delta[1], -carry_clip, carry_clip))
+                clip = 0.012
+                waypoint[0] += float(np.clip(delta[0], -clip, clip))
+                waypoint[1] += float(np.clip(delta[1], -clip, clip))
                 dist = float(np.hypot(waypoint[0] - bowl_xy[0], waypoint[1] - bowl_xy[1]))
                 waypoint[2] = table_z + 0.05 * min(1.0, dist / 0.2)
                 ctrl[:] = _ik_toward(
@@ -317,7 +365,7 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
                 _data.mocap_pos[mocap] = hand
                 pos = hand.copy()
                 hand_dist = float(np.hypot(hand[0] - bowl_xy[0], hand[1] - bowl_xy[1]))
-                if dist <= radius and hand_dist <= radius + 0.10:
+                if dist <= radius and hand_dist <= radius + 0.08:
                     released = True
                     place_step = _step
                     pos = np.array([bowl_xy[0], bowl_xy[1], table_z], dtype=np.float64)
@@ -325,8 +373,7 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
                     log(f"place at step {_step} hand_bowl_dist={hand_dist:.3f}m")
                 return
             _data.mocap_pos[mocap] = pos
-            recover = min(1.0, float(_step - max(place_step, 0)) / 220.0)
-            ctrl[:] = _named_pose_ctrl(hold, names, _REACH_POSE, 1.0 - recover)
+            ctrl[:] = hold
             return
         obs_t = np.array([pos[0], pos[1], bowl_xy[0], bowl_xy[1]], dtype=np.float64)
         delta = predict_linear_bc(weights, obs_t)
@@ -372,7 +419,7 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
         video_path=video_path,
         passed=passed,
         notes=[
-            "linear BC + G1 right-arm seed pose + IK — mocap mustard, not finger grasping, not ACT",
+            "linear BC + G1 right-arm pick/lift/place playback — mocap mustard, not finger grasping, not ACT",
             f"frames={len(obs)} keep_episodes={keep if keep is not None else 'all'}",
             f"mustard_bowl_dist={dist:.3f}",
             f"mean_pelvis_z={mean_z:.3f}",
@@ -584,14 +631,80 @@ def _arm_actuator_ids(mujoco: Any, model: Any) -> list[int]:
     return sorted(ids)
 
 
-# Open-loop pose that puts the standing G1 right wrist near the kitchen mustard.
-_REACH_POSE = {
-    "right_shoulder_pitch_joint": -0.86,
-    "right_shoulder_roll_joint": 0.0,
-    "right_shoulder_yaw_joint": -0.12,
-    "right_elbow_joint": 1.70,
-    "waist_yaw_joint": 0.25,
+# Open-loop poses that put the standing G1 wrist on the kitchen mustard / bowl.
+_PICK_POSE = {
+    "right_shoulder_pitch_joint": -0.30,
+    "right_shoulder_roll_joint": 0.04,
+    "right_shoulder_yaw_joint": 0.42,
+    "right_elbow_joint": 1.00,
+    "right_wrist_pitch_joint": 0.23,
+    "waist_yaw_joint": 0.21,
 }
+_LIFT_POSE = {
+    "right_shoulder_pitch_joint": -0.18,
+    "right_shoulder_roll_joint": 0.20,
+    "right_shoulder_yaw_joint": 0.25,
+    "right_elbow_joint": 0.72,
+    "right_wrist_pitch_joint": 0.10,
+    "waist_yaw_joint": 0.18,
+}
+_PLACE_POSE = {
+    "right_shoulder_pitch_joint": -0.84,
+    "right_shoulder_roll_joint": 0.04,
+    "right_shoulder_yaw_joint": 0.07,
+    "right_elbow_joint": 1.60,
+    "right_wrist_pitch_joint": 0.05,
+    "waist_yaw_joint": 0.34,
+}
+_REACH_POSE = _PICK_POSE
+
+
+def _phase_alpha(step: int, start: int, end: int) -> float:
+    if end <= start:
+        return 1.0
+    return float(np.clip((step - start) / float(end - start), 0.0, 1.0))
+
+
+def _blend_poses(a: dict[str, float], b: dict[str, float], t: float) -> dict[str, float]:
+    t = float(np.clip(t, 0.0, 1.0))
+    keys = set(a) | set(b)
+    out: dict[str, float] = {}
+    for key in keys:
+        av = float(a[key]) if key in a else float(b[key])
+        bv = float(b[key]) if key in b else av
+        out[key] = (1.0 - t) * av + t * bv
+    return out
+
+
+def _drive_named_pose(model: Any, data: Any, names: dict[str, int], pose: dict[str, float]) -> None:
+    """Write joint qpos+ctrl so eval motion is not waiting on weak wrist actuators."""
+    import mujoco
+
+    for name, val in pose.items():
+        idx = names.get(name)
+        if idx is None:
+            continue
+        jnt = int(model.actuator_trnid[idx, 0])
+        if jnt < 0:
+            continue
+        data.qpos[int(model.jnt_qposadr[jnt])] = float(val)
+        data.qvel[int(model.jnt_dofadr[jnt])] = 0.0
+        data.ctrl[idx] = float(val)
+    mujoco.mj_forward(model, data)
+
+
+def _drive_ctrl_subset(model: Any, data: Any, names: dict[str, int], ctrl: np.ndarray) -> None:
+    import mujoco
+
+    for name, idx in names.items():
+        if not any(bit in name for bit in ("shoulder", "elbow", "wrist", "waist_")):
+            continue
+        jnt = int(model.actuator_trnid[idx, 0])
+        if jnt < 0:
+            continue
+        data.qpos[int(model.jnt_qposadr[jnt])] = float(ctrl[idx])
+        data.qvel[int(model.jnt_dofadr[jnt])] = 0.0
+    mujoco.mj_forward(model, data)
 
 
 def _named_pose_ctrl(
@@ -616,11 +729,11 @@ def _idle_stand_ctrl(
     step: int,
     horizon: int,
 ) -> np.ndarray:
-    """Raise both arms and yaw-wave so a stand eval is not a still photo."""
+    """Raise both arms and wave so a stand eval is not a still photo."""
     ctrl = np.array(hold, copy=True)
     t = float(step) / float(max(horizon - 1, 1))
-    lift = 0.5 * (1.0 - np.cos(2.0 * np.pi * t))
-    wave = float(np.sin(2.0 * np.pi * 2.0 * t))
+    up = min(1.0, t / 0.18)
+    wave = float(np.sin(2.0 * np.pi * 3.0 * t))
 
     def nudge(name: str, delta: float) -> None:
         idx = names.get(name)
@@ -628,13 +741,15 @@ def _idle_stand_ctrl(
             return
         ctrl[idx] = float(hold[idx] + delta)
 
-    nudge("right_shoulder_pitch_joint", -1.15 * lift)
-    nudge("right_shoulder_roll_joint", 0.40 * lift)
-    nudge("right_elbow_joint", 0.40 * lift + 0.18 * wave * lift)
-    nudge("right_shoulder_yaw_joint", 0.25 * wave * lift)
-    nudge("waist_yaw_joint", 0.50 * wave)
-    nudge("left_shoulder_pitch_joint", -0.85 * lift)
-    nudge("left_elbow_joint", 0.30 * lift)
+    nudge("right_shoulder_pitch_joint", -1.25 * up)
+    nudge("right_shoulder_roll_joint", 0.45 * up)
+    nudge("right_elbow_joint", 0.25 * up)
+    nudge("right_shoulder_yaw_joint", 0.55 * wave * up)
+    nudge("waist_yaw_joint", 0.55 * wave)
+    nudge("left_shoulder_pitch_joint", -1.05 * up)
+    nudge("left_shoulder_roll_joint", -0.40 * up)
+    nudge("left_elbow_joint", 0.25 * up)
+    nudge("left_shoulder_yaw_joint", -0.45 * wave * up)
     return ctrl
 
 
