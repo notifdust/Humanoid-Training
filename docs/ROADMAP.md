@@ -78,7 +78,7 @@ train an imitation recipe, get an eval video.
 |---|---|
 | LeRobot adapter (dataset I/O + ACT / similar) | write/inspect local LeRobot v2 layout; ACT launch still blocked |
 | Episode review (keep / drop) | keep_episodes filters BC training frames |
-| `pick-and-place` recipe backed by real data | scripted or canvas-drag object-space demos + CPU linear-BC → mustard-in-bowl eval |
+| `pick-and-place` recipe backed by real data | scripted or canvas demos → linear-BC steers mustard; G1 arm plays pick/lift/place poses |
 | Teleop session into the studio | canvas drag records LeRobot takes; gamepad still later |
 
 ---
@@ -122,10 +122,10 @@ a v1 feature.
 | Recipe | Phase | Runnable today |
 |---|---|---|
 | `cartpole-balance` | 0 smoke test | yes (CPU) |
-| `g1-stand` | 1 | yes (CPU MuJoCo, stand + both-arm idle, not walking) |
+| `g1-stand` | 1 | yes (CPU MuJoCo, stand + both-arm wave, pelvis pinned, not walking) |
 | `g1-walk` | 0 compile / 3 train | compile only until Playground, mjlab, or Isaac Lab is present |
 | `g1-reach` | 1 compile | compile only |
-| `pick-and-place` | 2 | yes — demos + linear-BC + G1 reach/carry (seed pose + IK) to put mustard in the bowl. Not finger grasping. |
+| `pick-and-place` | 2 | yes — demos fit linear-BC; G1 pick pose + BC mustard path + place poses. Not finger grasping. |
 | imitation-from-demos | 2 | same loop as pick-and-place; ACT / gamepad still later |
 
 ---

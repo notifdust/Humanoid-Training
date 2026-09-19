@@ -228,9 +228,12 @@ pre,
   font-size: 12px;
 }
 
-.status.passed,
-.status.completed {
+.status.passed {
   color: var(--ok);
+}
+
+.status.completed {
+  color: var(--warn);
 }
 
 .status.blocked,

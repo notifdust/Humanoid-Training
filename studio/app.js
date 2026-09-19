@@ -63,7 +63,7 @@ function recipesForRobot() {
 const START_HERE = [
   ["cartpole-balance", "1. Cartpole", "~30s CPU eval video"],
   ["g1-stand", "2. G1 stand", "arms raise + wave (~2s)"],
-  ["pick-and-place", "3. Pick and place", "re-train — arm reaches mustard"],
+  ["pick-and-place", "3. Pick and place", "BC steers mustard; arm follows"],
 ];
 
 function renderRobots() {
@@ -215,9 +215,9 @@ function renderRecipe() {
   const r = state.selected;
   const spec = state.expanded?.spec || state.starter;
   const hasScene = Boolean(spec?.scene?.objects?.length);
-  const trainLabel = r.imitate ? "Train from demos" : r.scene_preview ? "Preview scene" : "Train this recipe";
+  const trainLabel = r.imitate ? "Train pick eval" : r.scene_preview ? "Preview scene" : "Train this recipe";
   const trainHint = r.imitate
-    ? `<p class="lede">Needs a LeRobot dataset. Record by dragging mustard into the bowl, or let Train write scripted takes. Object-space BC, not G1 grasping.</p>`
+    ? `<p class="lede">Fits linear BC on demos (canvas or scripted). Eval: G1 reaches, then BC steers the mustard into the bowl while the arm follows. Not finger grasping.</p>`
     : r.runnable
       ? ""
       : `<p class="lede">Compile only on this CPU. Train still runs and will block with a next-step sentence (usually Playground / Isaac Lab + GPU).</p>`;
@@ -474,9 +474,9 @@ function renderData() {
         <thead><tr><th>keep</th><th>#</th><th>length</th><th>tasks</th><th>success</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <p class="lede">Keep/drop writes <code>data.keep_episodes</code>. Train from demos fits linear BC on the kept frames.</p>
+      <p class="lede">Keep/drop writes <code>data.keep_episodes</code>. Train pick eval fits linear BC on kept frames — that BC steers the mustard path.</p>
       <div class="actions">
-        <button class="primary" id="train-from-data">Train from demos</button>
+        <button class="primary" id="train-from-data">Train pick eval</button>
       </div>
     `;
   } else if (inspected && inspected.error) {
@@ -488,7 +488,7 @@ function renderData() {
       Demonstrations live in the LeRobot dataset format — we do not invent one.
       Record scripted mustard→bowl demos here, drop bad takes, then train.
       Or record by dragging mustard on the task scene. Gamepad teleop is still later;
-      these demos are object-space, not G1 grasping.
+      these demos fit linear BC that steers the mustard; the G1 arm follows with poses, not finger grasping.
     </p>
     <section>
       <h2>On this job</h2>
@@ -586,22 +586,39 @@ function syncKeepEpisodes() {
 
 function renderRuns() {
   const rows = state.runs
-    .map(
-      (run) => `
+    .map((run) => {
+      const notes = (run.notes || []).join(" ");
+      const mode =
+        (notes.match(/arm_mode=[\w+]+/) || [])[0] ||
+        (notes.includes("playback") ? "arm_mode=playback" : "") ||
+        (notes.includes("linear BC") ? "object-BC" : "");
+      const passed = run.metrics && run.metrics.passed === true;
+      const statusClass =
+        run.status === "passed" || passed
+          ? "passed"
+          : run.status === "completed"
+            ? "completed"
+            : run.status || "";
+      const hint = mode
+        ? ` · ${mode}`
+        : run.status === "completed" && run.metrics && run.metrics.passed === false
+          ? " · failed metrics"
+          : "";
+      return `
       <li>
         <div class="run-row" data-run="${run.run_id}">
           <div>
             <strong>${run.recipe || run.run_id}</strong>
-            <div class="meta">${run.run_id}${run.artifacts && run.artifacts["eval.mp4"] ? " · eval.mp4" : ""}</div>
+            <div class="meta">${run.run_id}${run.artifacts && run.artifacts["eval.mp4"] ? " · eval.mp4" : ""}${hint}</div>
           </div>
-          <div class="status ${run.status || ""}">${run.status}</div>
+          <div class="status ${statusClass}">${run.status}${passed ? "" : run.status === "completed" ? " (not passed)" : ""}</div>
         </div>
-      </li>`
-    )
+      </li>`;
+    })
     .join("");
   main.innerHTML = `
     <h1>Runs</h1>
-    <p class="lede">Every run writes a manifest, engine payload, and — when the adapter can — an eval video. Click a row to play it.</p>
+    <p class="lede">Every run writes a manifest, engine payload, and — when the adapter can — an eval video. Click a row to play it. Prefer runs whose notes say <code>arm_mode=playback+BC</code> over older frozen clips.</p>
     <ul class="runs">${rows || "<li class='lede'>No runs yet. Train Cartpole from Tasks.</li>"}</ul>
   `;
   main.querySelectorAll("[data-run]").forEach((el) => {
@@ -621,11 +638,21 @@ function paintRun(run, logText) {
   const metrics = hasMetrics
     ? `<p class="status ${run.status}">success_rate=${fmt(run.metrics.success_rate)} mean_return=${fmt(run.metrics.mean_return)} passed=${run.metrics.passed ?? "—"}</p>`
     : "";
+  const statusClass =
+    run.status === "passed" || (run.metrics && run.metrics.passed === true)
+      ? "passed"
+      : run.status === "completed"
+        ? "completed"
+        : run.status || "";
   main.innerHTML = `
     ${stepsHTML("train")}
     <h1>Run</h1>
     <p class="lede">${run.run_id}</p>
-    <p class="status ${run.status}">${run.status}</p>
+    <p class="status ${statusClass}">${run.status}${
+      run.status === "completed" && run.metrics && run.metrics.passed === false
+        ? " (metrics not passed)"
+        : ""
+    }</p>
     ${metrics}
     ${notes ? `<p class="lede">${notes}</p>` : ""}
     ${run.error ? `<p class="error">${escapeHtml(run.error)}</p>` : ""}

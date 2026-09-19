@@ -254,9 +254,9 @@ Phase 0 of [VISION.md](./VISION.md) is live as `ht train`. The studio
 shell is `ht serve` with Robots / Tasks / Data / Runs rooms. Dragged
 `scene.objects` compile into MuJoCo via MjSpec (`composed_scene.xml`).
 The Data room records and inspects local LeRobot datasets. Pick-and-place
-imitation is linear BC on object-space demos (mustard→bowl) plus G1
-right-arm pick/lift/place playback to carry mocap mustard. The pelvis is
-pinned and the arm is qpos-driven on that CPU path (no torque policy).
-Not ACT, not finger grasping.
+imitation is linear BC on demos (mustard→bowl). On the Menagerie G1 the
+arm plays pick/lift/place poses while BC steers mocap mustard. Pelvis
+pinned. Not ACT, not finger grasping. `gold/eval.mp4` folders are not
+required yet — recipe gold notes document honesty instead.
 
 Nothing in this architecture requires inventing physics.

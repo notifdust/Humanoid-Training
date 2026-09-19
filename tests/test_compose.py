@@ -39,7 +39,7 @@ def test_kitchen_counter_sits_in_standing_g1_workspace() -> None:
     layout = table_layout({})
     assert layout["table_pos"] == KITCHEN_COUNTER["table_pos"]
     mustard = object_world_pos(
-        {"id": "mustard", "asset": "ycb-mustard", "x": -0.08, "y": -0.04},
+        {"id": "mustard", "asset": "ycb-mustard", "x": -0.10, "y": -0.05},
         layout,
     )
     # Standing G1 wrist workspace is roughly x∈[0.15, 0.45], z∈[0.70, 0.95].
