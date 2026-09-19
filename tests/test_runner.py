@@ -38,6 +38,16 @@ def test_g1_walk_is_blocked_without_playground(tmp_path: Path) -> None:
     assert (run_dir / "engines" / "isaaclab" / "osmo_workflow.yaml").is_file()
 
 
+def test_g1_reach_is_blocked_with_cpu_next_step(tmp_path: Path) -> None:
+    spec = load_spec(Path(__file__).resolve().parents[1] / "spec" / "examples" / "g1-reach.json")
+    manifest = run_job(spec, runs_dir=tmp_path)
+    assert manifest["status"] == "blocked"
+    err = manifest["error"] or ""
+    assert "mjlab" in err.lower() or "reach" in err.lower()
+    assert "CPU studio" in err or "g1-stand" in err or "pick-and-place" in err
+    assert (Path(manifest["run_dir"]) / "train_mjlab.sh").is_file()
+
+
 def test_g1_walk_compile_only(tmp_path: Path) -> None:
     spec = load_spec(Path(__file__).resolve().parents[1] / "spec" / "examples" / "g1-walk.json")
     manifest = run_job(spec, runs_dir=tmp_path, compile_only=True)

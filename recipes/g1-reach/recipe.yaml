@@ -3,7 +3,7 @@ version: 0.1.0
 phase: 1
 runnable: false
 title: G1 reach
-summary: Reach a target with a G1 arm. Compiles to Playground / mjlab / Isaac Lab; live train is GPU work.
+summary: Reach a target with a G1 arm. Compiles mjlab / Isaac Lab payloads; live train needs a GPU (blocked on CPU studio).
 language: Reach the target with the right hand.
 robot: unitree-g1-29dof
 success:
