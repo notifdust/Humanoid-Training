@@ -1,1 +1,96 @@
-Read me
+# Humanoid Training
+
+A studio for training robots without making people become Isaac Lab
+experts first.
+
+**What you do:** pick a canned task → click Train → watch a video.
+That is the product. It is Canva on top of MuJoCo / Isaac Lab, not a
+new simulator.
+
+## Run it on your computer
+
+From a **new terminal** (your home directory is fine):
+
+```bash
+git clone https://github.com/notifdust/Humanoid-Training.git
+cd Humanoid-Training
+./run-studio.sh
+```
+
+Then open **http://127.0.0.1:8000**. Click **Cartpole → Train**.
+Wait ~30s. Play the video. That is the loop.
+
+If `./run-studio.sh` is not executable: `chmod +x run-studio.sh` and run it again.
+
+Same steps by hand:
+
+```bash
+cd Humanoid-Training          # the folder that contains pyproject.toml
+python3 -m venv .venv
+source .venv/bin/activate     # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
+python -m humanoid_training.cli serve --host 127.0.0.1 --port 8000
+```
+
+Do **not** `cd /path/to/Humanoid-Training` — that was a placeholder. Do **not**
+install the Ubuntu `ht` TeX package. After `pip install -e ".[dev]"` the
+command is `ht` **or** `python -m humanoid_training.cli`.
+
+You need a display for eval video (MuJoCo uses GLFW). Headless:
+`HT_NO_RENDER=1 python -m humanoid_training.cli train spec/examples/cartpole-balance.json`
+still scores success; it will not write `eval.mp4`.
+
+### What to click
+
+1. **Cartpole → Train.** Pole stays up. Proves Train → video on your machine.
+2. **G1 stand → Train.** Humanoid holds a pose and waves. Not walking.
+3. **Pick and place → Train.** Mustard goes in the bowl; the arm follows. Not finger grasping.
+
+Skip **G1 walk** and **G1 reach** on a laptop — they need a GPU and will stop on purpose.
+
+Rooms: Robots · Tasks · Data · Runs. Job spec is under **Advanced**.
+
+### Same jobs from the CLI
+
+```bash
+python -m humanoid_training.cli recipes
+python -m humanoid_training.cli train spec/examples/cartpole-balance.json
+python -m humanoid_training.cli fetch-assets unitree_g1
+python -m humanoid_training.cli train spec/examples/g1-stand.json
+python -m humanoid_training.cli train spec/examples/g1-walk.json --compile-only
+```
+
+Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
+
+## Read this first
+
+- **[Roadmap](docs/ROADMAP.md)** — phases, exit tests, what is live now
+- **[Product vision](docs/VISION.md)** — landscape and why we compile instead of replacing engines
+- **[Architecture](docs/ARCHITECTURE.md)** — job spec, adapters, runners
+
+## What works today
+
+| Recipe | What happens |
+|---|---|
+| `cartpole-balance` | Gymnasium RL on CPU, eval video |
+| `g1-stand` | MuJoCo G1 from Menagerie, stand + both-arm wave, eval video |
+| `g1-walk` | Compile to Playground / mjlab / Isaac Lab (GPU to launch) |
+| `g1-reach` | Compile to mjlab / Isaac Lab |
+| `pick-and-place` | Demos → linear BC steers mustard; G1 arm plays pick/lift/place. Not finger grasping, not ACT. |
+
+## Non-goals (for now)
+
+- A new physics engine
+- A new policy architecture or dataset format
+- Competing with LeLab on SO-ARM101 unboxing
+- Fleet operations (use Foxglove / Formant later)
+
+## Tests
+
+```bash
+pytest
+```
+
+## License
+
+TBD.

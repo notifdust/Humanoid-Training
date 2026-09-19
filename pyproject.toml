@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "humanoid-training"
+version = "0.1.0"
+description = "Studio and compiler for robot training jobs on MuJoCo, Isaac Lab, and LeRobot."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "jsonschema>=4.20",
+  "PyYAML>=6.0",
+  "numpy>=1.26",
+  "gymnasium[classic-control]>=0.29",
+  "mujoco>=3.2",
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.32",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "httpx>=0.27",
+]
+mujoco = [
+  "mujoco>=3.2",
+]
+
+[project.scripts]
+ht = "humanoid_training.cli:main"
+humanoid-training = "humanoid_training.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+humanoid_training = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = [
+  "ignore::DeprecationWarning",
+]

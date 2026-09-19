@@ -1,0 +1,42 @@
+{
+  "spec_version": "0.1.0",
+  "name": "g1-mustard-in-bowl",
+  "robot": {
+    "id": "unitree-g1-29dof",
+    "source": "catalog"
+  },
+  "scene": {
+    "template": "kitchen-counter-v1",
+    "objects": [
+      { "id": "mustard", "asset": "ycb-mustard", "pose": "on:counter", "x": -0.10, "y": -0.05 },
+      { "id": "bowl", "asset": "bowl-white", "pose": "on:counter", "x": 0.10, "y": 0.05 }
+    ]
+  },
+  "task": {
+    "recipe": "pick-and-place",
+    "language": "Pick up the mustard bottle and put it in the bowl.",
+    "success": {
+      "type": "object-in-container",
+      "object": "mustard",
+      "container": "bowl",
+      "hold_s": 0.5
+    }
+  },
+  "data": {
+    "min_episodes": 4
+  },
+  "train": {
+    "method": "imitation",
+    "policy": "linear-bc",
+    "steps": 180,
+    "seed": 1
+  },
+  "backend": {
+    "prefer": ["mujoco", "lerobot", "mjlab", "isaaclab"],
+    "compute": "local"
+  },
+  "eval": {
+    "episodes": 20,
+    "record_video": true
+  }
+}

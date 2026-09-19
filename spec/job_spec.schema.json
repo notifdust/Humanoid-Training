@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/notifdust/Humanoid-Training/spec/job_spec.schema.json",
+  "title": "Humanoid Training job spec",
+  "description": "Source of truth for a studio training run. The UI writes this; adapters compile it into Isaac Lab, mjlab, MuJoCo Playground, or LeRobot payloads.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["spec_version", "name", "robot", "task", "train"],
+  "properties": {
+    "spec_version": {
+      "type": "string",
+      "pattern": "^0\\.[0-9]+\\.[0-9]+$",
+      "description": "Schema version. Adapters must reject major-incompatible documents."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "robot": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Catalog id such as unitree-g1-29dof, or 'custom'."
+        },
+        "source": {
+          "type": "string",
+          "enum": ["catalog", "urdf", "mjcf", "usd"]
+        },
+        "uri": {
+          "type": "string",
+          "description": "Required when source is not catalog."
+        }
+      }
+    },
+    "scene": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "template": { "type": "string" },
+        "objects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["id"],
+            "properties": {
+              "id": { "type": "string" },
+              "asset": { "type": "string" },
+              "pose": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["recipe"],
+      "properties": {
+        "recipe": {
+          "type": "string",
+          "description": "Id of a versioned recipe package, e.g. pick-and-place or g1-walk."
+        },
+        "language": {
+          "type": "string",
+          "description": "Plain-language task description for demos, VLAs, and the UI."
+        },
+        "success": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["type"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "object-in-container",
+                "reached-pose",
+                "upright-duration",
+                "custom"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "datasets": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "LeRobot dataset refs, usually hf:org/name or file: paths."
+        },
+        "min_episodes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "train": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["method"],
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["imitation", "rl", "hybrid", "hold"]
+        },
+        "policy": { "type": "string" },
+        "steps": { "type": "integer", "minimum": 1 },
+        "seed": { "type": "integer" }
+      }
+    },
+    "backend": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "prefer": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["gymnasium", "mujoco", "playground", "mjlab", "isaaclab", "lerobot"]
+          }
+        },
+        "compute": {
+          "type": "string",
+          "enum": ["local", "local-docker", "hf-jobs", "osmo", "hosted"]
+        }
+      }
+    },
+    "eval": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "episodes": { "type": "integer", "minimum": 1 },
+        "record_video": { "type": "boolean" }
+      }
+    }
+  }
+}
