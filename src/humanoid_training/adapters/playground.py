@@ -82,14 +82,16 @@ class PlaygroundAdapter:
                 import mujoco_playground  # noqa: F401
             except ImportError:
                 raise AdapterUnavailable(
-                    "G1 walk is compiled, but MuJoCo Playground is not installed "
-                    "in this environment. On a machine with an NVIDIA GPU:\n"
+                    "G1 walk is blocked on this machine: MuJoCo Playground is not installed. "
+                    "This is expected on the CPU studio — not a silent failure. "
+                    "On a machine with an NVIDIA GPU:\n"
                     "  pip install playground\n"
                     "  train-jax-ppo --env_name G1JoystickFlatTerrain\n"
-                    f"Generated files are in {run_dir}"
+                    "Or open g1-stand for a CPU hold preview. "
+                    f"Compiled payloads are in {run_dir}"
                 ) from None
         raise AdapterUnavailable(
-            "Playground is present, but live G1 training is Phase 1/3 work "
+            "Playground is present, but live G1 walk training is still Phase 1/3 "
             f"(GPU job runner). Payload is in {run_dir}. "
-            "Run the generated train.sh on a GPU box."
+            "Run the generated train.sh on a GPU box, or use g1-stand for a CPU hold."
         )
