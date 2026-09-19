@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from humanoid_training import __version__
 from humanoid_training.adapters import registry, select_adapter, write_payload_files
+from humanoid_training.artifacts import RUN_ARTIFACTS
 from humanoid_training.errors import AdapterUnavailable, NoAdapter, repo_root
 from humanoid_training.recipes import expand_spec
 from humanoid_training.spec import spec_hash
@@ -83,7 +84,7 @@ def run_job(
         "adapter": None,
         "error": None,
     }
-    _write_manifest(run_dir, manifest)
+    write_manifest(run_dir, manifest)
     emit(f"run {run_id} spec_hash={hashed}")
 
     try:
@@ -103,7 +104,7 @@ def run_job(
         manifest["adapter"] = payload.as_dict()
         manifest["compiled_engines"] = compiled_engines
         manifest["ignored_fields"] = payload.ignored_fields
-        _write_manifest(run_dir, manifest)
+        write_manifest(run_dir, manifest)
         emit(f"compiled adapter={payload.adapter} env={payload.env_name}")
         for note in payload.notes:
             emit(note)
@@ -111,7 +112,7 @@ def run_job(
         if compile_only:
             manifest["status"] = "compiled"
             emit("compile-only; skipping launch")
-            _write_manifest(run_dir, manifest)
+            write_manifest(run_dir, manifest)
             return manifest
 
         result = adapter.launch(expanded, payload, run_dir, emit)
@@ -123,14 +124,7 @@ def run_job(
             "passed": result.passed,
         }
         manifest["notes"] = result.notes
-        artifacts = {}
-        if result.video_path and Path(result.video_path).is_file():
-            artifacts["eval.mp4"] = str(result.video_path)
-        for name in ("checkpoint.npz", "composed_scene.xml"):
-            path = run_dir / name
-            if path.is_file():
-                artifacts[name] = str(path)
-        manifest["artifacts"] = artifacts
+        manifest["artifacts"] = collect_artifacts(run_dir, result.video_path)
         emit(
             f"eval success_rate={result.success_rate:.2f} "
             f"mean_return={result.mean_return:.1f} passed={result.passed}"
@@ -150,9 +144,24 @@ def run_job(
         emit(f"failed: {err}")
     finally:
         manifest["finished_at"] = datetime.now(timezone.utc).isoformat()
-        _write_manifest(run_dir, manifest)
+        write_manifest(run_dir, manifest)
 
     return manifest
+
+
+KNOWN_ARTIFACTS = RUN_ARTIFACTS
+
+
+def collect_artifacts(run_dir: Path, video_path: Path | None = None) -> dict[str, str]:
+    """Name the files a run produced. The studio only plays what is listed here."""
+    artifacts: dict[str, str] = {}
+    if video_path and Path(video_path).is_file():
+        artifacts["eval.mp4"] = str(video_path)
+    for name in RUN_ARTIFACTS:
+        path = Path(run_dir) / name
+        if path.is_file():
+            artifacts.setdefault(name, str(path))
+    return artifacts
 
 
 def load_manifest(run_dir: Path) -> dict[str, Any]:
@@ -169,8 +178,12 @@ def load_manifest(run_dir: Path) -> dict[str, Any]:
     raise last_error  # type: ignore[misc]
 
 
-def _write_manifest(run_dir: Path, manifest: dict[str, Any]) -> None:
+def write_manifest(run_dir: Path, manifest: dict[str, Any]) -> None:
     path = run_dir / "manifest.json"
     tmp = run_dir / ".manifest.json.tmp"
     tmp.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     tmp.replace(path)
+
+
+# Back-compat for older imports.
+_write_manifest = write_manifest

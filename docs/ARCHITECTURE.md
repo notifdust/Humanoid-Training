@@ -1,265 +1,219 @@
-# Architecture: studio, spec, adapters
+# Architecture: spec, recipes, adapters, studio
 
-The platform is three layers. Keep them separate so a UI rewrite or a new
-simulator does not contaminate the rest.
+This repo is a **compiler**, not a simulator. The missing product is a
+studio that compiles a job into engines that already exist (MuJoCo,
+Playground, mjlab, Isaac Lab, LeRobot).
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│  Studio (browser)                                        │
-│  Robots · Tasks · Data · Train · Evaluate                │
-└────────────────────────────┬─────────────────────────────┘
-                             │ reads/writes
-┌────────────────────────────▼─────────────────────────────┐
-│  Job spec  (versioned JSON / YAML)                       │
-│  robot · scene · task · data · train · eval · deploy     │
-└───────────────┬─────────────────────────────┬────────────┘
-                │ compile                     │ schedule
-┌───────────────▼──────────────┐   ┌──────────▼────────────┐
-│  Adapters                    │   │  Runners              │
-│  playground · mjlab          │   │  local docker         │
-│  isaaclab · lerobot          │   │  hf jobs · osmo       │
-└──────────────────────────────┘   └───────────────────────┘
+Studio (browser)     projection of GET /api/recipes (public_catalog)
+        │
+        ▼
+Job spec (JSON)      source of truth for one run
+        │
+        ├─ expand    recipe.yaml defaults, user overlay wins
+        ├─ compile   adapter → engine payload files
+        └─ launch    in-process runner today; Docker / OSMO later
+                     → eval.mp4 + boolean + manifest
 ```
 
-The spec is the source of truth. The studio is a projection. Adapters are
-lossy compilers into someone else's Python. Runners are how GPUs get
-involved.
+If a change cannot be expressed as a spec field or a recipe field, it
+does not belong in the UI.
 
 ---
 
 ## 1. Job spec
 
-A training run is a document, not a pile of CLI flags. Example (illustrative,
-not a frozen schema):
+A run is a document. Schema: `spec/schema.json`. Examples: `spec/examples/`.
 
 ```json
 {
   "spec_version": "0.1.0",
   "name": "g1-mustard-in-bowl",
-  "robot": {
-    "id": "unitree-g1-29dof",
-    "source": "catalog"
-  },
-  "scene": {
-    "template": "kitchen-counter-v1",
-    "objects": [
-      { "id": "mustard", "asset": "ycb-mustard", "pose": "on:counter" },
-      { "id": "bowl", "asset": "bowl-white", "pose": "on:counter" }
-    ]
-  },
-  "task": {
-    "recipe": "pick-and-place",
-    "language": "Pick up the mustard bottle and put it in the bowl.",
-    "success": {
-      "type": "object-in-container",
-      "object": "mustard",
-      "container": "bowl",
-      "hold_s": 0.5
-    }
-  },
-  "data": {
-    "datasets": ["hf:myorg/g1-mustard-demos"],
-    "min_episodes": 30
-  },
-  "train": {
-    "method": "imitation",
-    "policy": "lerobot.act",
-    "steps": 80000,
-    "seed": 1
-  },
-  "backend": {
-    "prefer": ["mjlab", "isaaclab"],
-    "compute": "local-docker"
-  },
-  "eval": {
-    "episodes": 20,
-    "record_video": true
-  }
+  "robot": { "id": "unitree-g1-29dof", "source": "catalog" },
+  "scene": { "template": "kitchen-counter-v1", "objects": [] },
+  "task": { "recipe": "pick-and-place", "success": { "type": "object-in-container" } },
+  "data": { "datasets": [], "keep_episodes": [0, 1, 2] },
+  "train": { "method": "imitation", "seed": 1 },
+  "backend": { "prefer": ["mujoco"], "compute": "local" },
+  "eval": { "episodes": 1, "record_video": true }
 }
 ```
 
 Rules:
 
-- Unknown fields are preserved, never silently dropped. Adapters ignore
-  what they cannot honor and must record that in the run manifest.
-- Recipes supply defaults. The document a beginner saves is short. The
-  document a runner executes is fully expanded and hashed.
-- Success criteria are first-class. If we cannot evaluate a boolean, we
-  do not call the recipe done.
-- `backend.prefer` is a hint. The compiler may downgrade (Isaac Lab →
-  mjlab) when the recipe allows it, and must say so in the UI.
-
-Store specs and run manifests in git-friendly YAML plus an object store
-for videos, checkpoints, and datasets.
+- Recipes supply defaults. The beginner document is short. The runner
+  executes the **expanded** spec and hashes it.
+- User overlay wins (`expand_spec`).
+- Unknown fields are preserved. Adapters that cannot honor a field must
+  record it (`ignored_fields`) or fail closed.
+- Success is a boolean plus a video when the machine can render.
 
 ---
 
-## 2. Studio
+## 2. Recipes are the studio contract
 
-A single-page app. Suggested split:
+Each `recipes/<id>/recipe.yaml` is a versioned task package. It owns
+**what the UI may say**, not just train hyperparameters.
 
-| Surface | Owns | Must not own |
-|---|---|---|
-| Scene canvas | Layout, object placement, camera frustums, goal markers | Physics step, training loop |
-| Recipe picker | Catalog of known-good tasks | Arbitrary reward algebra for v1 |
-| Data bay | Episode timeline, keep/drop, teleop session | Model code |
-| Run dashboard | Queue, logs, eval grid, promote checkpoint | Kubernetes details |
-| Spec inspector | Diff, export, "open in VS Code" | Being the default path |
+```yaml
+id: pick-and-place
+runnable: true
+studio:
+  availability: cpu    # cpu | gpu  — home screen grouping
+  start_here: true
+  promise: Mustard slides into the bowl. The arm follows. Not finger grasping.
+  train_hint: You will see the mustard move into the bowl…
+  blocked_hint: ""     # GPU recipes only
+  scene_hint: Top-down kitchen counter. Drag mustard if you want…
+  record_hint: Record mustard-into-bowl takes, uncheck the bad ones, then Train.
+```
 
-Implementation sketch (changeable):
+`GET /api/recipes` returns `public_catalog()`:
 
-- TypeScript + a real-time 3D viewport (Three.js / react-three-fiber for
-  layout; native engine stream for high-fidelity playback)
-- A small API (`studio-server`) that validates specs, expands recipes,
-  and talks to runners
-- WebSocket/SSE for log lines and "new eval mp4"
+```json
+{
+  "recipes": [/* as_public_dict() */],
+  "ready": ["cartpole-balance", "g1-stand", "pick-and-place"],
+  "later": ["g1-walk", "g1-reach"],
+  "start_here": ["cartpole-balance", "g1-stand", "pick-and-place"]
+}
+```
 
-Do not stream Isaac Sim's full UI into the browser as the product. Optional
-pixel streaming is an advanced view, not the authoring surface.
+The browser **projects** `availability`, `promise`, `train_hint`,
+`blocked_hint`, `scene_hint`, and `record_hint`. It must not hardcode
+recipe ids to decide what works on a laptop, which task to Train as a
+fallback, or which imitation recipe to record.
+
+`runnable` means an adapter can launch something. `availability: gpu`
+means launch will **block** here with a next step (compile payloads,
+no fake walk clip). `start_here` defaults to `availability == cpu` when
+omitted.
+
+Gold notes stay in `recipe.yaml` until `gold/eval.mp4` is CI.
 
 ---
 
 ## 3. Adapters
 
-Each adapter implements a narrow interface:
+Implemented protocol (`src/humanoid_training/adapters/base.py`):
 
 ```
-compile(expanded_spec) -> engine_payload
-launch(payload, runner) -> run_id
-poll(run_id) -> status, metrics, artifacts
-eval(checkpoint, spec) -> videos, success_rate
-export_scene(spec) -> mjcf | usd
+support(spec) -> Support          # can this adapter claim the spec?
+compile(spec) -> EnginePayload    # files + command; never hide them
+launch(spec, payload, run_dir) -> EvalResult   # boolean + optional video
 ```
 
-### Playground / mjlab (v1)
+`poll` / `eval` as separate RPCs are not built. Launch is in-process and
+returns the eval. That is enough for CPU recipes; GPU jobs will need the
+split later.
 
-Best first target: Python in a container, one GPU, minutes-to-hours, no
-Omniverse. Use this for locomotion recipes and simpler manipulation.
-
-Compile strategy: map `robot.id` to a known env name (`G1JoystickFlatTerrain`,
-etc.), map success/eval to their eval scripts, pass seed and steps through.
-
-### Isaac Lab (v2)
-
-Wrap official containers. The adapter writes the Python task config or
-Arena env spec, then a command that `isaaclab.sh` already understands.
-Prefer submitting via [OSMO](https://developer.nvidia.com/osmo) YAML when
-the user has a cluster; otherwise Docker.
-
-### LeRobot (parallel track)
-
-Imitation learning, dataset I/O, and real-robot control. The studio should
-read and write LeRobot datasets natively so we stay compatible with LeLab,
-HF Hub, and LeIsaac.
-
-### What an adapter must never do
-
-- Invent a parallel dataset format
-- Hide the generated engine files from the user
-- Claim success without running the spec's eval
-
-If an adapter cannot express a spec field, it fails closed with a readable
-error: "This recipe needs deformable cloth; only Isaac Lab can run it."
-
----
-
-## 4. Runners
-
-Runners execute compiled payloads. They are dumb.
-
-| Runner | For |
+| Adapter | Role today |
 |---|---|
-| `local-docker` | Contributors and anyone with an NVIDIA GPU |
-| `hf-jobs` | People already in the LeRobot world |
-| `osmo` | Labs with heterogeneous GPU / HIL |
-| `hosted` (later) | True no-install beginners |
+| `gymnasium` | Cartpole RL + eval video |
+| `mujoco` | G1 stand hold; pick-and-place linear-BC + arm poses |
+| `playground` | Compile G1 walk; launch blocked without Playground |
+| `mjlab` | Compile reach/walk; launch blocked on CPU |
+| `isaaclab` | Compile OSMO YAML; launch not wired |
+| `lerobot` | Compile future ACT script; CPU imitation stays on mujoco |
 
-The studio-server never SSHs into a researcher's machine and never bakes
-cloud credentials into the frontend.
+The MuJoCo adapter is three modules, not one god file:
 
-Every run writes a **manifest**: expanded spec hash, adapter version, image
-digest, seed, hardware, git commit, artifact URLs. Reproducibility is a
-feature, not a paper appendix.
+- `mujoco_adapter.py` — `support` / `compile` / `launch` (hold vs imitation)
+- `mujoco_runtime.py` — simulate, renderer, pin, body ids
+- `mujoco_control.py` — open-loop poses, qpos drive, Jacobian IK
+
+Selection: `backend.prefer` order, skip `unsupported`, first `support.ok`.
+The runner also compiles **other** supporting adapters into
+`engines/<name>/` so a researcher can take the payload to a GPU box.
+
+Adapters must never invent a dataset format, hide generated files, or
+claim success without the spec's eval.
 
 ---
 
-## 5. Recipes
+## 4. Runner
 
-A recipe is a versioned package:
+`run_job` is the only orchestrator today: expand → compile → launch →
+manifest. It is in-process, not Docker.
 
-```
-recipes/pick-and-place/
-  recipe.yaml          # defaults, required spec fields, success type
-  adapters/
-    mjlab.md           # what this adapter can and cannot do
-    isaaclab.py.tmpl
-    lerobot.yaml.tmpl
-  gold/
-    eval.mp4           # what "good" looks like
-    notes.md           # GPU, wall clock, known failure modes
-```
+`src/humanoid_training/artifacts.py` is the inventory of files a run
+may write (`RUN_ARTIFACTS`) and the names the studio HTTP API may
+stream (`SERVED_ARTIFACTS`). `collect_artifacts` and
+`GET /api/runs/.../artifacts/{name}` share that list.
 
-Gold videos are part of CI in spirit: a change that cannot match the
-qualitative success of `gold/eval.mp4` on the pinned seed is a regression
-even if the code runs.
+Every run directory contains:
 
-v1 recipe list should be boring and reliable:
+| File | Meaning |
+|---|---|
+| `spec.json` | expanded public spec |
+| `manifest.json` | status, metrics, notes, artifact paths |
+| `run.log` | line log (studio SSE tails this) |
+| `eval.mp4` | when GLFW/display can render |
+| `checkpoint.npz` | policy weights when the adapter trains |
+| `composed_scene.xml` | MjSpec export when a scene was compiled |
+| `train_returns.json` | gymnasium training curve when present |
 
-1. G1 stand (hold + arm wave preview — not balance RL)
-2. G1 walk to a pose
-3. G1 reach a target
-4. Fixed-base pick-and-place (can be a cheaper arm if G1 is too hard)
-5. One "from demos" imitation task (CPU linear-BC today; ACT later)
+Status:
+
+- `passed` — eval boolean true
+- `completed` — ran, boolean false
+- `blocked` — adapter unavailable (expected on CPU for walk/reach)
+- `compiled` — `--compile-only`
+- `failed` — unexpected exception
+
+Docker / HF Jobs / OSMO runners are Phase 3. The studio-server does not
+SSH and does not put cloud credentials in the browser.
+
+---
+
+## 5. Studio
+
+`studio/` is a static SPA. `ht serve` is FastAPI: recipes, expand,
+datasets, runs, SSE, artifacts.
+
+| Room | Owns | Must not own |
+|---|---|---|
+| Tasks | Recipe catalog projection | Physics, hardcoded GPU lists |
+| Scene canvas | `scene.objects` x/y | Training loop |
+| Data | LeRobot keep/drop → `data.keep_episodes` | Model code |
+| Runs | Video + English status | Kubernetes |
+
+The job spec editor is **Advanced**, not the home screen. Home is
+`availability: cpu` recipes, then GPU skip. Copy for blocked runs,
+empty runs, and Data-room record hints is generated from the catalog.
 
 ---
 
 ## 6. Data
 
-- Canonical demonstration format: LeRobot dataset on disk / Hub
-- Canonical log format for live robots later: MCAP (Foxglove can view it;
-  we do not need to rebuild that viewer)
-- Videos are first-class artifacts, compressed and seekable
-- Episode review in the studio is a cut tool, not a labeling startup
+Canonical demos: LeRobot v2 layout on disk (`meta/info.json` + episode
+JSONL). Hugging Face Hub import is closed until we wrap their API.
+`keep_episodes` is a spec field. Empty keep is refused. Failure-only
+keep must miss mustard-in-bowl.
 
 ---
 
-## 7. Safety and deploy
-
-Real-robot deploy is a different state machine from sim eval.
-
-- Policy is tagged `sim-only` until a hardware eval profile passes
-- Default velocity/torque clamps come from the robot catalog, not the user
-- E-stop and a watchdog that kills the policy on NaNs / pose limits
-- No silent fallback to a previous checkpoint on the robot
-
-Until Phase 4, the deploy button only targets simulation.
-
----
-
-## 8. What we implement in *this* repository
-
-Suggested layout when code exists:
+## 7. Layout
 
 ```
-studio/                      # browser shell (Phase 1)
-src/humanoid_training/       # spec, recipes, adapters, runner, API
-  adapters/                  # gymnasium · playground · isaaclab
-spec/                        # JSON schema + example job specs
-recipes/                     # versioned task packages
+studio/                    # browser projection
+src/humanoid_training/
+  spec.py                  # schema
+  recipes.py               # expand + public_catalog
+  artifacts.py             # run file inventory
+  adapters/                # compile / launch
+    mujoco_adapter.py      # hold + imitation launches
+    mujoco_runtime.py      # simulate / render
+    mujoco_control.py      # poses / IK
+  runner.py                # in-process job
+  server.py                # studio API
+spec/                      # schema + examples
+recipes/<id>/recipe.yaml   # defaults + studio contract
 robots/catalog.yaml
-docs/ROADMAP.md
 ```
 
-Phase 0 of [VISION.md](./VISION.md) is live as `ht train`. The studio
-shell is `ht serve` with Robots / Tasks / Data / Runs rooms. Dragged
-`scene.objects` compile into MuJoCo via MjSpec (`composed_scene.xml`).
-The Data room records and inspects local LeRobot datasets. Keep/drop writes
-`data.keep_episodes` into the job spec — failure-only keeps fail mustard-in-bowl;
-empty keep is refused. Pick-and-place imitation is linear BC on demos (mustard→bowl).
-Notes say `dataset=local|auto-scripted` and `attach_step` (mocap, not fingers).
-On the Menagerie G1 the arm plays pick/lift/place poses while BC steers mocap mustard.
-Pelvis pinned. Not ACT, not finger grasping. `g1-walk` compiles and blocks on CPU
-(GPU Playground / Isaac Lab). `gold/eval.mp4` folders are not required yet —
-recipe gold notes document honesty instead.
+Nothing here requires inventing physics, a policy family, or a dataset
+format.
 
-Nothing in this architecture requires inventing physics.
+See [VISION.md](./VISION.md) for the product, [ROADMAP.md](./ROADMAP.md)
+for phase gates.

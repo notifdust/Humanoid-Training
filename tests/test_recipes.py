@@ -53,3 +53,55 @@ def test_start_here_recipes() -> None:
     assert flags["g1-stand"] is True
     assert flags["pick-and-place"] is True
     assert flags["g1-walk"] is False
+
+
+def test_recipe_catalog_is_the_studio_contract() -> None:
+    """Studio must not hardcode which tasks work on CPU — recipes declare it."""
+    from humanoid_training.recipes import public_catalog
+
+    catalog = public_catalog()
+    by_id = {r["id"]: r for r in catalog["recipes"]}
+    assert by_id["cartpole-balance"]["availability"] == "cpu"
+    assert by_id["g1-stand"]["availability"] == "cpu"
+    assert by_id["pick-and-place"]["availability"] == "cpu"
+    assert by_id["g1-walk"]["availability"] == "gpu"
+    assert by_id["g1-reach"]["availability"] == "gpu"
+    assert by_id["cartpole-balance"]["promise"]
+    assert by_id["g1-walk"]["blocked_hint"]
+    assert by_id["pick-and-place"]["imitate"] is True
+    assert by_id["pick-and-place"]["scene_hint"]
+    assert by_id["pick-and-place"]["record_hint"]
+    assert set(catalog["ready"]) == {"cartpole-balance", "g1-stand", "pick-and-place"}
+    assert set(catalog["later"]) == {"g1-walk", "g1-reach"}
+    assert set(catalog["start_here"]) == {"cartpole-balance", "g1-stand", "pick-and-place"}
+
+
+def test_recipes_module_does_not_hardcode_start_here_ids() -> None:
+    from humanoid_training import recipes as recipes_mod
+
+    src = Path(recipes_mod.__file__).read_text(encoding="utf-8")
+    assert "cartpole-balance" not in src
+    assert "g1-stand" not in src
+    assert "pick-and-place" not in src
+
+
+def test_studio_availability_must_be_cpu_or_gpu() -> None:
+    from humanoid_training.errors import RecipeError
+    from humanoid_training.recipes import _validate_studio
+
+    _validate_studio("ok", {"studio": {"availability": "cpu"}})
+    try:
+        _validate_studio("bad", {"studio": {"availability": "tpu"}})
+    except RecipeError as err:
+        assert "cpu or gpu" in str(err)
+    else:
+        raise AssertionError("expected RecipeError")
+
+
+def test_english_list() -> None:
+    from humanoid_training.recipes import english_list
+
+    assert english_list([]) == ""
+    assert english_list(["Cartpole"]) == "Cartpole"
+    assert english_list(["A", "B"]) == "A and B"
+    assert english_list(["A", "B", "C"]) == "A, B, and C"

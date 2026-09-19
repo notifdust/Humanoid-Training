@@ -32,3 +32,8 @@ gold:
   notes: |
     On CPU this usually crosses a 400 return in a few hundred episodes.
     It is not a humanoid task. It exists so the compiler loop is real.
+studio:
+  availability: cpu
+  start_here: true
+  promise: A pole stays up. Proof Train → video works on this computer. ~30s.
+  train_hint: You will see a cart keep a pole upright. This proves the loop on your machine.

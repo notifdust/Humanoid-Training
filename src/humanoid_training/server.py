@@ -18,8 +18,9 @@ from humanoid_training.demos import (
     record_scripted_pick_place,
 )
 from humanoid_training.errors import RecipeError, SpecError, repo_root
-from humanoid_training.recipes import default_user_spec, expand_spec, list_recipes, load_recipe
-from humanoid_training.runner import default_runs_dir, load_manifest, new_run_id, run_job, _write_manifest
+from humanoid_training.artifacts import SERVED_ARTIFACTS
+from humanoid_training.recipes import default_user_spec, expand_spec, load_recipe, public_catalog
+from humanoid_training.runner import default_runs_dir, load_manifest, new_run_id, run_job, write_manifest
 from humanoid_training.spec import validate_spec
 
 app = FastAPI(title="Humanoid Training Studio", version="0.1.0")
@@ -98,7 +99,7 @@ def api_record_dataset(body: RecordBody) -> dict[str, Any]:
 
 @app.get("/api/recipes")
 def recipes() -> dict[str, Any]:
-    return {"recipes": [r.as_public_dict() for r in list_recipes()]}
+    return public_catalog()
 
 
 @app.get("/api/recipes/{recipe_id}")
@@ -195,14 +196,7 @@ def run_events(run_id: str):
 
 @app.get("/api/runs/{run_id}/artifacts/{name}")
 def get_artifact(run_id: str, name: str):
-    if name not in {
-        "eval.mp4",
-        "manifest.json",
-        "spec.json",
-        "run.log",
-        "checkpoint.npz",
-        "composed_scene.xml",
-    }:
+    if name not in SERVED_ARTIFACTS:
         raise HTTPException(status_code=400, detail="Unknown artifact")
     path = _find_run(run_id) / name
     if not path.is_file():
@@ -238,7 +232,7 @@ def start_run(body: SpecBody) -> dict[str, Any]:
         "metrics": {},
         "artifacts": {},
     }
-    _write_manifest(run_dir, queued)
+    write_manifest(run_dir, queued)
 
     def _work() -> None:
         run_job(body.spec, runs_dir=runs_dir, log=None, run_id=run_id)

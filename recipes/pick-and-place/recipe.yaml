@@ -63,4 +63,11 @@ gold:
     pose, then BC moves the mocap mustard toward the bowl while the arm
     blends lift→place poses from progress. Pelvis pinned. Not finger
     grasping and not ACT. Bad demos make mustard_bowl_dist fail.
+studio:
+  availability: cpu
+  start_here: true
+  promise: Mustard slides into the bowl. The arm follows. Not finger grasping.
+  train_hint: You will see the mustard move into the bowl and the G1 arm follow. That is a demo-following preview, not a grasping policy.
+  scene_hint: Top-down kitchen counter. Drag mustard if you want. Train still works if you do not.
+  record_hint: Show the robot the task. Record mustard-into-bowl takes, uncheck the bad ones, then Train. Gamepad teleop is later. This is demonstration following, not finger grasping.
 

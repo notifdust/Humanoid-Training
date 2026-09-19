@@ -27,6 +27,9 @@ def test_cartpole_train_writes_video(tmp_path: Path) -> None:
     assert "greedy_train_eval=" in notes
     ckpt = np.load(run_dir / "checkpoint.npz")
     assert "W" in ckpt.files and "weights" in ckpt.files
+    assert "eval.mp4" in manifest["artifacts"]
+    assert "checkpoint.npz" in manifest["artifacts"]
+    assert "train_returns.json" in manifest["artifacts"]
 
 
 def test_g1_walk_is_blocked_without_playground(tmp_path: Path) -> None:

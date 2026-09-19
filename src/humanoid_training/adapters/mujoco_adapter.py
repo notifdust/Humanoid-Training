@@ -9,10 +9,10 @@ import numpy as np
 
 from humanoid_training.adapters.base import EnginePayload, EvalResult, LogFn, Support
 from humanoid_training.adapters.common import ignored_scene_fields, recipe_adapter_config
+from humanoid_training.adapters import mujoco_control as control
+from humanoid_training.adapters import mujoco_runtime as runtime
 from humanoid_training.assets import resolve_mjcf
 from humanoid_training.compose import (
-    STAND_CAMERA,
-    camera_xyaxes,
     compose_mjcf,
     object_world_pos,
     primitive_for,
@@ -24,6 +24,33 @@ from humanoid_training.demos import record_scripted_pick_place, require_pick_obj
 from humanoid_training.errors import AdapterUnavailable, RecipeError
 from humanoid_training.train_bc import fit_linear_bc, predict_linear_bc, save_bc
 from humanoid_training.video import write_eval_video
+
+# Tests monkeypatch these names on this module. Launch looks them up here
+# at runtime so a patch is visible to hold / imitation without importing
+# mujoco_control's constants directly inside step closures.
+_PICK_POSE = control.PICK_POSE
+_LIFT_POSE = control.LIFT_POSE
+_PLACE_POSE = control.PLACE_POSE
+_REACH_POSE = control.REACH_POSE
+_idle_stand_ctrl = control.idle_stand_ctrl
+_named_pose_ctrl = control.named_pose_ctrl
+_drive_named_pose = control.drive_named_pose
+_drive_ctrl_subset = control.drive_ctrl_subset
+_blend_poses = control.blend_poses
+_phase_alpha = control.phase_alpha
+_ik_toward = control.ik_toward
+_make_renderer = runtime.make_renderer
+_snapshot_freejoint = runtime.snapshot_freejoint
+_reset = runtime.reset
+_simulate = runtime.simulate
+_hold_ctrl = runtime.hold_ctrl
+_body_id = runtime.body_id
+_find_hand = runtime.find_hand
+_actuator_name_map = runtime.actuator_name_map
+_arm_actuator_ids = runtime.arm_actuator_ids
+_placement_report = runtime.placement_report
+_video_notes = runtime.video_notes
+_model_with_stand_camera = runtime.model_with_stand_camera
 
 
 class MujocoAdapter:
@@ -515,364 +542,3 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
         passed=passed,
         notes=notes,
     )
-
-
-def _reset(mujoco: Any, model: Any, data: Any, keyframe: int, log: LogFn) -> None:
-    if model.nkey > 0:
-        idx = min(keyframe, model.nkey - 1)
-        mujoco.mj_resetDataKeyframe(model, data, idx)
-        log(f"reset to keyframe {idx}")
-    else:
-        mujoco.mj_resetData(model, data)
-    mujoco.mj_forward(model, data)
-
-
-def _simulate(
-    mujoco: Any,
-    model: Any,
-    data: Any,
-    spec: dict[str, Any],
-    *,
-    honors: bool,
-    ctrl: np.ndarray | None,
-    horizon: int,
-    render_every: int,
-    log: LogFn,
-    step_fn: Any,
-    pin_base: tuple[int, int, np.ndarray] | None = None,
-    stop_box: dict[str, bool] | None = None,
-) -> tuple[list[np.ndarray], list[float], list[bool], dict[str, int]]:
-    eval_cfg = spec.get("eval") or {}
-    record_video = bool(eval_cfg.get("record_video", True))
-    success_cfg = (spec.get("task") or {}).get("success") or {}
-    min_z = float(success_cfg.get("min_z", 0.5))
-    renderer = None
-    camera: Any = -1
-    if model.ncam > 0:
-        cam_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "ht_eval")
-        if cam_id >= 0:
-            camera = cam_id
-    if record_video:
-        renderer = _make_renderer(mujoco, model, log)
-
-    pelvis = _body_id(mujoco, model, "pelvis")
-    if pelvis < 0:
-        pelvis = 1 if model.nbody > 1 else 0
-    objects = list((spec.get("scene") or {}).get("objects") or []) if honors else []
-    object_ids = {
-        str(obj["id"]): _body_id(mujoco, model, str(obj["id"]))
-        for obj in objects
-        if obj.get("id")
-    }
-    frames: list[np.ndarray] = []
-    upright: list[bool] = []
-    zs: list[float] = []
-    for step in range(horizon):
-        if pin_base is not None:
-            qadr, dadr, q0 = pin_base
-            data.qpos[qadr : qadr + 7] = q0
-            data.qvel[dadr : dadr + 6] = 0.0
-            mujoco.mj_forward(model, data)
-        if step_fn is not None:
-            step_fn(model, data, step)
-        if ctrl is not None:
-            data.ctrl[:] = ctrl
-        mujoco.mj_step(model, data)
-        z = float(data.xpos[pelvis, 2])
-        zs.append(z)
-        upright.append(z >= min_z)
-        if renderer is not None and step % render_every == 0:
-            if camera != -1:
-                renderer.update_scene(data, camera=camera)
-            else:
-                renderer.update_scene(data)
-            frames.append(np.asarray(renderer.render()).copy())
-        if step in {0, horizon // 2, horizon - 1}:
-            log(f"step {step}/{horizon} pelvis_z={z:.3f}")
-        if stop_box is not None and stop_box.get("stop"):
-            log(f"early stop at step {step}/{horizon}")
-            break
-    return frames, zs, upright, object_ids
-
-
-def _make_renderer(mujoco: Any, model: Any, log: LogFn) -> Any:
-    """GLFW aborts the process on a headless runner. Never construct it without a display."""
-    if os.environ.get("HT_NO_RENDER") == "1":
-        log("HT_NO_RENDER=1; physics-only eval")
-        return None
-    gl = os.environ.get("MUJOCO_GL", "glfw").lower()
-    if gl in {"glfw", ""} and not os.environ.get("DISPLAY"):
-        log("no DISPLAY for MuJoCo GLFW; physics-only eval")
-        return None
-    try:
-        return mujoco.Renderer(model, 360, 640)
-    except Exception as err:
-        log(f"renderer unavailable ({err}); physics-only eval")
-        return None
-
-
-def _video_notes(frames: list[np.ndarray]) -> list[str]:
-    if frames:
-        return []
-    return ["no eval.mp4 (headless / HT_NO_RENDER); physics success still counted"]
-
-
-def _body_id(mujoco: Any, model: Any, name: str) -> int:
-    return int(mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name))
-
-
-def _placement_report(
-    data: Any,
-    object_ids: dict[str, int],
-    objects: list[dict[str, Any]],
-    layout: dict[str, Any],
-    tol: float = 0.08,
-) -> list[dict[str, Any]]:
-    rows = []
-    for obj in objects:
-        oid = str(obj.get("id") or "")
-        bid = object_ids.get(oid, -1)
-        if not oid or bid is None or bid < 0:
-            rows.append({"id": oid or "?", "ok": False, "xy_err": 999.0})
-            continue
-        want = object_world_pos(obj, layout)
-        got = data.xpos[bid]
-        err = float(np.hypot(float(got[0]) - want[0], float(got[1]) - want[1]))
-        rows.append({"id": oid, "ok": err <= tol, "xy_err": err})
-    return rows
-
-
-def _snapshot_freejoint(model: Any, data: Any) -> tuple[int, int, np.ndarray] | None:
-    """Stand-keyframe pose of a freejoint, if the model has one."""
-    for i in range(int(model.njnt)):
-        if int(model.jnt_type[i]) != 0:  # mjJNT_FREE
-            continue
-        qadr = int(model.jnt_qposadr[i])
-        dadr = int(model.jnt_dofadr[i])
-        return qadr, dadr, np.array(data.qpos[qadr : qadr + 7], dtype=np.float64, copy=True)
-    return None
-
-
-def _hold_ctrl(model: Any, data: Any) -> np.ndarray | None:
-    if model.nu == 0:
-        return None
-    ctrl = np.zeros(model.nu, dtype=np.float64)
-    for i in range(model.nu):
-        jnt = int(model.actuator_trnid[i, 0])
-        if jnt < 0:
-            continue
-        qadr = int(model.jnt_qposadr[jnt])
-        ctrl[i] = float(data.qpos[qadr])
-    return ctrl
-
-
-def _model_with_stand_camera(mujoco: Any, mjcf: Path) -> Any:
-    """Frame the full G1 so stand idle is visible; Menagerie default is a wide shot."""
-    spec = mujoco.MjSpec.from_file(str(mjcf))
-    pos = STAND_CAMERA["camera_pos"]
-    target = STAND_CAMERA["camera_target"]
-    spec.worldbody.add_camera(
-        name="ht_eval",
-        pos=list(pos),
-        xyaxes=camera_xyaxes(pos, target),
-    )
-    spec.worldbody.add_light(pos=[0.4, -0.5, 2.2], dir=[0.1, 0.2, -1.0])
-    return spec.compile()
-
-
-_HAND_BODIES = (
-    "right_wrist_yaw_link",
-    "right_rubber_hand",
-    "right_palm_link",
-    "right_wrist_roll_link",
-    "right_wrist_pitch_link",
-)
-
-_ARM_ACTUATOR_BITS = (
-    "right_shoulder",
-    "right_elbow",
-    "right_wrist",
-    "waist_yaw",
-)
-
-
-def _find_hand(mujoco: Any, model: Any) -> int:
-    for name in _HAND_BODIES:
-        bid = _body_id(mujoco, model, name)
-        if bid >= 0:
-            return bid
-    return -1
-
-
-def _actuator_name_map(mujoco: Any, model: Any) -> dict[str, int]:
-    names: dict[str, int] = {}
-    for i in range(model.nu):
-        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, i)
-        if name:
-            names[str(name)] = i
-    return names
-
-
-def _arm_actuator_ids(mujoco: Any, model: Any) -> list[int]:
-    ids = []
-    for name, idx in _actuator_name_map(mujoco, model).items():
-        if any(bit in name for bit in _ARM_ACTUATOR_BITS):
-            ids.append(idx)
-    return sorted(ids)
-
-
-# Open-loop poses that put the standing G1 wrist on the kitchen mustard / bowl.
-_PICK_POSE = {
-    "right_shoulder_pitch_joint": -0.30,
-    "right_shoulder_roll_joint": 0.04,
-    "right_shoulder_yaw_joint": 0.42,
-    "right_elbow_joint": 1.00,
-    "right_wrist_pitch_joint": 0.23,
-    "waist_yaw_joint": 0.21,
-}
-_LIFT_POSE = {
-    "right_shoulder_pitch_joint": -0.18,
-    "right_shoulder_roll_joint": 0.20,
-    "right_shoulder_yaw_joint": 0.25,
-    "right_elbow_joint": 0.72,
-    "right_wrist_pitch_joint": 0.10,
-    "waist_yaw_joint": 0.18,
-}
-_PLACE_POSE = {
-    "right_shoulder_pitch_joint": -0.84,
-    "right_shoulder_roll_joint": 0.04,
-    "right_shoulder_yaw_joint": 0.07,
-    "right_elbow_joint": 1.60,
-    "right_wrist_pitch_joint": 0.05,
-    "waist_yaw_joint": 0.34,
-}
-_REACH_POSE = _PICK_POSE
-
-
-def _phase_alpha(step: int, start: int, end: int) -> float:
-    if end <= start:
-        return 1.0
-    return float(np.clip((step - start) / float(end - start), 0.0, 1.0))
-
-
-def _blend_poses(a: dict[str, float], b: dict[str, float], t: float) -> dict[str, float]:
-    t = float(np.clip(t, 0.0, 1.0))
-    keys = set(a) | set(b)
-    out: dict[str, float] = {}
-    for key in keys:
-        av = float(a[key]) if key in a else float(b[key])
-        bv = float(b[key]) if key in b else av
-        out[key] = (1.0 - t) * av + t * bv
-    return out
-
-
-def _drive_named_pose(model: Any, data: Any, names: dict[str, int], pose: dict[str, float]) -> None:
-    """Write joint qpos+ctrl so eval motion is not waiting on weak wrist actuators."""
-    import mujoco
-
-    for name, val in pose.items():
-        idx = names.get(name)
-        if idx is None:
-            continue
-        jnt = int(model.actuator_trnid[idx, 0])
-        if jnt < 0:
-            continue
-        data.qpos[int(model.jnt_qposadr[jnt])] = float(val)
-        data.qvel[int(model.jnt_dofadr[jnt])] = 0.0
-        data.ctrl[idx] = float(val)
-    mujoco.mj_forward(model, data)
-
-
-def _drive_ctrl_subset(model: Any, data: Any, names: dict[str, int], ctrl: np.ndarray) -> None:
-    import mujoco
-
-    for name, idx in names.items():
-        if not any(bit in name for bit in ("shoulder", "elbow", "wrist", "waist_")):
-            continue
-        jnt = int(model.actuator_trnid[idx, 0])
-        if jnt < 0:
-            continue
-        data.qpos[int(model.jnt_qposadr[jnt])] = float(ctrl[idx])
-        data.qvel[int(model.jnt_dofadr[jnt])] = 0.0
-    mujoco.mj_forward(model, data)
-
-
-def _named_pose_ctrl(
-    hold: np.ndarray,
-    names: dict[str, int],
-    pose: dict[str, float],
-    alpha: float,
-) -> np.ndarray:
-    ctrl = np.array(hold, copy=True)
-    a = float(np.clip(alpha, 0.0, 1.0))
-    for name, val in pose.items():
-        idx = names.get(name)
-        if idx is None:
-            continue
-        ctrl[idx] = (1.0 - a) * float(hold[idx]) + a * float(val)
-    return ctrl
-
-
-def _idle_stand_ctrl(
-    hold: np.ndarray,
-    names: dict[str, int],
-    step: int,
-    horizon: int,
-) -> np.ndarray:
-    """Raise both arms and wave so a stand eval is not a still photo."""
-    ctrl = np.array(hold, copy=True)
-    t = float(step) / float(max(horizon - 1, 1))
-    up = min(1.0, t / 0.18)
-    wave = float(np.sin(2.0 * np.pi * 3.0 * t))
-
-    def nudge(name: str, delta: float) -> None:
-        idx = names.get(name)
-        if idx is None:
-            return
-        ctrl[idx] = float(hold[idx] + delta)
-
-    nudge("right_shoulder_pitch_joint", -1.25 * up)
-    nudge("right_shoulder_roll_joint", 0.45 * up)
-    nudge("right_elbow_joint", 0.25 * up)
-    nudge("right_shoulder_yaw_joint", 0.55 * wave * up)
-    nudge("waist_yaw_joint", 0.55 * wave)
-    nudge("left_shoulder_pitch_joint", -1.05 * up)
-    nudge("left_shoulder_roll_joint", -0.40 * up)
-    nudge("left_elbow_joint", 0.25 * up)
-    nudge("left_shoulder_yaw_joint", -0.45 * wave * up)
-    return ctrl
-
-
-def _ik_toward(
-    mujoco: Any,
-    model: Any,
-    data: Any,
-    hand_id: int,
-    target: np.ndarray,
-    arm_actuators: list[int],
-    hold: np.ndarray,
-    gain: float = 0.55,
-    damping: float = 1e-3,
-) -> np.ndarray:
-    """Damped-least-squares Jacobian IK on arm/waist position actuators."""
-    jacp = np.zeros((3, model.nv))
-    mujoco.mj_jacBody(model, data, jacp, None, hand_id)
-    cols = []
-    for idx in arm_actuators:
-        jnt = int(model.actuator_trnid[idx, 0])
-        if jnt < 0:
-            continue
-        cols.append((idx, int(model.jnt_dofadr[jnt]), int(model.jnt_qposadr[jnt]), jnt))
-    if not cols:
-        return np.array(hold, copy=True)
-    J = jacp[:, [c[1] for c in cols]]
-    err = np.asarray(target, dtype=np.float64) - np.asarray(data.xpos[hand_id], dtype=np.float64)
-    jj = J @ J.T + damping * np.eye(3)
-    dq = J.T @ np.linalg.solve(jj, err * gain)
-    ctrl = np.array(hold, copy=True)
-    for (idx, _dof, qadr, jnt), delta in zip(cols, dq):
-        lo, hi = -2.0, 2.0
-        if int(model.jnt_limited[jnt]):
-            lo, hi = float(model.jnt_range[jnt, 0]), float(model.jnt_range[jnt, 1])
-        ctrl[idx] = float(np.clip(float(data.qpos[qadr]) + float(delta), lo, hi))
-    return ctrl
