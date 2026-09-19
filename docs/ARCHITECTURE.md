@@ -205,11 +205,11 @@ even if the code runs.
 
 v1 recipe list should be boring and reliable:
 
-1. G1 stand / balance
+1. G1 stand (hold + arm wave preview — not balance RL)
 2. G1 walk to a pose
 3. G1 reach a target
 4. Fixed-base pick-and-place (can be a cheaper arm if G1 is too hard)
-5. One "from demos" imitation task
+5. One "from demos" imitation task (CPU linear-BC today; ACT later)
 
 ---
 
