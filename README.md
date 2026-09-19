@@ -3,50 +3,64 @@
 A studio for training robots without making people become Isaac Lab
 experts first.
 
-This is not another simulator. MuJoCo, Isaac Lab, mjlab, and LeRobot
-already exist. The goal of this repo is the layer above them: a visual
-workflow that talks to those engines, plus a library of recipes that
-actually train.
+**What you do:** pick a canned task → click Train → watch a video.
+That is the product. It is Canva on top of MuJoCo / Isaac Lab, not a
+new simulator.
 
-Think Canva sitting on top of the print shop, not a new printing press.
+## Run it on your computer
 
-## Run the studio
+From a **new terminal** (your home directory is fine):
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -e ".[dev]"
-ht serve --host 127.0.0.1 --port 8000
+git clone https://github.com/notifdust/Humanoid-Training.git
+cd Humanoid-Training
+./run-studio.sh
 ```
 
-Open **http://127.0.0.1:8000**. You need a display for eval video (MuJoCo uses GLFW).
+Then open **http://127.0.0.1:8000**. Click **Cartpole → Train**.
+Wait ~30s. Play the video. That is the loop.
+
+If `./run-studio.sh` is not executable: `chmod +x run-studio.sh` and run it again.
+
+Same steps by hand:
+
+```bash
+cd Humanoid-Training          # the folder that contains pyproject.toml
+python3 -m venv .venv
+source .venv/bin/activate     # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
+python -m humanoid_training.cli serve --host 127.0.0.1 --port 8000
+```
+
+Do **not** `cd /path/to/Humanoid-Training` — that was a placeholder. Do **not**
+install the Ubuntu `ht` TeX package. After `pip install -e ".[dev]"` the
+command is `ht` **or** `python -m humanoid_training.cli`.
+
+You need a display for eval video (MuJoCo uses GLFW). Headless:
+`HT_NO_RENDER=1 python -m humanoid_training.cli train spec/examples/cartpole-balance.json`
+still scores success; it will not write `eval.mp4`.
 
 ### What to click
 
-1. **Start here → Cartpole balance → Train this recipe.** About 30s. Play the eval video. That is the whole product loop.
-2. **G1 stand → Train this recipe.** First time downloads the Unitree G1 from MuJoCo Menagerie into `.cache/`.
-3. **Pick and place → Record a demo**, drag mustard into the bowl, **Save**, **Train pick eval**. Or skip Record — Train writes scripted LeRobot takes. Linear BC steers the mustard; the G1 arm follows with pick/lift/place poses. Not finger grasping.
+1. **Cartpole → Train.** Pole stays up. Proves Train → video on your machine.
+2. **G1 stand → Train.** Humanoid holds a pose and waves. Not walking.
+3. **Pick and place → Train.** Mustard goes in the bowl; the arm follows. Not finger grasping.
 
-Rooms: Robots · Tasks · Data · Runs. The job spec is under **Advanced**.
+Skip **G1 walk** and **G1 reach** on a laptop — they need a GPU and will stop on purpose.
+
+Rooms: Robots · Tasks · Data · Runs. Job spec is under **Advanced**.
 
 ### Same jobs from the CLI
 
 ```bash
-ht recipes
-ht train spec/examples/cartpole-balance.json
-# CPU RL → runs/<id>/eval.mp4
-
-ht fetch-assets unitree_g1
-ht train spec/examples/g1-stand.json
-
-ht train spec/examples/g1-walk.json --compile-only
-# Playground + mjlab + Isaac Lab payloads; GPU launch later
-
-ht record spec/examples/g1-mustard-in-bowl.json --out .cache/datasets/g1-mustard
-ht train spec/examples/g1-mustard-in-bowl.json
+python -m humanoid_training.cli recipes
+python -m humanoid_training.cli train spec/examples/cartpole-balance.json
+python -m humanoid_training.cli fetch-assets unitree_g1
+python -m humanoid_training.cli train spec/examples/g1-stand.json
+python -m humanoid_training.cli train spec/examples/g1-walk.json --compile-only
 ```
 
-Headless (CI / SSH): `HT_NO_RENDER=1 ht train spec/examples/g1-stand.json` still computes success; it will not write `eval.mp4`.
+Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
 
 ## Read this first
 

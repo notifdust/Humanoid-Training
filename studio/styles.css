@@ -141,9 +141,16 @@ h1 {
   gap: 10px;
 }
 
-.card h2 {
-  margin: 0;
-  font-size: 18px;
+.later-head {
+  margin: 36px 0 8px;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.hero-card {
+  min-height: 200px;
+  border-color: #3d4c34;
 }
 
 .pill {

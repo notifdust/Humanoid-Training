@@ -34,29 +34,27 @@ async function api(path, options) {
 }
 
 function pill(recipe) {
-  if (recipe.imitate) return `<span class="pill live">imitation</span>`;
-  if (recipe.scene_preview) return `<span class="pill live">scene preview</span>`;
-  if (recipe.runnable) return `<span class="pill live">runnable</span>`;
-  if (recipe.id === "g1-walk") {
-    return `<span class="pill blocked">blocked · GPU walk</span>`;
+  if (recipe.id === "cartpole-balance" || recipe.id === "g1-stand" || recipe.imitate) {
+    return `<span class="pill live">works on this computer</span>`;
   }
-  if (recipe.id === "g1-reach") {
-    return `<span class="pill blocked">blocked · GPU reach</span>`;
-  }
-  return `<span class="pill blocked">compile only · later phase</span>`;
+  if (recipe.runnable) return `<span class="pill live">works here</span>`;
+  if (recipe.id === "g1-walk") return `<span class="pill blocked">needs a GPU — skip for now</span>`;
+  if (recipe.id === "g1-reach") return `<span class="pill blocked">needs a GPU — skip for now</span>`;
+  return `<span class="pill blocked">later</span>`;
 }
 
 function stepsHTML(active) {
   const items = [
-    ["robots", "Robot"],
-    ["task", "Task"],
-    ["scene", "Scene"],
-    ["train", "Train"],
+    ["task", "1. Task"],
+    ["train", "2. Train"],
+    ["video", "3. Video"],
   ];
+  const map = { robots: "task", task: "task", scene: "task", train: "train", video: "video" };
+  const now = map[active] || active;
   return `<ol class="steps">${items
     .map(
       ([id, label]) =>
-        `<li class="${id === active ? "active" : ""}">${escapeHtml(label)}</li>`
+        `<li class="${id === now ? "active" : ""}">${escapeHtml(label)}</li>`
     )
     .join("")}</ol>`;
 }
@@ -67,9 +65,9 @@ function recipesForRobot() {
 }
 
 const START_HERE = [
-  ["cartpole-balance", "1. Cartpole", "~30s CPU eval video"],
-  ["g1-stand", "2. G1 stand", "arms raise + wave (~2s)"],
-  ["pick-and-place", "3. Pick and place", "BC steers mustard; arm follows"],
+  ["cartpole-balance", "Cartpole", "A pole stays up. Proof the loop works. ~30s."],
+  ["g1-stand", "G1 stand", "The humanoid holds still and waves. Not walking."],
+  ["pick-and-place", "Pick and place", "Mustard slides into the bowl. The arm follows. Not finger grasping."],
 ];
 
 function renderRobots() {
@@ -79,7 +77,7 @@ function renderRobots() {
       return `
       <article class="card robot-card ${selected ? "selected" : ""}">
         <h2>${escapeHtml(robot.name)}</h2>
-        <p class="meta">${escapeHtml(robot.id)} · ${escapeHtml(robot.kind)} · ${robot.dofs} DoF</p>
+        <p class="meta">${escapeHtml(robot.kind)} · ${robot.dofs} joints</p>
         <p>${escapeHtml(robot.summary || "")}</p>
         <div class="actions">
           <button class="primary" data-robot="${escapeHtml(robot.id)}">Use this robot</button>
@@ -88,12 +86,9 @@ function renderRobots() {
     })
     .join("");
   main.innerHTML = `
-    ${stepsHTML("robots")}
+    ${stepsHTML("task")}
     <h1>Robots</h1>
-    <p class="lede">
-      Pick a body from the catalog. The studio compiles a job spec for that
-      robot — it does not import a new physics engine.
-    </p>
+    <p class="lede">Start with the Unitree G1. Cartpole is the smoke test (not a humanoid).</p>
     <div class="grid">${cards}</div>
   `;
   main.querySelectorAll("[data-robot]").forEach((btn) => {
@@ -106,39 +101,54 @@ function renderRobots() {
 
 function renderRecipes() {
   const list = recipesForRobot();
-  const filter = state.robot
-    ? `Showing tasks for <code>${escapeHtml(state.robot.id)}</code>.`
-    : "Pick a known-good task. Drag objects when a scene exists.";
-  const start = state.robot
-    ? ""
-    : `<div class="start-here" id="start-here">
-        <p>Start here — train writes an eval video. Re-train G1 recipes if an old run looks frozen.</p>
+  const ready = list.filter((r) => r.id === "cartpole-balance" || r.id === "g1-stand" || r.imitate);
+  const later = list.filter((r) => !ready.includes(r));
+  const readyCards = ready
+    .map((r) => {
+      const start = START_HERE.find((row) => row[0] === r.id);
+      const see = start ? start[2] : r.summary;
+      return `
+      <article class="card hero-card">
+        ${pill(r)}
+        <h2>${escapeHtml(r.title)}</h2>
+        <p>${escapeHtml(see)}</p>
         <div class="actions">
-          ${START_HERE.map(
-            ([id, label, hint]) =>
-              `<button class="primary" data-open="${id}">${label}</button><span class="meta">${hint}</span>`
-          ).join("")}
+          <button class="primary" data-open="${escapeHtml(r.id)}">Open and train</button>
         </div>
-      </div>`;
-  const cards = list
+      </article>`;
+    })
+    .join("");
+  const laterCards = later
     .map(
       (r) => `
       <article class="card">
         ${pill(r)}
-        <h2>${r.title}</h2>
-        <p>${r.summary}</p>
+        <h2>${escapeHtml(r.title)}</h2>
+        <p>${escapeHtml(r.summary)}</p>
         <div class="actions">
-          <button class="primary" data-open="${r.id}">Open</button>
+          <button class="ghost" data-open="${escapeHtml(r.id)}">See why it is blocked</button>
         </div>
       </article>`
     )
     .join("");
+  const filter = state.robot
+    ? `Tasks for ${escapeHtml(state.robot.name || state.robot.id)}.`
+    : "";
   main.innerHTML = `
     ${stepsHTML("task")}
-    <h1>Tasks</h1>
-    <p class="lede">${filter} Train writes a job spec and an eval video.</p>
-    ${start}
-    <div class="grid">${cards || `<p class="lede">No recipes for this robot yet.</p>`}</div>
+    <h1>What should the robot do?</h1>
+    <p class="lede" id="start-here">
+      Start here: click a task, then Train. You should get a video. That is the whole product today.
+      ${filter} Walking and GPU reach are listed below so they do not look like silent failures — skip them on this computer.
+    </p>
+    <div class="grid">${readyCards || `<p class="lede">No recipes for this robot yet.</p>`}</div>
+    ${
+      laterCards
+        ? `<h2 class="later-head">Needs a GPU (skip)</h2>
+           <p class="lede">These compile a job for Playground / Isaac Lab. Train will stop with a next step, not a fake walk clip.</p>
+           <div class="grid">${laterCards}</div>`
+        : ""
+    }
   `;
   main.querySelectorAll("[data-open]").forEach((btn) => {
     btn.addEventListener("click", () => openRecipe(btn.dataset.open));
@@ -244,7 +254,7 @@ function sceneHTML(spec) {
     .join("");
   return `
     <h2>Scene</h2>
-    <p class="lede">Top-down counter. G1 stands at the near edge. Drag objects — that writes <code>scene.objects</code>.</p>
+    <p class="lede">Top-down kitchen counter. Drag mustard if you want. Train still works if you do not.</p>
     <div class="canvas-wrap${state.recording ? " recording" : ""}" id="scene-canvas">
       <svg class="trail" id="scene-trail" viewBox="0 0 100 100" preserveAspectRatio="none">${trailPolylines()}</svg>
       <span class="canvas-label">${escapeHtml(spec.scene.template || "scene")}</span>
@@ -258,29 +268,28 @@ function renderRecipe() {
   const r = state.selected;
   const spec = state.expanded?.spec || state.starter;
   const hasScene = Boolean(spec?.scene?.objects?.length);
-  const trainLabel = r.imitate ? "Train pick eval" : r.scene_preview ? "Preview scene" : "Train this recipe";
+  const worksHere = r.imitate || r.id === "g1-stand" || r.id === "cartpole-balance" || r.runnable;
+  const trainLabel = worksHere ? "Train" : "Compile (will stop — needs GPU)";
   const trainHint = r.imitate
-    ? `<p class="lede">Fits linear BC on demos (canvas or scripted). Eval: G1 reaches, then BC steers the mustard into the bowl while the arm follows. Not finger grasping.</p>`
+    ? `<p class="lede">You will see the mustard move into the bowl and the G1 arm follow. That is a demo-following preview, not a grasping policy.</p>`
     : r.id === "g1-stand"
-      ? `<p class="lede">Open-loop stand hold + arm raise/wave — not a learned balance policy, not walking. Pelvis is pinned on the Menagerie G1.</p>`
+      ? `<p class="lede">You will see the G1 stand and wave. It is holding a pose, not learning to walk or balance.</p>`
       : r.id === "g1-walk"
-      ? `<p class="lede">Blocked on this CPU. Train still compiles Playground / mjlab / Isaac Lab payloads, then stops with a next-step sentence — install Playground on a GPU box, or use <code>g1-stand</code> for a CPU hold preview. This is not a frozen walk clip.</p>`
+      ? `<p class="lede">Walking is not available on this computer. Clicking Train writes GPU job files and stops. Use G1 stand to see the humanoid move here.</p>`
       : r.id === "g1-reach"
-        ? `<p class="lede">Blocked on this CPU. Train compiles an mjlab / Isaac Lab reach payload, then stops — needs a GPU box with mjlab. Use <code>pick-and-place</code> for a CPU arm+mustard preview, or <code>g1-stand</code> for a hold. Not a silent reach success.</p>`
+        ? `<p class="lede">Reach training needs a GPU. Clicking Train writes job files and stops. Use Pick and place to see an arm move here.</p>`
         : r.id === "cartpole-balance"
-          ? `<p class="lede">Trains a real linear RL policy (CEM + REINFORCE) and evals it. Checkpoint.npz stores the weights; eval uses them in-memory.</p>`
-          : r.runnable
-            ? ""
-            : `<p class="lede">Compile only on this CPU. Train still runs and will block with a next-step sentence (usually Playground / Isaac Lab + GPU).</p>`;
+          ? `<p class="lede">You will see a cart keep a pole upright. This proves Train → video works on your machine.</p>`
+          : `<p class="lede">This task cannot train on this computer. Train still writes files and explains the next step.</p>`;
   const boundDs = (state.starter?.data?.datasets || [])[0];
   const boundKeep = state.starter?.data?.keep_episodes;
   const boundHint =
     r.imitate && boundDs
-      ? `<p class="meta">Demos bound: <code>${escapeHtml(boundDs)}</code>${
-          Array.isArray(boundKeep) ? ` · keep=[${boundKeep.join(", ")}]` : ""
-        }. Re-open keeps this path; switching recipes clears it.</p>`
+      ? `<p class="meta">Using your recorded demos${
+          Array.isArray(boundKeep) ? ` (${boundKeep.length} kept)` : ""
+        }.</p>`
       : r.imitate
-        ? `<p class="meta">No dataset bound — Train will write scripted demos. Save canvas takes or Record in Data to choose keep/drop.</p>`
+        ? `<p class="meta">No demos saved yet — Train will use built-in scripted takes. Or record by dragging mustard below.</p>`
         : "";
   const nTakes = state.pendingTrajectories.length;
   const saveBtn = nTakes
@@ -292,21 +301,20 @@ function renderRecipe() {
           <button class="ghost" id="toggle-record">${state.recording ? "Stop recording" : "Record a demo"}</button>
           ${saveBtn}
         </div>
-        <p class="lede">${state.recording ? "Drag mustard into the bowl. Each pointer-up is one take. The yellow trail is what will be saved." : "Record a take on the canvas, then Save. Scripted demos still live in Data."}</p>
+        <p class="lede">${state.recording ? "Drag mustard into the bowl. Each release is one take." : "Optional: record a take on the canvas, then Save, then Train."}</p>
         <p class="status" id="demo-status">${escapeHtml(state.lastDemoMessage || (nTakes ? `${nTakes} take(s) in memory` : ""))}</p>
         <p class="error" id="demo-error"></p>`
     : "";
   main.innerHTML = `
-    ${stepsHTML(hasScene ? "scene" : "train")}
-    <h1>${r.title}</h1>
-    <p class="lede">${r.summary}</p>
+    ${stepsHTML("train")}
+    <h1>${escapeHtml(r.title)}</h1>
+    <p class="lede">${escapeHtml(r.language || r.summary || "")}</p>
     <div class="detail">
       <section>
-        <p>${pill(r)} &nbsp; robot <code>${escapeHtml(r.robot)}</code></p>
-        <p class="lede">${r.language || ""}</p>
+        <p>${pill(r)}</p>
         <div class="actions recipe-bar">
           <button class="primary" id="train">${trainLabel}</button>
-          <button class="ghost" id="back">Back to tasks</button>
+          <button class="ghost" id="back">Back</button>
         </div>
         <p class="status" id="train-status"></p>
         <p class="error" id="train-error"></p>
@@ -318,7 +326,7 @@ function renderRecipe() {
       <section>
         <details class="advanced" id="advanced">
           <summary>Advanced · job spec</summary>
-          <p class="lede">The UI is a projection of this document. Edit only if you need to.</p>
+          <p class="lede">Researchers: this JSON is what Train sends to the engine. Beginners can ignore it.</p>
           <textarea class="spec" id="spec-json">${escapeHtml(JSON.stringify(state.starter, null, 2))}</textarea>
           <div class="actions" style="margin-top:8px">
             <button class="ghost" id="apply-spec">Apply spec</button>
@@ -537,7 +545,7 @@ function renderData() {
     ? `<ul class="runs">${datasets
         .map((d) => `<li class="run-row"><code>${escapeHtml(d)}</code></li>`)
         .join("")}</ul>`
-    : `<p class="lede">No dataset on this job yet. <code>Train pick eval</code> still works — it writes scripted demos automatically. Record or Inspect here when you want keep/drop.</p>`;
+    : `<p class="lede">No demos on this job yet. Train on Pick and place still works — it writes built-in takes. Record here when you want to keep or drop episodes.</p>`;
   const inspected = state.dataset;
   let body = "";
   if (inspected && inspected.ok) {
@@ -581,7 +589,7 @@ function renderData() {
       </table>
       <div id="keep-summary">${trainSummary}</div>
       <div class="actions">
-        <button class="primary" id="train-from-data" ${emptyKeep ? "disabled" : ""}>Train pick eval (${keep.length} kept)</button>
+        <button class="primary" id="train-from-data" ${emptyKeep ? "disabled" : ""}>Train (${keep.length} kept)</button>
         <button class="ghost" id="keep-successes">Keep successes only</button>
       </div>
     `;
@@ -591,10 +599,8 @@ function renderData() {
   main.innerHTML = `
     <h1>Data</h1>
     <p class="lede">
-      Demonstrations live in the LeRobot dataset format — we do not invent one.
-      Record scripted mustard→bowl demos here, drop bad takes, then train.
-      Or record by dragging mustard on the task scene. Gamepad teleop is still later;
-      these demos fit linear BC that steers the mustard; the G1 arm follows with poses, not finger grasping.
+      Show the robot the task. Record mustard-into-bowl takes, uncheck the bad ones, then Train.
+      Gamepad teleop is later. This is demonstration following, not finger grasping.
     </p>
     <section>
       <h2>On this job</h2>
@@ -663,7 +669,7 @@ function refreshKeepSummary() {
   const btn = document.getElementById("train-from-data");
   if (btn) {
     btn.disabled = emptyKeep;
-    btn.textContent = `Train pick eval (${keep.length} kept)`;
+    btn.textContent = `Train (${keep.length} kept)`;
   }
 }
 
@@ -809,32 +815,48 @@ function renderRuns() {
             <strong>${run.recipe || run.run_id}</strong>
             <div class="meta">${run.run_id}${run.artifacts && run.artifacts["eval.mp4"] ? " · eval.mp4" : ""}${hint}${failedHint}</div>
           </div>
-          <div class="status ${statusClass}">${run.status}${passed ? "" : run.status === "completed" ? " (not passed)" : ""}${run.status === "blocked" ? " (compile only)" : ""}</div>
+          <div class="status ${statusClass}">${englishRunStatus(run)}</div>
         </div>
       </li>`;
     })
     .join("");
   main.innerHTML = `
     <h1>Runs</h1>
-    <p class="lede">Every run writes a manifest, engine payload, and — when the adapter can — an eval video. Click a row to play it. Prefer pick-and-place notes with BC evidence (<code>arm_mode=…+BC</code>, <code>linear BC</code>, or <code>keep=</code> + frames). Only clips with none of those get a stale hint. Blocked <code>g1-walk</code> means GPU walk is not available here.</p>
-    <ul class="runs">${rows || "<li class='lede'>No runs yet. Train Cartpole from Tasks.</li>"}</ul>
+    <p class="lede">Click a run to watch the video. Green means the task succeeded. Orange means it finished but failed, or it cannot train on this computer.</p>
+    <ul class="runs">${rows || "<li class='lede'>No runs yet. Open Cartpole from Tasks and click Train.</li>"}</ul>
   `;
   main.querySelectorAll("[data-run]").forEach((el) => {
     el.addEventListener("click", () => showRun(el.dataset.run));
   });
 }
 
+function englishRunStatus(run) {
+  const passed = run.metrics && run.metrics.passed === true;
+  if (run.status === "queued" || run.status === "running") return "training…";
+  if (run.status === "passed" || passed) return "worked";
+  if (run.status === "blocked") return "can't train here";
+  if (run.status === "failed") return "broke";
+  if (run.status === "completed") return "finished — did not pass";
+  return run.status || "";
+}
+
 function paintRun(run, logText) {
   const video = run.artifacts && run.artifacts["eval.mp4"]
     ? `<video controls autoplay muted src="/api/runs/${run.run_id}/artifacts/eval.mp4?t=${Date.now()}"></video>`
-    : `<p class="lede">No eval video yet.</p>`;
+    : `<p class="lede">${
+        run.status === "blocked"
+          ? "No video — this task cannot train on this computer."
+          : ["queued", "running"].includes(run.status)
+            ? "Video appears when training finishes."
+            : "No eval video. On a machine without a display, Train still scores success but skips the clip."
+      }</p>`;
   const scene = run.artifacts && run.artifacts["composed_scene.xml"]
-    ? `<p class="lede"><a href="/api/runs/${run.run_id}/artifacts/composed_scene.xml">composed_scene.xml</a> — open in native MuJoCo.</p>`
+    ? `<p class="lede"><a href="/api/runs/${run.run_id}/artifacts/composed_scene.xml">Scene file</a> — open in MuJoCo if you want.</p>`
     : "";
   const notes = (run.notes || []).map((n) => escapeHtml(n)).join(" · ");
   const hasMetrics = run.metrics && run.metrics.eval_episodes != null;
   const metrics = hasMetrics
-    ? `<p class="status ${run.status}">success_rate=${fmt(run.metrics.success_rate)} mean_return=${fmt(run.metrics.mean_return)} passed=${run.metrics.passed ?? "—"}</p>`
+    ? `<p class="meta">score ${fmt(run.metrics.success_rate)} · passed=${run.metrics.passed ?? "—"}</p>`
     : "";
   const statusClass =
     run.status === "passed" || (run.metrics && run.metrics.passed === true)
@@ -842,35 +864,17 @@ function paintRun(run, logText) {
       : run.status === "completed"
         ? "completed"
         : run.status || "";
-  const hintText = runDemoHint(run).replace(/^ · /, "");
-  const demoLine = hintText
-    ? `<p class="lede">${
-        run.recipe === "pick-and-place" ? "Demos / BC: " : "Hint: "
-      }${escapeHtml(hintText)}</p>`
-    : "";
+  const headline = englishRunStatus(run);
   const blockedHelp =
-    run.status === "blocked" &&
-    (run.recipe === "g1-walk" ||
-      run.recipe === "g1-reach" ||
-      (run.error || "").includes("Playground") ||
-      (run.error || "").includes("mjlab"))
-      ? `<p class="lede">Next step: use a GPU box for the compiled train script, or open <code>g1-stand</code> / <code>pick-and-place</code> for a CPU preview. Blocked is expected here — not a silent failure.</p>`
+    run.status === "blocked"
+      ? `<p class="lede">This is expected. Use Cartpole, G1 stand, or Pick and place on this computer. Walking and reach need a GPU box.</p>`
       : "";
   main.innerHTML = `
-    ${stepsHTML("train")}
-    <h1>Run</h1>
-    <p class="lede">${run.run_id}</p>
-    <p class="status ${statusClass}">${run.status}${
-      run.status === "completed" && run.metrics && run.metrics.passed === false
-        ? " (metrics not passed)"
-        : run.status === "blocked"
-          ? " (compile only — not trained)"
-          : ""
-    }</p>
+    ${stepsHTML("video")}
+    <h1>${escapeHtml(prettyRecipe(run.recipe))}</h1>
+    <p class="status ${statusClass}">${escapeHtml(headline)}</p>
     ${metrics}
-    ${demoLine}
-    ${notes ? `<p class="lede">${notes}</p>` : ""}
-    ${run.error ? `<p class="error">${escapeHtml(run.error)}</p>` : ""}
+    ${run.error ? `<p class="error">${escapeHtml(plainError(run.error))}</p>` : ""}
     ${blockedHelp}
     <div class="actions recipe-bar">
       <button class="primary" id="train-again">Train again</button>
@@ -878,18 +882,46 @@ function paintRun(run, logText) {
     </div>
     <div class="detail">
       <section>
-        <h2>Eval</h2>
+        <h2>Did it work?</h2>
         ${video}
         ${scene}
       </section>
       <section>
-        <h2>Log</h2>
-        <pre class="log" id="run-log">${escapeHtml(logText || run.log || "")}</pre>
+        <details class="advanced" ${["queued", "running"].includes(run.status) ? "open" : ""}>
+          <summary>Log</summary>
+          <pre class="log" id="run-log">${escapeHtml(logText || run.log || "")}</pre>
+          ${notes ? `<p class="meta">${notes}</p>` : ""}
+        </details>
       </section>
     </div>
   `;
   document.getElementById("train-again")?.addEventListener("click", trainCurrent);
   document.getElementById("back-tasks")?.addEventListener("click", () => switchView("tasks"));
+}
+
+function prettyRecipe(id) {
+  const map = {
+    "cartpole-balance": "Cartpole",
+    "g1-stand": "G1 stand",
+    "g1-walk": "G1 walk",
+    "g1-reach": "G1 reach",
+    "pick-and-place": "Pick and place",
+  };
+  return map[id] || id || "Run";
+}
+
+function plainError(err) {
+  const text = String(err);
+  if (text.includes("Playground")) {
+    return "Walking needs MuJoCo Playground on a GPU machine. Not available here.";
+  }
+  if (text.includes("mjlab")) {
+    return "Reach needs mjlab on a GPU machine. Not available here.";
+  }
+  if (text.includes("keep_episodes is empty")) {
+    return "Keep at least one demo, then Train.";
+  }
+  return text;
 }
 
 async function showRun(runId) {
