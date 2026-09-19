@@ -19,6 +19,7 @@ def test_compose_adds_table_objects_and_camera() -> None:
     }
     model, xml = compose_mjcf(mjcf, scene)
     assert "ht_table" in xml
+    assert "ht_table_leg_0" in xml
     assert "mustard" in xml
     assert "ht_eval" in xml
     data = mujoco.MjData(model)

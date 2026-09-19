@@ -9,15 +9,15 @@ import numpy as np
 # A floor-height counter at x=0.50 is not reachable with arm/waist only.
 KITCHEN_COUNTER = {
     "table_pos": (0.28, 0.0, 0.66),
-    "table_size": (0.12, 0.12, 0.02),
+    "table_size": (0.14, 0.12, 0.02),
     "table_rgba": (0.45, 0.32, 0.18, 1.0),
-    "camera_pos": (1.10, -0.90, 1.05),
-    "camera_target": (0.12, -0.04, 0.78),
+    "camera_pos": (0.95, -0.85, 1.00),
+    "camera_target": (0.18, -0.05, 0.80),
 }
 
 STAND_CAMERA = {
-    "camera_pos": (1.35, -1.00, 1.05),
-    "camera_target": (0.0, 0.0, 0.75),
+    "camera_pos": (1.20, -1.10, 1.00),
+    "camera_target": (0.05, 0.0, 0.85),
 }
 
 PRIMITIVES: dict[str, dict[str, Any]] = {
@@ -127,6 +127,27 @@ def compose_mjcf(
         size=list(layout["table_size"]),
         rgba=list(layout["table_rgba"]),
     )
+    # Legs so the counter is not a floating slab in the eval video.
+    tx, ty, tz = layout["table_pos"]
+    sx, sy, sz = layout["table_size"]
+    leg_half = max(0.04, tz - sz) * 0.5
+    leg_z = -(tz - leg_half)
+    leg_rgba = [0.32, 0.22, 0.12, 1.0]
+    for i, (lx, ly) in enumerate(
+        (
+            (sx * 0.75, sy * 0.75),
+            (sx * 0.75, -sy * 0.75),
+            (-sx * 0.75, sy * 0.75),
+            (-sx * 0.75, -sy * 0.75),
+        )
+    ):
+        table.add_geom(
+            name=f"ht_table_leg_{i}",
+            type=int(getattr(mujoco.mjtGeom, "mjGEOM_BOX", _GEOM_ENUM["box"])),
+            size=[0.015, 0.015, leg_half],
+            pos=[lx, ly, leg_z],
+            rgba=leg_rgba,
+        )
 
     objects = list((scene or {}).get("objects") or [])
     for obj in objects:

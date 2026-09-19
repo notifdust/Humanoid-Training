@@ -62,8 +62,8 @@ function recipesForRobot() {
 
 const START_HERE = [
   ["cartpole-balance", "1. Cartpole", "~30s CPU eval video"],
-  ["g1-stand", "2. G1 stand", "arms raise on the stand pose"],
-  ["pick-and-place", "3. Pick and place", "G1 reaches and carries mustard"],
+  ["g1-stand", "2. G1 stand", "arms raise + wave (~2s)"],
+  ["pick-and-place", "3. Pick and place", "re-train — arm reaches mustard"],
 ];
 
 function renderRobots() {
@@ -106,7 +106,7 @@ function renderRecipes() {
   const start = state.robot
     ? ""
     : `<div class="start-here" id="start-here">
-        <p>Start here — train writes an eval video. Spec is under Advanced.</p>
+        <p>Start here — train writes an eval video. Re-train G1 recipes if an old run looks frozen.</p>
         <div class="actions">
           ${START_HERE.map(
             ([id, label, hint]) =>
