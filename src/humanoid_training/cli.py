@@ -160,7 +160,8 @@ def _cmd_serve(host: str, port: int) -> int:
     print(f"Humanoid Training studio")
     print(f"  Open http://{open_host}:{port}")
     print("  Start here: Cartpole balance (~30s) → eval video")
-    print("  Then G1 stand, then Pick and place (drag mustard into the bowl).")
+    print("  Then G1 stand (arms raise), then Pick and place (arm reaches mustard).")
+    print("  Re-train old G1 runs — earlier evals looked frozen.")
     print("  Spec is under Advanced. This is not Isaac Lab.")
     uvicorn.run("humanoid_training.server:app", host=host, port=port, reload=False)
     return 0
