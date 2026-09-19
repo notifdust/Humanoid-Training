@@ -72,12 +72,13 @@ LeRobot dataset format. Non-experts *show* the task instead of designing
 rewards.
 
 **Exit test.** Record or import a LeRobot dataset, drop bad episodes,
-train an imitation recipe, get an eval video.
+train an imitation recipe, get an eval video. Keep-only-failure demos
+must fail mustard-in-bowl; keep-success demos must pass.
 
 | Deliverable | Status |
 |---|---|
 | LeRobot adapter (dataset I/O + ACT / similar) | write/inspect local LeRobot v2 layout; ACT launch still blocked |
-| Episode review (keep / drop) | keep_episodes filters BC training frames |
+| Episode review (keep / drop) | keep_episodes filters BC frames; failure-only keep fails eval |
 | `pick-and-place` recipe backed by real data | scripted or canvas demos → linear-BC steers mustard; G1 arm plays pick/lift/place poses |
 | Teleop session into the studio | canvas drag records LeRobot takes; gamepad still later |
 

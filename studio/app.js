@@ -37,7 +37,10 @@ function pill(recipe) {
   if (recipe.imitate) return `<span class="pill live">imitation</span>`;
   if (recipe.scene_preview) return `<span class="pill live">scene preview</span>`;
   if (recipe.runnable) return `<span class="pill live">runnable</span>`;
-  return `<span class="pill blocked">compile / later phase</span>`;
+  if (recipe.id === "g1-walk") {
+    return `<span class="pill blocked">blocked · GPU walk</span>`;
+  }
+  return `<span class="pill blocked">compile only · later phase</span>`;
 }
 
 function stepsHTML(active) {
@@ -218,9 +221,11 @@ function renderRecipe() {
   const trainLabel = r.imitate ? "Train pick eval" : r.scene_preview ? "Preview scene" : "Train this recipe";
   const trainHint = r.imitate
     ? `<p class="lede">Fits linear BC on demos (canvas or scripted). Eval: G1 reaches, then BC steers the mustard into the bowl while the arm follows. Not finger grasping.</p>`
-    : r.runnable
-      ? ""
-      : `<p class="lede">Compile only on this CPU. Train still runs and will block with a next-step sentence (usually Playground / Isaac Lab + GPU).</p>`;
+    : r.id === "g1-walk"
+      ? `<p class="lede">Blocked on this CPU. Train still compiles Playground / mjlab / Isaac Lab payloads, then stops with a next-step sentence — install Playground on a GPU box, or use <code>g1-stand</code> for a CPU hold preview. This is not a frozen walk clip.</p>`
+      : r.runnable
+        ? ""
+        : `<p class="lede">Compile only on this CPU. Train still runs and will block with a next-step sentence (usually Playground / Isaac Lab + GPU).</p>`;
   const nTakes = state.pendingTrajectories.length;
   const saveBtn = nTakes
     ? `<button class="primary" id="save-demos">Save ${nTakes} demo${nTakes === 1 ? "" : "s"}</button>
@@ -454,10 +459,24 @@ function renderData() {
   const inspected = state.dataset;
   let body = "";
   if (inspected && inspected.ok) {
-    const rows = (inspected.episodes || [])
+    const episodes = inspected.episodes || [];
+    const total = episodes.length;
+    const keep = state.keepEpisodes.length
+      ? state.keepEpisodes
+      : episodes.map((ep) => ep.episode_index);
+    const keptEps = episodes.filter((ep) => keep.includes(ep.episode_index));
+    const keptOk = keptEps.filter((ep) => ep.success !== false).length;
+    const keptMiss = keptEps.filter((ep) => ep.success === false).length;
+    const trainSummary =
+      keptMiss && !keptOk
+        ? `<p class="error">Keeping only misses (${keptMiss}) — train pick eval should fail mustard-in-bowl. Prefer success takes unless you are proving keep/drop.</p>`
+        : keptMiss
+          ? `<p class="lede">Train will fit BC on ${keep.length} of ${total} episodes (${keptOk} ok · ${keptMiss} miss). Drop misses unless you are proving keep/drop.</p>`
+          : `<p class="lede">Train will fit BC on ${keep.length} of ${total} episodes. That filter writes <code>data.keep_episodes</code>.</p>`;
+    const rows = episodes
       .map((ep) => {
         const idx = ep.episode_index;
-        const checked = !state.keepEpisodes.length || state.keepEpisodes.includes(idx);
+        const checked = keep.includes(idx);
         const ok = ep.success === false ? "miss" : ep.success ? "ok" : "—";
         return `<tr>
           <td><input type="checkbox" data-ep="${idx}" ${checked ? "checked" : ""} /></td>
@@ -470,13 +489,15 @@ function renderData() {
       .join("");
     body = `
       <p class="status completed">${escapeHtml(inspected.format)} · ${inspected.total_episodes} episodes · fps=${inspected.fps ?? "—"} · robot=${escapeHtml(inspected.robot_type || "—")}</p>
+      <p class="meta">path <code>${escapeHtml(state.datasetUri || inspected.path || "")}</code></p>
       <table class="data-table">
         <thead><tr><th>keep</th><th>#</th><th>length</th><th>tasks</th><th>success</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <p class="lede">Keep/drop writes <code>data.keep_episodes</code>. Train pick eval fits linear BC on kept frames — that BC steers the mustard path.</p>
+      ${trainSummary}
       <div class="actions">
-        <button class="primary" id="train-from-data">Train pick eval</button>
+        <button class="primary" id="train-from-data">Train pick eval (${keep.length} kept)</button>
+        <button class="ghost" id="keep-successes">Keep successes only</button>
       </div>
     `;
   } else if (inspected && inspected.error) {
@@ -512,8 +533,22 @@ function renderData() {
   document.getElementById("inspect-ds").addEventListener("click", inspectDataset);
   document.getElementById("record-ds")?.addEventListener("click", recordDemos);
   document.getElementById("train-from-data")?.addEventListener("click", trainCurrent);
+  document.getElementById("keep-successes")?.addEventListener("click", () => {
+    if (!state.dataset?.episodes) return;
+    state.keepEpisodes = state.dataset.episodes
+      .filter((ep) => ep.success !== false)
+      .map((ep) => ep.episode_index);
+    if (state.starter) {
+      state.starter.data = state.starter.data || {};
+      state.starter.data.keep_episodes = state.keepEpisodes;
+    }
+    renderData();
+  });
   main.querySelectorAll("[data-ep]").forEach((box) => {
-    box.addEventListener("change", syncKeepEpisodes);
+    box.addEventListener("change", () => {
+      syncKeepEpisodes();
+      renderData();
+    });
   });
 }
 
@@ -564,7 +599,16 @@ async function inspectDataset() {
       body: JSON.stringify({ uri }),
     });
     if (state.dataset.ok) {
-      state.keepEpisodes = (state.dataset.episodes || []).map((ep) => ep.episode_index);
+      const eps = state.dataset.episodes || [];
+      const hasSuccessMeta = eps.some((ep) => ep.success === true || ep.success === false);
+      state.keepEpisodes = hasSuccessMeta
+        ? eps.filter((ep) => ep.success !== false).map((ep) => ep.episode_index)
+        : eps.map((ep) => ep.episode_index);
+      if (state.starter) {
+        state.starter.data = state.starter.data || {};
+        state.starter.data.keep_episodes = state.keepEpisodes;
+        if (uri) state.starter.data.datasets = [uri.replace(/^file:/, "")];
+      }
     }
   } catch (error) {
     state.dataset = { ok: false, error: error.message };
@@ -584,14 +628,39 @@ function syncKeepEpisodes() {
   }
 }
 
+function runDemoHint(run) {
+  const notes = (run.notes || []).join(" ");
+  const keep = (notes.match(/keep_episodes=(\[[^\]]*\]|all)/) || [])[1];
+  const frames = (notes.match(/frames=(\d+)/) || [])[1];
+  const bc = (notes.match(/bc_steps=(\d+)/) || [])[1];
+  const mode =
+    (notes.match(/arm_mode=[\w+]+/) || [])[0] ||
+    (notes.includes("playback") ? "arm_mode=playback" : "") ||
+    (notes.includes("linear BC") ? "object-BC" : "");
+  const bits = [];
+  if (mode) bits.push(mode);
+  if (keep) bits.push(`keep=${keep}`);
+  if (frames) bits.push(`${frames} frames`);
+  if (bc) bits.push(`bc_steps=${bc}`);
+  if (
+    run.recipe === "pick-and-place" &&
+    run.status !== "queued" &&
+    run.status !== "running" &&
+    !notes.includes("playback+BC") &&
+    !notes.includes("IK+BC") &&
+    !notes.includes("mocap-BC")
+  ) {
+    bits.push("stale? re-train for BC");
+  }
+  if (run.recipe === "g1-walk" && run.status === "blocked") {
+    bits.push("needs Playground + GPU");
+  }
+  return bits.length ? ` · ${bits.join(" · ")}` : "";
+}
+
 function renderRuns() {
   const rows = state.runs
     .map((run) => {
-      const notes = (run.notes || []).join(" ");
-      const mode =
-        (notes.match(/arm_mode=[\w+]+/) || [])[0] ||
-        (notes.includes("playback") ? "arm_mode=playback" : "") ||
-        (notes.includes("linear BC") ? "object-BC" : "");
       const passed = run.metrics && run.metrics.passed === true;
       const statusClass =
         run.status === "passed" || passed
@@ -599,9 +668,12 @@ function renderRuns() {
           : run.status === "completed"
             ? "completed"
             : run.status || "";
-      const hint = mode
-        ? ` · ${mode}`
-        : run.status === "completed" && run.metrics && run.metrics.passed === false
+      const hint = runDemoHint(run);
+      const failedHint =
+        !hint &&
+        run.status === "completed" &&
+        run.metrics &&
+        run.metrics.passed === false
           ? " · failed metrics"
           : "";
       return `
@@ -609,16 +681,16 @@ function renderRuns() {
         <div class="run-row" data-run="${run.run_id}">
           <div>
             <strong>${run.recipe || run.run_id}</strong>
-            <div class="meta">${run.run_id}${run.artifacts && run.artifacts["eval.mp4"] ? " · eval.mp4" : ""}${hint}</div>
+            <div class="meta">${run.run_id}${run.artifacts && run.artifacts["eval.mp4"] ? " · eval.mp4" : ""}${hint}${failedHint}</div>
           </div>
-          <div class="status ${statusClass}">${run.status}${passed ? "" : run.status === "completed" ? " (not passed)" : ""}</div>
+          <div class="status ${statusClass}">${run.status}${passed ? "" : run.status === "completed" ? " (not passed)" : ""}${run.status === "blocked" ? " (compile only)" : ""}</div>
         </div>
       </li>`;
     })
     .join("");
   main.innerHTML = `
     <h1>Runs</h1>
-    <p class="lede">Every run writes a manifest, engine payload, and — when the adapter can — an eval video. Click a row to play it. Prefer runs whose notes say <code>arm_mode=playback+BC</code> over older frozen clips.</p>
+    <p class="lede">Every run writes a manifest, engine payload, and — when the adapter can — an eval video. Click a row to play it. Prefer pick-and-place notes with <code>arm_mode=playback+BC</code> and a <code>keep=</code> list; older frozen clips lack those. Blocked <code>g1-walk</code> means GPU walk is not available here.</p>
     <ul class="runs">${rows || "<li class='lede'>No runs yet. Train Cartpole from Tasks.</li>"}</ul>
   `;
   main.querySelectorAll("[data-run]").forEach((el) => {
@@ -644,6 +716,13 @@ function paintRun(run, logText) {
       : run.status === "completed"
         ? "completed"
         : run.status || "";
+  const demoLine = runDemoHint(run)
+    ? `<p class="lede">Demos / BC: ${escapeHtml(runDemoHint(run).replace(/^ · /, ""))}</p>`
+    : "";
+  const blockedHelp =
+    run.status === "blocked" && (run.recipe === "g1-walk" || (run.error || "").includes("Playground"))
+      ? `<p class="lede">Next step: on a machine with an NVIDIA GPU, <code>pip install playground</code> then run the generated <code>train.sh</code>, or open <code>g1-stand</code> for a CPU hold preview. Blocked is expected here — not a silent failure.</p>`
+      : "";
   main.innerHTML = `
     ${stepsHTML("train")}
     <h1>Run</h1>
@@ -651,11 +730,15 @@ function paintRun(run, logText) {
     <p class="status ${statusClass}">${run.status}${
       run.status === "completed" && run.metrics && run.metrics.passed === false
         ? " (metrics not passed)"
-        : ""
+        : run.status === "blocked"
+          ? " (compile only — not trained)"
+          : ""
     }</p>
     ${metrics}
+    ${demoLine}
     ${notes ? `<p class="lede">${notes}</p>` : ""}
     ${run.error ? `<p class="error">${escapeHtml(run.error)}</p>` : ""}
+    ${blockedHelp}
     <div class="actions recipe-bar">
       <button class="primary" id="train-again">Train again</button>
       <button class="ghost" id="back-tasks">Back to tasks</button>

@@ -3,7 +3,7 @@ version: 0.1.0
 phase: 0
 runnable: false
 title: G1 walk (flat)
-summary: Unitree G1 velocity tracking on flat terrain. Compiles to Playground and Isaac Lab.
+summary: Unitree G1 velocity tracking on flat terrain. Compiles Playground / mjlab / Isaac Lab payloads; live train needs a GPU (blocked on CPU studio).
 language: Walk forward on flat ground without falling.
 robot: unitree-g1-29dof
 success:

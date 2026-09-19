@@ -29,7 +29,9 @@ def test_g1_walk_is_blocked_without_playground(tmp_path: Path) -> None:
     spec = load_spec(Path(__file__).resolve().parents[1] / "spec" / "examples" / "g1-walk.json")
     manifest = run_job(spec, runs_dir=tmp_path)
     assert manifest["status"] == "blocked"
-    assert "Playground" in (manifest["error"] or "")
+    err = manifest["error"] or ""
+    assert "Playground" in err
+    assert "blocked" in err.lower() or "CPU studio" in err or "g1-stand" in err
     run_dir = Path(manifest["run_dir"])
     assert (run_dir / "train.sh").is_file()
     assert (run_dir / "engine_payload.json").is_file()
@@ -286,6 +288,83 @@ def test_puppet_freejoint_uses_bc_for_mustard(tmp_path: Path, monkeypatch) -> No
     assert calls["n"] > 0, "linear BC never ran on the puppet path"
     assert "bc_steps=" in notes
     assert "mustard_bowl_dist" in notes
+
+
+def test_keep_only_failures_fails_mustard_in_bowl(tmp_path: Path, monkeypatch) -> None:
+    """Full train→eval: keep_episodes of only misses must not place mustard in bowl."""
+    import humanoid_training.adapters.mujoco_adapter as adapter
+    from humanoid_training.demos import record_scripted_pick_place
+
+    monkeypatch.setattr(adapter, "_PICK_POSE", {})
+    monkeypatch.setattr(adapter, "_LIFT_POSE", {})
+    monkeypatch.setattr(adapter, "_PLACE_POSE", {})
+
+    # Compact counter matching mini_puppet.xml reach — same as BC wiring test.
+    scene = {
+        "template": "kitchen-counter-v1",
+        "table_pos": [0.36, -0.12, 0.90],
+        "table_size": [0.10, 0.10, 0.02],
+        "objects": [
+            {"id": "mustard", "asset": "ycb-mustard", "x": 0.0, "y": 0.0},
+            {"id": "bowl", "asset": "bowl-white", "x": 0.08, "y": 0.04},
+        ],
+    }
+    record_spec = {
+        "spec_version": "0.1.0",
+        "name": "pick-and-place",
+        "robot": {"id": "unitree-g1-29dof", "source": "catalog"},
+        "task": {
+            "recipe": "pick-and-place",
+            "success": {"object": "mustard", "container": "bowl"},
+        },
+        "scene": scene,
+        "train": {"method": "imitation", "seed": 3},
+    }
+    demos = tmp_path / "demos"
+    meta = record_scripted_pick_place(record_spec, demos, episodes=4, include_failure=True, seed=3)
+    fails = [ep["episode_index"] for ep in meta["episodes"] if ep.get("success") is False]
+    oks = [ep["episode_index"] for ep in meta["episodes"] if ep.get("success") is not False]
+    assert fails and oks
+
+    fixture = Path(__file__).resolve().parent / "fixtures" / "mini_puppet.xml"
+
+    def _spec(keep: list[int]) -> dict:
+        return {
+            "spec_version": "0.1.0",
+            "name": "pick-and-place",
+            "robot": {"id": "unitree-g1-29dof", "source": "catalog"},
+            "task": {
+                "recipe": "pick-and-place",
+                "success": {"object": "mustard", "container": "bowl", "min_z": 0.5, "hold_s": 0.1},
+            },
+            "train": {"method": "imitation", "seed": 3},
+            "scene": scene,
+            "backend": {"prefer": ["mujoco"], "compute": "local"},
+            "adapters": {
+                "mujoco": {
+                    "mjcf": str(fixture),
+                    "horizon": 600,
+                    "render_every": 20,
+                    "keyframe": 0,
+                }
+            },
+            "eval": {"episodes": 1, "record_video": False},
+            "data": {
+                "datasets": [str(demos)],
+                "keep_episodes": keep,
+                "min_episodes": 1,
+            },
+        }
+
+    bad = run_job(_spec(fails), runs_dir=tmp_path / "bad")
+    assert bad.get("metrics", {}).get("passed") is False, bad.get("notes")
+    bad_notes = " ".join(bad.get("notes") or [])
+    assert f"keep_episodes={fails}" in bad_notes
+
+    good = run_job(_spec(oks), runs_dir=tmp_path / "good")
+    assert good.get("metrics", {}).get("passed") is True, good.get("notes")
+    good_notes = " ".join(good.get("notes") or [])
+    assert f"keep_episodes={oks}" in good_notes
 
 
 def test_imitation_physics_only_without_display(tmp_path: Path, monkeypatch) -> None:

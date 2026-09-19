@@ -45,6 +45,20 @@ def _pick_spec() -> dict:
     )
 
 
+def _bc_reaches_bowl(
+    weights: np.ndarray,
+    start_xy: np.ndarray,
+    goal_xy: np.ndarray,
+    radius: float,
+    *,
+    steps: int = 120,
+) -> bool:
+    pos = np.array(start_xy, dtype=float)
+    for _ in range(steps):
+        pos = pos + predict_linear_bc(weights, [pos[0], pos[1], goal_xy[0], goal_xy[1]])
+    return float(np.hypot(pos[0] - goal_xy[0], pos[1] - goal_xy[1])) <= radius
+
+
 def test_record_and_filter_scripted_demos(tmp_path: Path) -> None:
     spec = _pick_spec()
     dest = tmp_path / "demos"
@@ -68,6 +82,35 @@ def test_record_and_filter_scripted_demos(tmp_path: Path) -> None:
     assert delta.shape == (2,)
     toward = (b[0] - m[0]) * float(delta[0]) + (b[1] - m[1]) * float(delta[1])
     assert toward > 0
+
+
+def test_keep_drop_changes_bc_eval_outcome(tmp_path: Path) -> None:
+    """Phase 2 exit: dropping good takes / keeping only misses must change the BC path."""
+    from humanoid_training.compose import object_world_pos, primitive_for, table_layout
+
+    spec = _pick_spec()
+    dest = tmp_path / "demos"
+    meta = record_scripted_pick_place(spec, dest, episodes=4, include_failure=True, seed=2)
+    fails = [ep["episode_index"] for ep in meta["episodes"] if ep.get("success") is False]
+    oks = [ep["episode_index"] for ep in meta["episodes"] if ep.get("success") is not False]
+    assert fails and oks
+
+    layout = table_layout(spec["scene"])
+    mustard = spec["scene"]["objects"][0]
+    bowl = spec["scene"]["objects"][1]
+    start = np.array(object_world_pos(mustard, layout)[:2], dtype=float)
+    goal = np.array(object_world_pos(bowl, layout)[:2], dtype=float)
+    radius = float(primitive_for(bowl)["size"][0])
+
+    obs_ok, act_ok = load_lerobot_arrays(dest, keep_episodes=oks)
+    w_ok = fit_linear_bc(obs_ok, act_ok)
+    assert _bc_reaches_bowl(w_ok, start, goal, radius), "kept successes must steer mustard into bowl"
+
+    obs_bad, act_bad = load_lerobot_arrays(dest, keep_episodes=fails)
+    w_bad = fit_linear_bc(obs_bad, act_bad)
+    assert not _bc_reaches_bowl(
+        w_bad, start, goal, radius
+    ), "kept-only failures must miss the bowl — otherwise keep/drop is theater"
 
 
 def test_record_requires_scene_objects(tmp_path: Path) -> None:
