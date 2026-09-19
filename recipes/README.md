@@ -9,7 +9,7 @@ blank reward function. See [ROADMAP.md](../docs/ROADMAP.md).
 | `g1-stand` | yes (CPU) | mujoco + Menagerie G1, stand + arm idle |
 | `g1-walk` | compile only | playground / mjlab / isaaclab |
 | `g1-reach` | compile only | mjlab / isaaclab |
-| `pick-and-place` | yes (CPU BC) | mujoco + LeRobot dataset; G1 reaches/carries mustard (not ACT) |
+| `pick-and-place` | yes (CPU BC) | mujoco + LeRobot demos; BC steers mustard, arm plays poses |
 
 Each folder is:
 

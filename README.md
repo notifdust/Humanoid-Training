@@ -25,7 +25,7 @@ Open **http://127.0.0.1:8000**. You need a display for eval video (MuJoCo uses G
 
 1. **Start here → Cartpole balance → Train this recipe.** About 30s. Play the eval video. That is the whole product loop.
 2. **G1 stand → Train this recipe.** First time downloads the Unitree G1 from MuJoCo Menagerie into `.cache/`.
-3. **Pick and place → Record a demo**, drag mustard into the bowl, **Save**, **Train from demos**. Or skip Record — Train writes scripted LeRobot takes. That is object-space BC, not G1 grasping.
+3. **Pick and place → Record a demo**, drag mustard into the bowl, **Save**, **Train pick eval**. Or skip Record — Train writes scripted LeRobot takes. Linear BC steers the mustard; the G1 arm follows with pick/lift/place poses. Not finger grasping.
 
 Rooms: Robots · Tasks · Data · Runs. The job spec is under **Advanced**.
 
@@ -59,10 +59,10 @@ Headless (CI / SSH): `HT_NO_RENDER=1 ht train spec/examples/g1-stand.json` still
 | Recipe | What happens |
 |---|---|
 | `cartpole-balance` | Gymnasium RL on CPU, eval video |
-| `g1-stand` | MuJoCo G1 from Menagerie, stand + both-arm idle, eval video |
+| `g1-stand` | MuJoCo G1 from Menagerie, stand + both-arm wave, eval video |
 | `g1-walk` | Compile to Playground / mjlab / Isaac Lab (GPU to launch) |
 | `g1-reach` | Compile to mjlab / Isaac Lab |
-| `pick-and-place` | Drag scene; record demos; G1 reaches, carries mocap mustard into the bowl. Not finger grasping, not ACT. |
+| `pick-and-place` | Demos → linear BC steers mustard; G1 arm plays pick/lift/place. Not finger grasping, not ACT. |
 
 ## Non-goals (for now)
 

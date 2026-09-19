@@ -57,9 +57,8 @@ class MujocoAdapter:
             notes.append("scene.objects are compiled into the MJCF (table + primitives).")
         if method == "imitation":
             notes.append(
-                "Imitation: G1 right arm plays pick/lift/place poses (qpos playback) "
-                "and carries mocap mustard. Not finger grasping, not ACT, not a "
-                "torque policy."
+                "Imitation: linear BC steers mocap mustard from demos; G1 right arm "
+                "plays pick/lift/place poses to follow. Not finger grasping, not ACT."
             )
         else:
             notes.append(
@@ -269,25 +268,29 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
     puppet = pin_base is not None
     if use_arm:
         log(
-            f"right-arm {'playback' if puppet else 'IK'} on body id={hand_id} "
+            f"right-arm {'playback+BC' if puppet else 'IK+BC'} on body id={hand_id} "
             f"actuators={len(arm_acts)}"
         )
     if puppet:
-        log("pinning floating base — arm qpos playback, not a torque/balance policy")
+        log("pinning floating base — arm qpos playback; mustard path is linear BC")
     grasped = False
     released = False
+    done = False
     waypoint = start.copy()
     grasp_step = -1
     place_step = -1
+    carry_span0 = 0.0
+    bc_steps = 0
     hold_pose = {name: float(hold[idx]) for name, idx in names.items()} if hold is not None else {}
-    reach_end = max(80, int(horizon * 0.28))
-    settle_end = reach_end + max(30, int(horizon * 0.05))
-    lift_end = settle_end + max(60, int(horizon * 0.12))
-    carry_end = lift_end + max(100, int(horizon * 0.22))
-    place_end = carry_end + max(30, int(horizon * 0.05))
+    reach_end = max(80, int(horizon * 0.22))
+    settle_end = reach_end + max(40, int(horizon * 0.04))
+    recover_steps = 180
+    carry_clip = 0.0022
+    stop_box = {"stop": False}
 
     def step_fn(_model: Any, _data: Any, _step: int = 0) -> None:
-        nonlocal pos, grasped, released, waypoint, grasp_step, place_step
+        nonlocal pos, grasped, released, done, waypoint, grasp_step, place_step
+        nonlocal carry_span0, bc_steps
         if use_arm and puppet:
             if not grasped:
                 alpha = _phase_alpha(_step, 0, reach_end)
@@ -303,36 +306,54 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
                 if _step >= settle_end - 1 and dist_h < 0.12:
                     grasped = True
                     grasp_step = _step
+                    carry_span0 = float(
+                        np.hypot(start[0] - bowl_xy[0], start[1] - bowl_xy[1])
+                    )
+                    waypoint = start.copy()
                     log(f"grasp at step {_step} hand_mustard_dist={dist_h:.3f}m")
                 return
             if grasped and not released:
-                if _step < lift_end:
-                    pose = _blend_poses(_PICK_POSE, _LIFT_POSE, _phase_alpha(_step, settle_end, lift_end))
+                obs_t = np.array(
+                    [waypoint[0], waypoint[1], bowl_xy[0], bowl_xy[1]], dtype=np.float64
+                )
+                delta = predict_linear_bc(weights, obs_t)
+                bc_steps += 1
+                waypoint[0] += float(np.clip(delta[0], -carry_clip, carry_clip))
+                waypoint[1] += float(np.clip(delta[1], -carry_clip, carry_clip))
+                dist = float(np.hypot(waypoint[0] - bowl_xy[0], waypoint[1] - bowl_xy[1]))
+                progress = 1.0 - dist / max(carry_span0, 1e-3)
+                progress = float(np.clip(progress, 0.0, 1.0))
+                if progress < 0.3:
+                    pose = _blend_poses(_PICK_POSE, _LIFT_POSE, progress / 0.3)
                 else:
-                    pose = _blend_poses(_LIFT_POSE, _PLACE_POSE, _phase_alpha(_step, lift_end, carry_end))
+                    pose = _blend_poses(_LIFT_POSE, _PLACE_POSE, (progress - 0.3) / 0.7)
                 _drive_named_pose(_model, _data, names, pose)
                 ctrl[:] = _named_pose_ctrl(hold, names, pose, 1.0)
-                hand = np.asarray(_data.xpos[hand_id], dtype=np.float64)
-                hold_pt = hand + np.array([0.03, 0.0, -0.04], dtype=np.float64)
-                _data.mocap_pos[mocap] = hold_pt
-                pos = hold_pt.copy()
-                hand_dist = float(np.hypot(hold_pt[0] - bowl_xy[0], hold_pt[1] - bowl_xy[1]))
-                if _step >= carry_end and hand_dist <= radius + 0.06:
+                waypoint[2] = table_z + 0.05 * min(1.0, dist / 0.2)
+                _data.mocap_pos[mocap] = waypoint
+                pos = waypoint.copy()
+                if dist <= radius:
                     released = True
                     place_step = _step
                     pos = np.array([bowl_xy[0], bowl_xy[1], table_z], dtype=np.float64)
                     _data.mocap_pos[mocap] = pos
-                    log(f"place at step {_step} hand_bowl_dist={hand_dist:.3f}m")
-                elif _step >= place_end:
+                    log(f"place at step {_step} mustard_bowl_dist={dist:.3f}m (BC path)")
+                elif bc_steps > max(400, horizon // 2):
                     released = True
                     place_step = _step
-                    pos = np.array([bowl_xy[0], bowl_xy[1], table_z], dtype=np.float64)
-                    _data.mocap_pos[mocap] = pos
-                    log(f"place at step {_step} (timeout) hand_bowl_dist={hand_dist:.3f}m")
+                    log(f"place timeout at step {_step} mustard_bowl_dist={dist:.3f}m")
                 return
-            pose = _blend_poses(_PLACE_POSE, hold_pose, _phase_alpha(_step, place_end, min(horizon, place_end + 250)))
-            _drive_named_pose(_model, _data, names, pose)
-            ctrl[:] = _named_pose_ctrl(hold, names, pose, 1.0)
+            if not done:
+                recover_t = _phase_alpha(_step, max(place_step, 0), max(place_step, 0) + recover_steps)
+                pose = _blend_poses(_PLACE_POSE, hold_pose, recover_t)
+                _drive_named_pose(_model, _data, names, pose)
+                ctrl[:] = _named_pose_ctrl(hold, names, pose, 1.0)
+                _data.mocap_pos[mocap] = pos
+                if recover_t >= 1.0:
+                    done = True
+                    stop_box["stop"] = True
+                    log(f"eval done at step {_step}")
+                return
             _data.mocap_pos[mocap] = pos
             return
         if use_arm:
@@ -353,6 +374,7 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
                 if _step >= seed_steps and dist_h < 0.08:
                     grasped = True
                     grasp_step = _step
+                    waypoint = start.copy()
                     log(f"grasp at step {_step} hand_mustard_dist={dist_h:.3f}m")
                 return
             if grasped and not released:
@@ -360,6 +382,7 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
                     [waypoint[0], waypoint[1], bowl_xy[0], bowl_xy[1]], dtype=np.float64
                 )
                 delta = predict_linear_bc(weights, obs_t)
+                bc_steps += 1
                 clip = 0.012
                 waypoint[0] += float(np.clip(delta[0], -clip, clip))
                 waypoint[1] += float(np.clip(delta[1], -clip, clip))
@@ -377,18 +400,22 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
                     pos = np.array([bowl_xy[0], bowl_xy[1], table_z], dtype=np.float64)
                     _data.mocap_pos[mocap] = pos
                     log(f"place at step {_step} hand_bowl_dist={hand_dist:.3f}m")
+                    stop_box["stop"] = True
                 return
             _data.mocap_pos[mocap] = pos
             ctrl[:] = hold
             return
         obs_t = np.array([pos[0], pos[1], bowl_xy[0], bowl_xy[1]], dtype=np.float64)
         delta = predict_linear_bc(weights, obs_t)
+        bc_steps += 1
         pos[0] += float(delta[0])
         pos[1] += float(delta[1])
         dist = float(np.hypot(pos[0] - bowl_xy[0], pos[1] - bowl_xy[1]))
         lift = 0.05 * min(1.0, dist / 0.2)
         pos[2] = table_z + lift
         _data.mocap_pos[mocap] = pos
+        if dist <= radius:
+            stop_box["stop"] = True
 
     frames, zs, upright, object_ids = _simulate(
         mujoco,
@@ -402,6 +429,7 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
         log=log,
         step_fn=step_fn,
         pin_base=pin_base,
+        stop_box=stop_box,
     )
     video_path = None
     if frames:
@@ -425,11 +453,11 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
         video_path=video_path,
         passed=passed,
         notes=[
-            "linear BC + G1 right-arm pick/lift/place playback — mocap mustard, not finger grasping, not ACT",
-            f"frames={len(obs)} keep_episodes={keep if keep is not None else 'all'}",
+            "G1 arm: pick pose playback; mustard carry: linear BC on demos — mocap, not finger grasping, not ACT",
+            f"frames={len(obs)} keep_episodes={keep if keep is not None else 'all'} bc_steps={bc_steps}",
             f"mustard_bowl_dist={dist:.3f}",
             f"mean_pelvis_z={mean_z:.3f}",
-            "arm_ik=on" if use_arm else "arm_ik=off (no hand body)",
+            f"arm_mode={'playback+BC' if puppet else ('IK+BC' if use_arm else 'mocap-BC')}",
             *(["pelvis pinned (no balance policy)"] if pin_base is not None else []),
             f"grasped_step={grasp_step} placed_step={place_step}",
             *_video_notes(frames),
@@ -460,6 +488,7 @@ def _simulate(
     log: LogFn,
     step_fn: Any,
     pin_base: tuple[int, int, np.ndarray] | None = None,
+    stop_box: dict[str, bool] | None = None,
 ) -> tuple[list[np.ndarray], list[float], list[bool], dict[str, int]]:
     eval_cfg = spec.get("eval") or {}
     record_video = bool(eval_cfg.get("record_video", True))
@@ -508,6 +537,9 @@ def _simulate(
             frames.append(np.asarray(renderer.render()).copy())
         if step in {0, horizon // 2, horizon - 1}:
             log(f"step {step}/{horizon} pelvis_z={z:.3f}")
+        if stop_box is not None and stop_box.get("stop"):
+            log(f"early stop at step {step}/{horizon}")
+            break
     return frames, zs, upright, object_ids
 
 

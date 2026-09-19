@@ -229,9 +229,63 @@ def test_pick_and_place_arm_fixture_moves_joints(tmp_path: Path) -> None:
     }
     manifest = run_job(spec, runs_dir=tmp_path)
     notes = " ".join(manifest.get("notes") or [])
-    assert "arm_ik=on" in notes, notes
+    assert "arm_mode=IK+BC" in notes, notes
     log = (Path(manifest["run_dir"]) / "run.log").read_text(encoding="utf-8")
-    assert "right-arm IK" in log
+    assert "right-arm IK+BC" in log or "IK+BC" in log
+
+
+def test_puppet_freejoint_uses_bc_for_mustard(tmp_path: Path, monkeypatch) -> None:
+    """Pinned freejoint path must call linear BC so demos change the mustard path."""
+    import humanoid_training.adapters.mujoco_adapter as adapter
+
+    calls = {"n": 0}
+    real_predict = adapter.predict_linear_bc
+
+    def counting_predict(weights, obs):
+        calls["n"] += 1
+        return real_predict(weights, obs)
+
+    monkeypatch.setattr(adapter, "predict_linear_bc", counting_predict)
+    # Keep the arm near the mustard so grasp succeeds on this tiny fixture.
+    monkeypatch.setattr(adapter, "_PICK_POSE", {})
+    monkeypatch.setattr(adapter, "_LIFT_POSE", {})
+    monkeypatch.setattr(adapter, "_PLACE_POSE", {})
+
+    fixture = Path(__file__).resolve().parent / "fixtures" / "mini_puppet.xml"
+    spec = {
+        "spec_version": "0.1.0",
+        "name": "pick-and-place",
+        "robot": {"id": "unitree-g1-29dof", "source": "catalog"},
+        "task": {"recipe": "pick-and-place"},
+        "train": {"method": "imitation", "seed": 1},
+        "scene": {
+            "template": "kitchen-counter-v1",
+            "table_pos": [0.36, -0.12, 0.90],
+            "table_size": [0.10, 0.10, 0.02],
+            "objects": [
+                {"id": "mustard", "asset": "ycb-mustard", "x": 0.0, "y": 0.0},
+                {"id": "bowl", "asset": "bowl-white", "x": 0.08, "y": 0.04},
+            ],
+        },
+        "backend": {"prefer": ["mujoco"], "compute": "local"},
+        "adapters": {
+            "mujoco": {
+                "mjcf": str(fixture),
+                "horizon": 400,
+                "render_every": 10,
+                "keyframe": 0,
+            }
+        },
+        "eval": {"episodes": 1, "record_video": False},
+        "data": {"min_episodes": 3},
+    }
+    manifest = run_job(spec, runs_dir=tmp_path)
+    notes = " ".join(manifest.get("notes") or [])
+    log = (Path(manifest["run_dir"]) / "run.log").read_text(encoding="utf-8")
+    assert "playback+BC" in log or "arm_mode=playback+BC" in notes, (log, notes)
+    assert calls["n"] > 0, "linear BC never ran on the puppet path"
+    assert "bc_steps=" in notes
+    assert "mustard_bowl_dist" in notes
 
 
 def test_imitation_physics_only_without_display(tmp_path: Path, monkeypatch) -> None:
