@@ -195,6 +195,10 @@ def load_lerobot_arrays(
             obs_rows.append(_as_list(row.get("observation.state"), OBS_DIM))
             act_rows.append(_as_list(row.get("action"), ACT_DIM))
     if not obs_rows:
+        if keep is not None and len(keep) == 0:
+            raise ValueError(
+                "keep_episodes is empty — keep at least one demo, or omit keep_episodes."
+            )
         raise ValueError("Dataset has no frames after keep/drop filtering.")
     return (
         np.asarray(obs_rows, dtype=np.float64),

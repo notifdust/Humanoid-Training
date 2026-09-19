@@ -12,7 +12,7 @@ const state = {
   stream: null,
   dataset: null,
   datasetUri: "",
-  keepEpisodes: [],
+  keepEpisodes: null, // null = unset (treat as all); [] = keep none
   recording: false,
   pendingTrajectories: [],
   lastDemoMessage: "",
@@ -432,7 +432,12 @@ async function trainCurrent() {
       state.starter = detail.starter_spec;
       state.selected = detail.recipe;
     }
-    if (state.dataset && state.dataset.ok) {
+    if (state.dataset && state.dataset.ok && Array.isArray(state.keepEpisodes)) {
+      if (state.keepEpisodes.length === 0) {
+        throw new Error(
+          "Keep at least one episode — empty keep_episodes fits no BC frames."
+        );
+      }
       state.starter.data = state.starter.data || {};
       state.starter.data.keep_episodes = state.keepEpisodes;
     }
@@ -455,20 +460,23 @@ function renderData() {
     ? `<ul class="runs">${datasets
         .map((d) => `<li class="run-row"><code>${escapeHtml(d)}</code></li>`)
         .join("")}</ul>`
-    : `<p class="lede">No datasets on the current spec. Pick-and-place imitation needs a LeRobot folder with <code>meta/info.json</code>.</p>`;
+    : `<p class="lede">No dataset on this job yet. <code>Train pick eval</code> still works — it writes scripted demos automatically. Record or Inspect here when you want keep/drop.</p>`;
   const inspected = state.dataset;
   let body = "";
   if (inspected && inspected.ok) {
     const episodes = inspected.episodes || [];
     const total = episodes.length;
-    const keep = state.keepEpisodes.length
+    const keepExplicit = Array.isArray(state.keepEpisodes);
+    const keep = keepExplicit
       ? state.keepEpisodes
       : episodes.map((ep) => ep.episode_index);
+    const emptyKeep = keepExplicit && keep.length === 0;
     const keptEps = episodes.filter((ep) => keep.includes(ep.episode_index));
     const keptOk = keptEps.filter((ep) => ep.success !== false).length;
     const keptMiss = keptEps.filter((ep) => ep.success === false).length;
-    const trainSummary =
-      keptMiss && !keptOk
+    const trainSummary = emptyKeep
+      ? `<p class="error">No episodes kept — train would fit BC on 0 frames. Check at least one take.</p>`
+      : keptMiss && !keptOk
         ? `<p class="error">Keeping only misses (${keptMiss}) — train pick eval should fail mustard-in-bowl. Prefer success takes unless you are proving keep/drop.</p>`
         : keptMiss
           ? `<p class="lede">Train will fit BC on ${keep.length} of ${total} episodes (${keptOk} ok · ${keptMiss} miss). Drop misses unless you are proving keep/drop.</p>`
@@ -496,7 +504,7 @@ function renderData() {
       </table>
       ${trainSummary}
       <div class="actions">
-        <button class="primary" id="train-from-data">Train pick eval (${keep.length} kept)</button>
+        <button class="primary" id="train-from-data" ${emptyKeep ? "disabled" : ""}>Train pick eval (${keep.length} kept)</button>
         <button class="ghost" id="keep-successes">Keep successes only</button>
       </div>
     `;
@@ -628,15 +636,25 @@ function syncKeepEpisodes() {
   }
 }
 
+function hasBcEvidence(notes) {
+  // Honest BC-era runs, including older note vocab — do not call these stale.
+  if (/arm_mode=(playback|IK|mocap)[+_]BC/.test(notes)) return true;
+  if (/bc_steps=\d+/.test(notes)) return true;
+  if (notes.includes("linear BC")) return true;
+  if (/frames=\d+/.test(notes) && /keep_episodes=/.test(notes)) return true;
+  if (notes.includes("arm_ik=on")) return true;
+  return false;
+}
+
 function runDemoHint(run) {
   const notes = (run.notes || []).join(" ");
   const keep = (notes.match(/keep_episodes=(\[[^\]]*\]|all)/) || [])[1];
   const frames = (notes.match(/frames=(\d+)/) || [])[1];
   const bc = (notes.match(/bc_steps=(\d+)/) || [])[1];
-  const mode =
-    (notes.match(/arm_mode=[\w+]+/) || [])[0] ||
-    (notes.includes("playback") ? "arm_mode=playback" : "") ||
-    (notes.includes("linear BC") ? "object-BC" : "");
+  const modeMatch = notes.match(/arm_mode=(playback\+BC|IK\+BC|mocap-BC|[-\w+]+)/);
+  let mode = modeMatch ? `arm_mode=${modeMatch[1]}` : "";
+  if (!mode && notes.includes("linear BC")) mode = "linear-BC";
+  if (!mode && notes.includes("arm_ik=on")) mode = "legacy-BC";
   const bits = [];
   if (mode) bits.push(mode);
   if (keep) bits.push(`keep=${keep}`);
@@ -646,9 +664,7 @@ function runDemoHint(run) {
     run.recipe === "pick-and-place" &&
     run.status !== "queued" &&
     run.status !== "running" &&
-    !notes.includes("playback+BC") &&
-    !notes.includes("IK+BC") &&
-    !notes.includes("mocap-BC")
+    !hasBcEvidence(notes)
   ) {
     bits.push("stale? re-train for BC");
   }
@@ -690,7 +706,7 @@ function renderRuns() {
     .join("");
   main.innerHTML = `
     <h1>Runs</h1>
-    <p class="lede">Every run writes a manifest, engine payload, and — when the adapter can — an eval video. Click a row to play it. Prefer pick-and-place notes with <code>arm_mode=playback+BC</code> and a <code>keep=</code> list; older frozen clips lack those. Blocked <code>g1-walk</code> means GPU walk is not available here.</p>
+    <p class="lede">Every run writes a manifest, engine payload, and — when the adapter can — an eval video. Click a row to play it. Prefer pick-and-place notes with BC evidence (<code>arm_mode=…+BC</code>, <code>linear BC</code>, or <code>keep=</code> + frames). Only clips with none of those get a stale hint. Blocked <code>g1-walk</code> means GPU walk is not available here.</p>
     <ul class="runs">${rows || "<li class='lede'>No runs yet. Train Cartpole from Tasks.</li>"}</ul>
   `;
   main.querySelectorAll("[data-run]").forEach((el) => {

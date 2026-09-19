@@ -27,8 +27,9 @@ class LeRobotAdapter:
             )
         return Support(
             False,
-            "LeRobot training (ACT / similar) is Phase 2. The Data room can inspect "
-            "a local LeRobot dataset; this adapter will launch once lerobot is wired.",
+            "ACT / GPU LeRobot train is later. CPU imitation already runs on the "
+            "mujoco adapter (linear BC + Data room keep/drop). This adapter only "
+            "compiles a future train_lerobot.sh.",
         )
 
     def compile(self, spec: dict[str, Any]) -> EnginePayload:
@@ -72,8 +73,9 @@ class LeRobotAdapter:
         run_dir: Path,
         log: LogFn,
     ) -> EvalResult:
-        log("LeRobot launch is not enabled in this phase")
+        log("LeRobot ACT launch is not enabled in this phase")
         raise AdapterUnavailable(
-            "Imitation training is Phase 2. Inspect a LeRobot dataset in the Data room, "
-            f"or run the generated train_lerobot.sh later. Files: {run_dir}"
+            "ACT / GPU LeRobot train is later. For CPU imitation now: open pick-and-place, "
+            "use the Data room (or let Train write scripted demos), and run on mujoco. "
+            f"Compiled train_lerobot.sh is in {run_dir}"
         )
