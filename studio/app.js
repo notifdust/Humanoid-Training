@@ -261,13 +261,17 @@ function renderRecipe() {
   const trainLabel = r.imitate ? "Train pick eval" : r.scene_preview ? "Preview scene" : "Train this recipe";
   const trainHint = r.imitate
     ? `<p class="lede">Fits linear BC on demos (canvas or scripted). Eval: G1 reaches, then BC steers the mustard into the bowl while the arm follows. Not finger grasping.</p>`
-    : r.id === "g1-walk"
+    : r.id === "g1-stand"
+      ? `<p class="lede">Open-loop stand hold + arm raise/wave — not a learned balance policy, not walking. Pelvis is pinned on the Menagerie G1.</p>`
+      : r.id === "g1-walk"
       ? `<p class="lede">Blocked on this CPU. Train still compiles Playground / mjlab / Isaac Lab payloads, then stops with a next-step sentence — install Playground on a GPU box, or use <code>g1-stand</code> for a CPU hold preview. This is not a frozen walk clip.</p>`
       : r.id === "g1-reach"
         ? `<p class="lede">Blocked on this CPU. Train compiles an mjlab / Isaac Lab reach payload, then stops — needs a GPU box with mjlab. Use <code>pick-and-place</code> for a CPU arm+mustard preview, or <code>g1-stand</code> for a hold. Not a silent reach success.</p>`
-        : r.runnable
-          ? ""
-          : `<p class="lede">Compile only on this CPU. Train still runs and will block with a next-step sentence (usually Playground / Isaac Lab + GPU).</p>`;
+        : r.id === "cartpole-balance"
+          ? `<p class="lede">Trains a real linear RL policy (CEM + REINFORCE) and evals it. Checkpoint.npz stores the weights; eval uses them in-memory.</p>`
+          : r.runnable
+            ? ""
+            : `<p class="lede">Compile only on this CPU. Train still runs and will block with a next-step sentence (usually Playground / Isaac Lab + GPU).</p>`;
   const boundDs = (state.starter?.data?.datasets || [])[0];
   const boundKeep = state.starter?.data?.keep_episodes;
   const boundHint =

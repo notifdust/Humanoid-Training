@@ -12,7 +12,7 @@ def train_linear_policy(
     episodes: int,
     seed: int,
     log: LogFn | None = None,
-) -> tuple[np.ndarray, list[float]]:
+) -> tuple[np.ndarray, list[float], float]:
     """Fit a linear softmax policy with REINFORCE + a CEM bootstrap.
 
     CartPole is the studio smoke test: the loop must produce a policy that
@@ -143,5 +143,6 @@ def train_linear_policy(
     cem_check = [rollout(best, seed + 800 + i, greedy=True) for i in range(3)]
     if float(np.mean(cem_check)) >= float(np.mean(greedy_check)):
         weights = best
-    _log(f"selected policy greedy_eval={max(np.mean(greedy_check), np.mean(cem_check)):.1f}")
-    return weights, history
+    greedy_eval = float(max(np.mean(greedy_check), np.mean(cem_check)))
+    _log(f"selected policy greedy_eval={greedy_eval:.1f}")
+    return weights, history, greedy_eval

@@ -36,4 +36,8 @@ def save_bc(path: Path, weights: np.ndarray) -> Path:
 
 def load_bc(path: Path) -> np.ndarray:
     data = np.load(Path(path))
-    return np.asarray(data["weights"], dtype=np.float64)
+    if "weights" in data.files:
+        return np.asarray(data["weights"], dtype=np.float64)
+    if "W" in data.files:
+        return np.asarray(data["W"], dtype=np.float64)
+    raise KeyError(f"checkpoint has no weights/W: {list(data.files)}")

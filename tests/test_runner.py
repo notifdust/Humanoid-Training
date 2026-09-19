@@ -23,6 +23,10 @@ def test_cartpole_train_writes_video(tmp_path: Path) -> None:
     assert (run_dir / "eval.mp4").is_file()
     assert (run_dir / "checkpoint.npz").is_file()
     assert manifest["metrics"]["eval_episodes"] == 2
+    notes = " ".join(manifest.get("notes") or [])
+    assert "greedy_train_eval=" in notes
+    ckpt = np.load(run_dir / "checkpoint.npz")
+    assert "W" in ckpt.files and "weights" in ckpt.files
 
 
 def test_g1_walk_is_blocked_without_playground(tmp_path: Path) -> None:
@@ -71,6 +75,11 @@ def test_g1_stand_hold_mini_humanoid(tmp_path: Path) -> None:
     assert manifest["status"] in {"completed", "passed"}, manifest.get("error")
     assert manifest["adapter"]["adapter"] == "mujoco"
     assert manifest["metrics"]["passed"] is True
+    notes = " ".join(manifest.get("notes") or [])
+    assert "not balance policy" in notes or "not a balance policy" in notes
+    # mini_humanoid has no actuators — must not claim arm wave.
+    assert "no actuators" in notes or "arm actuators not mapped" in notes
+    assert "raise and wave" not in notes
 
 
 def test_pick_and_place_preview_composes_scene(tmp_path: Path) -> None:
@@ -244,6 +253,9 @@ def test_pick_and_place_arm_fixture_moves_joints(tmp_path: Path) -> None:
     assert "arm_mode=IK+BC" in notes, notes
     log = (Path(manifest["run_dir"]) / "run.log").read_text(encoding="utf-8")
     assert "right-arm IK+BC" in log or "IK+BC" in log
+    # Mini arm cannot reach mustard — must not silently pass as if BC ran.
+    assert "arm never attached" in notes or manifest.get("metrics", {}).get("passed") is False
+    assert "bc_steps=0" in notes or "attach_step=-1" in notes
 
 
 def test_puppet_freejoint_uses_bc_for_mustard(tmp_path: Path, monkeypatch) -> None:

@@ -124,11 +124,15 @@ def _launch_hold(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: Any) -
     pin_base = _snapshot_freejoint(model, data)
     if pin_base is not None:
         log("pinning floating base so arm idle cannot tip the G1")
+    arm_driven = False
 
     def stand_idle(_model: Any, _data: Any, step: int) -> None:
+        nonlocal arm_driven
         if ctrl is None:
             return
         ctrl[:] = _idle_stand_ctrl(hold, names, step, horizon)
+        if names:
+            arm_driven = True
         _drive_ctrl_subset(_model, _data, names, ctrl)
 
     frames, zs, upright, object_ids = _simulate(
@@ -175,11 +179,23 @@ def _launch_hold(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: Any) -
     else:
         success_rate = stand_rate
         passed = stand_rate >= 0.9 and mean_z >= min_z
+        if arm_driven:
+            motion_note = (
+                "open-loop arm raise+wave on the stand keyframe — not a balance policy, not walking"
+            )
+        elif model.nu == 0:
+            motion_note = (
+                "static hold (fixture has no actuators) — not arm wave, not balance policy"
+            )
+        else:
+            motion_note = (
+                "stand keyframe hold — arm actuators not mapped; not a balance policy"
+            )
         notes = [
             f"mean_pelvis_z={mean_z:.3f}",
             f"min_z={min_z}",
             f"hold_s={hold_s}",
-            "both arms raise and wave on the stand keyframe — not walking",
+            motion_note,
             *(["pelvis pinned (no balance policy)"] if pin_base is not None else []),
         ]
         if placement:
@@ -286,6 +302,7 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
     waypoint = start.copy()
     grasp_step = -1
     place_step = -1
+    place_dist = -1.0
     carry_span0 = 0.0
     bc_steps = 0
     hold_pose = {name: float(hold[idx]) for name, idx in names.items()} if hold is not None else {}
@@ -297,7 +314,7 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
 
     def step_fn(_model: Any, _data: Any, _step: int = 0) -> None:
         nonlocal pos, grasped, released, done, waypoint, grasp_step, place_step
-        nonlocal carry_span0, bc_steps
+        nonlocal carry_span0, bc_steps, place_dist
         if use_arm and puppet:
             if not grasped:
                 alpha = _phase_alpha(_step, 0, reach_end)
@@ -342,12 +359,14 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
                 if dist <= radius:
                     released = True
                     place_step = _step
+                    place_dist = dist
                     pos = np.array([bowl_xy[0], bowl_xy[1], table_z], dtype=np.float64)
                     _data.mocap_pos[mocap] = pos
                     log(f"place at step {_step} mustard_bowl_dist={dist:.3f}m (BC path)")
                 elif bc_steps > max(400, horizon // 2):
                     released = True
                     place_step = _step
+                    place_dist = dist
                     log(f"place timeout at step {_step} mustard_bowl_dist={dist:.3f}m")
                 return
             if not done:
@@ -404,6 +423,7 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
                 if dist <= radius and hand_dist <= radius + 0.08:
                     released = True
                     place_step = _step
+                    place_dist = dist
                     pos = np.array([bowl_xy[0], bowl_xy[1], table_z], dtype=np.float64)
                     _data.mocap_pos[mocap] = pos
                     log(f"place at step {_step} hand_bowl_dist={hand_dist:.3f}m")
@@ -422,6 +442,7 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
         pos[2] = table_z + lift
         _data.mocap_pos[mocap] = pos
         if dist <= radius:
+            place_dist = dist
             stop_box["stop"] = True
 
     frames, zs, upright, object_ids = _simulate(
@@ -448,27 +469,51 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
     need_steps = max(1, int(hold_s / max(dt, 1e-4)))
     radius = float(primitive_for(bowl)["size"][0])
     dist = float(np.hypot(pos[0] - bowl_xy[0], pos[1] - bowl_xy[1]))
-    in_bowl = dist <= radius
+    # Prefer pre-snap place distance so notes are not cosmetically 0.000.
+    report_dist = float(place_dist) if place_dist >= 0 else dist
+    in_bowl = report_dist <= radius or dist <= radius
     stand_rate = float(np.mean(upright[-need_steps:] if upright else [0.0]))
     mean_z = float(np.mean(zs)) if zs else 0.0
-    passed = bool(in_bowl and stand_rate >= 0.9 and mean_z >= min_z)
-    log(f"mustard-to-bowl dist={dist:.3f}m radius={radius:.3f}m in_bowl={in_bowl}")
+    arm_mode = "playback+BC" if puppet else ("IK+BC" if use_arm else "mocap-BC")
+    never_attached = bool(use_arm and grasp_step < 0)
+    if never_attached:
+        in_bowl = False
+        log("arm never attached — BC carry did not run; marking mustard-in-bowl failed")
+    passed = bool(in_bowl and stand_rate >= 0.9 and mean_z >= min_z and not never_attached)
+    if arm_mode == "mocap-BC":
+        lead = (
+            "mustard carry: linear BC on demos (mocap only) — no arm actuators; "
+            "not finger grasping, not ACT"
+        )
+    elif arm_mode == "IK+BC":
+        lead = (
+            "G1 arm: IK reach + linear BC mustard — mocap attach, not finger grasping, not ACT"
+        )
+    else:
+        lead = (
+            "G1 arm: pick pose playback; mustard carry: linear BC on demos — "
+            "mocap, not finger grasping, not ACT"
+        )
+    log(f"mustard-to-bowl dist={report_dist:.3f}m radius={radius:.3f}m in_bowl={in_bowl}")
+    notes = [
+        lead,
+        f"dataset={dataset_source} frames={len(obs)} keep_episodes={keep if keep is not None else 'all'} bc_steps={bc_steps}",
+        f"mustard_bowl_dist={report_dist:.3f}",
+        f"mean_pelvis_z={mean_z:.3f}",
+        f"arm_mode={arm_mode}",
+        *(["pelvis pinned (no balance policy)"] if pin_base is not None else []),
+        f"attach_step={grasp_step} placed_step={place_step}",
+        *_video_notes(frames),
+    ]
+    if never_attached:
+        notes.append("arm never attached — BC did not run (IK/reach miss)")
     return EvalResult(
         success_rate=1.0 if passed else (0.6 if in_bowl else 0.0),
         mean_return=mean_z,
         episodes=1,
         video_path=video_path,
         passed=passed,
-        notes=[
-            "G1 arm: pick pose playback; mustard carry: linear BC on demos — mocap, not finger grasping, not ACT",
-            f"dataset={dataset_source} frames={len(obs)} keep_episodes={keep if keep is not None else 'all'} bc_steps={bc_steps}",
-            f"mustard_bowl_dist={dist:.3f}",
-            f"mean_pelvis_z={mean_z:.3f}",
-            f"arm_mode={'playback+BC' if puppet else ('IK+BC' if use_arm else 'mocap-BC')}",
-            *(["pelvis pinned (no balance policy)"] if pin_base is not None else []),
-            f"attach_step={grasp_step} placed_step={place_step}",
-            *_video_notes(frames),
-        ],
+        notes=notes,
     )
 
 
