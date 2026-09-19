@@ -143,16 +143,53 @@ function renderRecipes() {
 }
 
 async function openRecipe(id) {
+  const prevId = state.selected?.id;
+  if (prevId && prevId !== id) {
+    clearDemoSession();
+  }
   const detail = await api(`/api/recipes/${id}`);
   state.selected = detail.recipe;
   state.starter = detail.starter_spec;
   if (state.robot) {
     state.starter.robot = { id: state.robot.id, source: "catalog" };
   }
+  // Re-open of the same imitation recipe: put inspected/saved demos back on the starter
+  // so Train does not silently fall back to auto-scripted takes.
+  if (detail.recipe.imitate) {
+    rebindDatasetOntoStarter();
+  }
   await refreshExpanded();
   state.view = "recipe";
   setActive("tasks");
   renderRecipe();
+}
+
+function clearDemoSession() {
+  state.dataset = null;
+  state.datasetUri = "";
+  state.keepEpisodes = null;
+  state.pendingTrajectories = [];
+  state.recording = false;
+  state.lastDemoMessage = "";
+}
+
+function rebindDatasetOntoStarter() {
+  if (!state.starter) return;
+  const path =
+    state.datasetUri ||
+    state.dataset?.path ||
+    ((state.starter.data || {}).datasets || [])[0];
+  if (!path) return;
+  state.starter.data = state.starter.data || {};
+  state.starter.data.datasets = [String(path).replace(/^file:/, "")];
+  if (Array.isArray(state.keepEpisodes) && state.keepEpisodes.length > 0) {
+    state.starter.data.keep_episodes = state.keepEpisodes;
+  }
+}
+
+function isImitationJob(spec, selected) {
+  if (selected && selected.imitate) return true;
+  return String((spec?.train || {}).method || "") === "imitation";
 }
 
 async function refreshExpanded() {
@@ -226,6 +263,16 @@ function renderRecipe() {
       : r.runnable
         ? ""
         : `<p class="lede">Compile only on this CPU. Train still runs and will block with a next-step sentence (usually Playground / Isaac Lab + GPU).</p>`;
+  const boundDs = (state.starter?.data?.datasets || [])[0];
+  const boundKeep = state.starter?.data?.keep_episodes;
+  const boundHint =
+    r.imitate && boundDs
+      ? `<p class="meta">Demos bound: <code>${escapeHtml(boundDs)}</code>${
+          Array.isArray(boundKeep) ? ` · keep=[${boundKeep.join(", ")}]` : ""
+        }. Re-open keeps this path; switching recipes clears it.</p>`
+      : r.imitate
+        ? `<p class="meta">No dataset bound — Train will write scripted demos. Save canvas takes or Record in Data to choose keep/drop.</p>`
+        : "";
   const nTakes = state.pendingTrajectories.length;
   const saveBtn = nTakes
     ? `<button class="primary" id="save-demos">Save ${nTakes} demo${nTakes === 1 ? "" : "s"}</button>
@@ -255,6 +302,7 @@ function renderRecipe() {
         <p class="status" id="train-status"></p>
         <p class="error" id="train-error"></p>
         ${trainHint}
+        ${boundHint}
         ${demoControls}
         ${sceneHTML(spec)}
       </section>
@@ -415,7 +463,10 @@ async function trainCurrent() {
     document.getElementById("train-again");
   const status = document.getElementById("train-status") || document.getElementById("record-status");
   const err = document.getElementById("train-error") || document.getElementById("record-error");
-  if (btn) btn.disabled = true;
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add("busy");
+  }
   if (status) status.textContent = "queued…";
   if (err) err.textContent = "";
   try {
@@ -432,14 +483,28 @@ async function trainCurrent() {
       state.starter = detail.starter_spec;
       state.selected = detail.recipe;
     }
-    if (state.dataset && state.dataset.ok && Array.isArray(state.keepEpisodes)) {
-      if (state.keepEpisodes.length === 0) {
+    if (isImitationJob(state.starter, state.selected)) {
+      rebindDatasetOntoStarter();
+      state.starter.data = state.starter.data || {};
+      // Only stamp keep from the Data-room session when a dataset is inspected.
+      // "Train again" from a past run should use that run's own keep_episodes.
+      if (state.dataset && state.dataset.ok && Array.isArray(state.keepEpisodes)) {
+        if (state.keepEpisodes.length === 0) {
+          throw new Error(
+            "Keep at least one episode — empty keep_episodes fits no BC frames."
+          );
+        }
+        state.starter.data.keep_episodes = state.keepEpisodes;
+      }
+      const specKeep = state.starter.data.keep_episodes;
+      if (Array.isArray(specKeep) && specKeep.length === 0) {
         throw new Error(
           "Keep at least one episode — empty keep_episodes fits no BC frames."
         );
       }
-      state.starter.data = state.starter.data || {};
-      state.starter.data.keep_episodes = state.keepEpisodes;
+    } else if (state.starter.data) {
+      // Do not leak Data-room keep filters onto cartpole / stand / walk.
+      delete state.starter.data.keep_episodes;
     }
     const run = await api("/api/runs", {
       method: "POST",
@@ -449,7 +514,10 @@ async function trainCurrent() {
     await showRun(run.run_id);
   } catch (error) {
     if (err) err.textContent = error.message;
-    if (btn) btn.disabled = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove("busy");
+    }
     if (status) status.textContent = "";
   }
 }
@@ -496,7 +564,7 @@ function renderData() {
       })
       .join("");
     body = `
-      <p class="status completed">${escapeHtml(inspected.format)} · ${inspected.total_episodes} episodes · fps=${inspected.fps ?? "—"} · robot=${escapeHtml(inspected.robot_type || "—")}</p>
+      <p class="meta">${escapeHtml(inspected.format)} · ${inspected.total_episodes} episodes · fps=${inspected.fps ?? "—"} · robot=${escapeHtml(inspected.robot_type || "—")}</p>
       <p class="meta">path <code>${escapeHtml(state.datasetUri || inspected.path || "")}</code></p>
       <table class="data-table">
         <thead><tr><th>keep</th><th>#</th><th>length</th><th>tasks</th><th>success</th></tr></thead>

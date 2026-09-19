@@ -175,3 +175,14 @@ def test_studio_js_bc_freshness_contract() -> None:
     assert "arm_ik=on" in js
     assert "Keep at least one episode" in js
     assert "keepEpisodes: null" in js
+    assert "function rebindDatasetOntoStarter" in js
+    assert "function clearDemoSession" in js
+    assert "delete state.starter.data.keep_episodes" in js
+
+
+def test_studio_css_disabled_cursor() -> None:
+    css = (Path(__file__).resolve().parents[1] / "studio" / "styles.css").read_text(
+        encoding="utf-8"
+    )
+    assert "cursor: not-allowed" in css
+    assert "button.busy:disabled" in css
