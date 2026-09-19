@@ -313,9 +313,10 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
                 _drive_named_pose(_model, _data, names, pose)
                 ctrl[:] = _named_pose_ctrl(hold, names, pose, 1.0)
                 hand = np.asarray(_data.xpos[hand_id], dtype=np.float64)
-                _data.mocap_pos[mocap] = hand
-                pos = hand.copy()
-                hand_dist = float(np.hypot(hand[0] - bowl_xy[0], hand[1] - bowl_xy[1]))
+                hold_pt = hand + np.array([0.03, 0.0, -0.04], dtype=np.float64)
+                _data.mocap_pos[mocap] = hold_pt
+                pos = hold_pt.copy()
+                hand_dist = float(np.hypot(hold_pt[0] - bowl_xy[0], hold_pt[1] - bowl_xy[1]))
                 if _step >= carry_end and hand_dist <= radius + 0.06:
                     released = True
                     place_step = _step
