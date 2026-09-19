@@ -79,13 +79,14 @@ class GymnasiumAdapter:
         record_video = bool(eval_cfg.get("record_video", True))
 
         log(f"training {env_id} for {steps} episodes (seed={seed})")
-        weights, history = train_linear_policy(
+        weights, history, greedy_eval = train_linear_policy(
             env_id=env_id,
             episodes=steps,
             seed=seed,
             log=log,
         )
-        np.savez(run_dir / "checkpoint.npz", W=weights)
+        # Store both keys so checkpoint.npz matches BC layout (weights) and legacy gym (W).
+        np.savez(run_dir / "checkpoint.npz", W=weights, weights=weights)
         (run_dir / "train_returns.json").write_text(
             json.dumps(history, indent=2),
             encoding="utf-8",
@@ -125,7 +126,8 @@ class GymnasiumAdapter:
         notes = [
             f"mean_return={mean_return:.1f}",
             f"success_threshold={threshold:.0f}",
-            f"last_100_train_avg={float(np.mean(history[-100:])):.1f}" if history else "",
+            f"greedy_train_eval={greedy_eval:.1f}",
+            "checkpoint.npz is the linear policy weights (eval used in-memory copy)",
         ]
         notes = [n for n in notes if n]
         return EvalResult(
