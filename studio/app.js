@@ -716,8 +716,11 @@ function paintRun(run, logText) {
       : run.status === "completed"
         ? "completed"
         : run.status || "";
-  const demoLine = runDemoHint(run)
-    ? `<p class="lede">Demos / BC: ${escapeHtml(runDemoHint(run).replace(/^ · /, ""))}</p>`
+  const hintText = runDemoHint(run).replace(/^ · /, "");
+  const demoLine = hintText
+    ? `<p class="lede">${
+        run.recipe === "pick-and-place" ? "Demos / BC: " : "Hint: "
+      }${escapeHtml(hintText)}</p>`
     : "";
   const blockedHelp =
     run.status === "blocked" && (run.recipe === "g1-walk" || (run.error || "").includes("Playground"))
