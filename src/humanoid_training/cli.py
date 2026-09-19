@@ -7,7 +7,7 @@ from pathlib import Path
 
 from humanoid_training.catalog import load_robot_catalog
 from humanoid_training.errors import AdapterError, RecipeError, SpecError
-from humanoid_training.recipes import expand_spec, list_recipes
+from humanoid_training.recipes import english_list, expand_spec, list_recipes, public_catalog
 from humanoid_training.runner import default_runs_dir, run_job
 from humanoid_training.spec import load_spec, validate_spec
 
@@ -81,7 +81,8 @@ def _cmd_recipes() -> int:
         return 0
     width = max(len(r.id) for r in rows)
     for recipe in rows:
-        flag = "run" if recipe.data.get("runnable") else "spec"
+        public = recipe.as_public_dict()
+        flag = public["availability"]
         print(f"{recipe.id:<{width}}  {flag:<4}  {recipe.title} — {recipe.summary}")
     return 0
 
@@ -157,11 +158,17 @@ def _cmd_serve(host: str, port: int) -> int:
     import uvicorn
 
     open_host = "127.0.0.1" if host in {"0.0.0.0", "::", "[::]"} else host
-    print(f"Humanoid Training studio")
+    catalog = public_catalog()
+    ready = [r["title"] for r in catalog["recipes"] if r["id"] in catalog["ready"]]
+    later = [r["title"] for r in catalog["recipes"] if r["id"] in catalog["later"]]
+    print("Humanoid Training studio")
     print(f"  Open http://{open_host}:{port}")
-    print("  Click Cartpole → Train. You should get a video.")
-    print("  Then G1 stand, then Pick and place.")
-    print("  Skip G1 walk / reach on this computer (they need a GPU).")
+    if ready:
+        print(f"  Click {ready[0]} → Train. You should get a video.")
+        if len(ready) > 1:
+            print(f"  Then {english_list(ready[1:])}.")
+    if later:
+        print(f"  Skip {english_list(later)} on this computer (they need a GPU).")
     uvicorn.run("humanoid_training.server:app", host=host, port=port, reload=False)
     return 0
 

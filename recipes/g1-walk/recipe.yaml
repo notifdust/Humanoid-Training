@@ -40,3 +40,9 @@ gold:
   notes: |
     Needs an NVIDIA GPU and either MuJoCo Playground (`pip install playground`)
     or Isaac Lab. Phase 0 writes the engine payload; live training is Phase 1/3.
+studio:
+  availability: gpu
+  start_here: false
+  promise: Walking is not available on this computer.
+  train_hint: Walking is not available on this computer. Clicking Train writes GPU job files and stops. Use G1 stand to see the humanoid move here.
+  blocked_hint: Needs MuJoCo Playground on a GPU box. Not a frozen walk clip.

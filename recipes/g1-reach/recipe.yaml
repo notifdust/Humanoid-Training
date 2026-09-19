@@ -35,3 +35,9 @@ adapters:
 gold:
   notes: |
     Compile-only until a real reach environment id is verified on a GPU box.
+studio:
+  availability: gpu
+  start_here: false
+  promise: Reach training needs a GPU.
+  train_hint: Reach training needs a GPU. Clicking Train writes job files and stops. Use Pick and place to see an arm move here.
+  blocked_hint: Needs mjlab on a GPU box. Not a silent reach success.

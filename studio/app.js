@@ -33,13 +33,43 @@ async function api(path, options) {
   return data;
 }
 
+function worksHere(recipe) {
+  return recipe && recipe.availability === "cpu";
+}
+
+function recipeById(id) {
+  return (state.recipes || []).find((r) => r.id === id) || null;
+}
+
+function readyRecipes(list) {
+  return (list || recipesForRobot()).filter((r) => worksHere(r));
+}
+
+function laterRecipes(list) {
+  return (list || recipesForRobot()).filter((r) => !worksHere(r));
+}
+
+function firstReadyRecipe() {
+  const all = state.recipes || [];
+  return all.find((r) => r.start_here) || all.find((r) => worksHere(r)) || all[0] || null;
+}
+
+function firstImitateRecipe() {
+  const all = state.recipes || [];
+  return all.find((r) => r.imitate && worksHere(r)) || all.find((r) => r.imitate) || null;
+}
+
+function englishList(items) {
+  const names = (items || []).filter(Boolean);
+  if (!names.length) return "";
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+}
+
 function pill(recipe) {
-  if (recipe.id === "cartpole-balance" || recipe.id === "g1-stand" || recipe.imitate) {
-    return `<span class="pill live">works on this computer</span>`;
-  }
-  if (recipe.runnable) return `<span class="pill live">works here</span>`;
-  if (recipe.id === "g1-walk") return `<span class="pill blocked">needs a GPU — skip for now</span>`;
-  if (recipe.id === "g1-reach") return `<span class="pill blocked">needs a GPU — skip for now</span>`;
+  if (worksHere(recipe)) return `<span class="pill live">works on this computer</span>`;
+  if (recipe.availability === "gpu") return `<span class="pill blocked">needs a GPU — skip for now</span>`;
   return `<span class="pill blocked">later</span>`;
 }
 
@@ -64,12 +94,6 @@ function recipesForRobot() {
   return state.recipes.filter((r) => r.robot === state.robot.id);
 }
 
-const START_HERE = [
-  ["cartpole-balance", "Cartpole", "A pole stays up. Proof the loop works. ~30s."],
-  ["g1-stand", "G1 stand", "The humanoid holds still and waves. Not walking."],
-  ["pick-and-place", "Pick and place", "Mustard slides into the bowl. The arm follows. Not finger grasping."],
-];
-
 function renderRobots() {
   const cards = state.robots
     .map((robot) => {
@@ -88,7 +112,7 @@ function renderRobots() {
   main.innerHTML = `
     ${stepsHTML("task")}
     <h1>Robots</h1>
-    <p class="lede">Start with the Unitree G1. Cartpole is the smoke test (not a humanoid).</p>
+    <p class="lede">Start with the Unitree G1. A non-humanoid smoke test is included so Train → video is real before humanoid engines.</p>
     <div class="grid">${cards}</div>
   `;
   main.querySelectorAll("[data-robot]").forEach((btn) => {
@@ -101,22 +125,20 @@ function renderRobots() {
 
 function renderRecipes() {
   const list = recipesForRobot();
-  const ready = list.filter((r) => r.id === "cartpole-balance" || r.id === "g1-stand" || r.imitate);
-  const later = list.filter((r) => !ready.includes(r));
+  const ready = readyRecipes(list);
+  const later = laterRecipes(list);
   const readyCards = ready
-    .map((r) => {
-      const start = START_HERE.find((row) => row[0] === r.id);
-      const see = start ? start[2] : r.summary;
-      return `
+    .map(
+      (r) => `
       <article class="card hero-card">
         ${pill(r)}
         <h2>${escapeHtml(r.title)}</h2>
-        <p>${escapeHtml(see)}</p>
+        <p>${escapeHtml(r.promise || r.summary)}</p>
         <div class="actions">
           <button class="primary" data-open="${escapeHtml(r.id)}">Open and train</button>
         </div>
-      </article>`;
-    })
+      </article>`
+    )
     .join("");
   const laterCards = later
     .map(
@@ -124,7 +146,7 @@ function renderRecipes() {
       <article class="card">
         ${pill(r)}
         <h2>${escapeHtml(r.title)}</h2>
-        <p>${escapeHtml(r.summary)}</p>
+        <p>${escapeHtml(r.blocked_hint || r.promise || r.summary)}</p>
         <div class="actions">
           <button class="ghost" data-open="${escapeHtml(r.id)}">See why it is blocked</button>
         </div>
@@ -134,18 +156,25 @@ function renderRecipes() {
   const filter = state.robot
     ? `Tasks for ${escapeHtml(state.robot.name || state.robot.id)}.`
     : "";
+  const skipLine = later.length
+    ? ` ${englishList(later.map((r) => r.title))} ${
+        later.length === 1 ? "is" : "are"
+      } listed below so ${later.length === 1 ? "it does" : "they do"} not look like silent failures — skip ${
+        later.length === 1 ? "it" : "them"
+      } on this computer.`
+    : "";
   main.innerHTML = `
     ${stepsHTML("task")}
     <h1>What should the robot do?</h1>
     <p class="lede" id="start-here">
       Start here: click a task, then Train. You should get a video. That is the whole product today.
-      ${filter} Walking and GPU reach are listed below so they do not look like silent failures — skip them on this computer.
+      ${filter}${skipLine}
     </p>
     <div class="grid">${readyCards || `<p class="lede">No recipes for this robot yet.</p>`}</div>
     ${
       laterCards
         ? `<h2 class="later-head">Needs a GPU (skip)</h2>
-           <p class="lede">These compile a job for Playground / Isaac Lab. Train will stop with a next step, not a fake walk clip.</p>
+           <p class="lede">These compile a job for another machine. Train will stop with a next step, not a fake success clip.</p>
            <div class="grid">${laterCards}</div>`
         : ""
     }
@@ -252,9 +281,17 @@ function sceneHTML(spec) {
       return `<button type="button" class="token${rec}" data-id="${escapeHtml(obj.id)}" style="${tokenStyle(obj)}">${escapeHtml(obj.id)}</button>`;
     })
     .join("");
+  const recipe = state.selected;
+  const obj = objectLabel();
+  const dest = recordContainerId();
+  const sceneLede =
+    (recipe && recipe.scene_hint) ||
+    (dest
+      ? `Top-down ${spec.scene.template || "scene"}. Drag ${obj} into the ${dest} if you want. Train still works if you do not.`
+      : `Top-down ${spec.scene.template || "scene"}. Drag ${obj} if you want. Train still works if you do not.`);
   return `
     <h2>Scene</h2>
-    <p class="lede">Top-down kitchen counter. Drag mustard if you want. Train still works if you do not.</p>
+    <p class="lede">${escapeHtml(sceneLede)}</p>
     <div class="canvas-wrap${state.recording ? " recording" : ""}" id="scene-canvas">
       <svg class="trail" id="scene-trail" viewBox="0 0 100 100" preserveAspectRatio="none">${trailPolylines()}</svg>
       <span class="canvas-label">${escapeHtml(spec.scene.template || "scene")}</span>
@@ -268,19 +305,10 @@ function renderRecipe() {
   const r = state.selected;
   const spec = state.expanded?.spec || state.starter;
   const hasScene = Boolean(spec?.scene?.objects?.length);
-  const worksHere = r.imitate || r.id === "g1-stand" || r.id === "cartpole-balance" || r.runnable;
-  const trainLabel = worksHere ? "Train" : "Compile (will stop — needs GPU)";
-  const trainHint = r.imitate
-    ? `<p class="lede">You will see the mustard move into the bowl and the G1 arm follow. That is a demo-following preview, not a grasping policy.</p>`
-    : r.id === "g1-stand"
-      ? `<p class="lede">You will see the G1 stand and wave. It is holding a pose, not learning to walk or balance.</p>`
-      : r.id === "g1-walk"
-      ? `<p class="lede">Walking is not available on this computer. Clicking Train writes GPU job files and stops. Use G1 stand to see the humanoid move here.</p>`
-      : r.id === "g1-reach"
-        ? `<p class="lede">Reach training needs a GPU. Clicking Train writes job files and stops. Use Pick and place to see an arm move here.</p>`
-        : r.id === "cartpole-balance"
-          ? `<p class="lede">You will see a cart keep a pole upright. This proves Train → video works on your machine.</p>`
-          : `<p class="lede">This task cannot train on this computer. Train still writes files and explains the next step.</p>`;
+  const cpu = worksHere(r);
+  const trainLabel = cpu ? "Train" : "Compile (will stop — needs GPU)";
+  const hintText = r.train_hint || r.promise || r.summary || "";
+  const trainHint = hintText ? `<p class="lede">${escapeHtml(hintText)}</p>` : "";
   const boundDs = (state.starter?.data?.datasets || [])[0];
   const boundKeep = state.starter?.data?.keep_episodes;
   const boundHint =
@@ -289,7 +317,7 @@ function renderRecipe() {
           Array.isArray(boundKeep) ? ` (${boundKeep.length} kept)` : ""
         }.</p>`
       : r.imitate
-        ? `<p class="meta">No demos saved yet — Train will use built-in scripted takes. Or record by dragging mustard below.</p>`
+        ? `<p class="meta">No demos saved yet — Train will use built-in scripted takes. Or record by dragging ${escapeHtml(objectLabel())} below.</p>`
         : "";
   const nTakes = state.pendingTrajectories.length;
   const saveBtn = nTakes
@@ -301,7 +329,7 @@ function renderRecipe() {
           <button class="ghost" id="toggle-record">${state.recording ? "Stop recording" : "Record a demo"}</button>
           ${saveBtn}
         </div>
-        <p class="lede">${state.recording ? "Drag mustard into the bowl. Each release is one take." : "Optional: record a take on the canvas, then Save, then Train."}</p>
+        <p class="lede">${state.recording ? `Drag ${escapeHtml(objectLabel())}${recordContainerId() ? ` into the ${escapeHtml(recordContainerId())}` : ""}. Each release is one take.` : "Optional: record a take on the canvas, then Save, then Train."}</p>
         <p class="status" id="demo-status">${escapeHtml(state.lastDemoMessage || (nTakes ? `${nTakes} take(s) in memory` : ""))}</p>
         <p class="error" id="demo-error"></p>`
     : "";
@@ -343,7 +371,7 @@ function renderRecipe() {
   document.getElementById("toggle-record")?.addEventListener("click", () => {
     state.recording = !state.recording;
     state.lastDemoMessage = state.recording
-      ? "recording — drag mustard into the bowl"
+      ? `recording — drag ${objectLabel()}${recordContainerId() ? ` into the ${recordContainerId()}` : ""}`
       : state.pendingTrajectories.length
         ? `${state.pendingTrajectories.length} take(s) in memory`
         : "";
@@ -373,7 +401,18 @@ async function applySpecEditor() {
 }
 
 function recordTargetId() {
-  return state.expanded?.spec?.task?.success?.object || "mustard";
+  const fromSuccess = state.expanded?.spec?.task?.success?.object;
+  if (fromSuccess) return String(fromSuccess);
+  const objects = state.starter?.scene?.objects || state.expanded?.spec?.scene?.objects || [];
+  return objects[0]?.id ? String(objects[0].id) : "";
+}
+
+function recordContainerId() {
+  return String(state.expanded?.spec?.task?.success?.container || "");
+}
+
+function objectLabel() {
+  return recordTargetId() || "the object";
 }
 
 function canvasPoint(canvas, event) {
@@ -495,7 +534,8 @@ async function trainCurrent() {
       if (specRes.ok) state.starter = await specRes.json();
     }
     if (!state.starter) {
-      const recipeId = state.run?.recipe || "cartpole-balance";
+      const recipeId = state.run?.recipe || firstReadyRecipe()?.id;
+      if (!recipeId) throw new Error("Pick a task first.");
       const detail = await api(`/api/recipes/${recipeId}`);
       state.starter = detail.starter_spec;
       state.selected = detail.recipe;
@@ -520,7 +560,7 @@ async function trainCurrent() {
         );
       }
     } else if (state.starter.data) {
-      // Do not leak Data-room keep filters onto cartpole / stand / walk.
+      // Do not leak Data-room keep filters onto non-imitation recipes.
       delete state.starter.data.keep_episodes;
     }
     const run = await api("/api/runs", {
@@ -539,13 +579,34 @@ async function trainCurrent() {
   }
 }
 
+function keepTrainSummary(emptyKeep, keptMiss, keptOk, keep, total) {
+  const check = successCheckPhrase();
+  if (emptyKeep) {
+    return `<p class="error">No episodes kept — train would fit BC on 0 frames. Check at least one take.</p>`;
+  }
+  if (keptMiss && !keptOk) {
+    return `<p class="error">Keeping only misses (${keptMiss}) — train eval should fail ${escapeHtml(check)}. Prefer success takes unless you are proving keep/drop.</p>`;
+  }
+  if (keptMiss) {
+    return `<p class="lede">Train will fit BC on ${keep.length} of ${total} episodes (${keptOk} ok · ${keptMiss} miss). Drop misses unless you are proving keep/drop.</p>`;
+  }
+  return `<p class="lede">Train will fit BC on ${keep.length} of ${total} episodes. That filter writes <code>data.keep_episodes</code>.</p>`;
+}
+
+function successCheckPhrase() {
+  const obj = recordTargetId();
+  const box = recordContainerId();
+  if (obj && box) return `${obj}-in-${box}`;
+  return "the success check";
+}
+
 function renderData() {
   const datasets = state.starter?.data?.datasets || state.expanded?.spec?.data?.datasets || [];
   const datasetList = datasets.length
     ? `<ul class="runs">${datasets
         .map((d) => `<li class="run-row"><code>${escapeHtml(d)}</code></li>`)
         .join("")}</ul>`
-    : `<p class="lede">No demos on this job yet. Train on Pick and place still works — it writes built-in takes. Record here when you want to keep or drop episodes.</p>`;
+    : `<p class="lede">No demos on this job yet. Train on an imitation task still works — it writes built-in takes. Record here when you want to keep or drop episodes.</p>`;
   const inspected = state.dataset;
   let body = "";
   if (inspected && inspected.ok) {
@@ -559,13 +620,7 @@ function renderData() {
     const keptEps = episodes.filter((ep) => keep.includes(ep.episode_index));
     const keptOk = keptEps.filter((ep) => ep.success !== false).length;
     const keptMiss = keptEps.filter((ep) => ep.success === false).length;
-    const trainSummary = emptyKeep
-      ? `<p class="error">No episodes kept — train would fit BC on 0 frames. Check at least one take.</p>`
-      : keptMiss && !keptOk
-        ? `<p class="error">Keeping only misses (${keptMiss}) — train pick eval should fail mustard-in-bowl. Prefer success takes unless you are proving keep/drop.</p>`
-        : keptMiss
-          ? `<p class="lede">Train will fit BC on ${keep.length} of ${total} episodes (${keptOk} ok · ${keptMiss} miss). Drop misses unless you are proving keep/drop.</p>`
-          : `<p class="lede">Train will fit BC on ${keep.length} of ${total} episodes. That filter writes <code>data.keep_episodes</code>.</p>`;
+    const trainSummary = keepTrainSummary(emptyKeep, keptMiss, keptOk, keep, total);
     const rows = episodes
       .map((ep) => {
         const idx = ep.episode_index;
@@ -599,8 +654,11 @@ function renderData() {
   main.innerHTML = `
     <h1>Data</h1>
     <p class="lede">
-      Show the robot the task. Record mustard-into-bowl takes, uncheck the bad ones, then Train.
-      Gamepad teleop is later. This is demonstration following, not finger grasping.
+      ${escapeHtml(
+        state.selected?.record_hint ||
+          firstImitateRecipe()?.record_hint ||
+          "This room is for demonstration data. Open an imitation task, record takes, uncheck the bad ones, then Train."
+      )}
     </p>
     <section>
       <h2>On this job</h2>
@@ -656,14 +714,7 @@ function refreshKeepSummary() {
   const keptEps = episodes.filter((ep) => keep.includes(ep.episode_index));
   const keptOk = keptEps.filter((ep) => ep.success !== false).length;
   const keptMiss = keptEps.filter((ep) => ep.success === false).length;
-  const summary =
-    emptyKeep
-      ? `<p class="error">No episodes kept — train would fit BC on 0 frames. Check at least one take.</p>`
-      : keptMiss && !keptOk
-        ? `<p class="error">Keeping only misses (${keptMiss}) — train pick eval should fail mustard-in-bowl. Prefer success takes unless you are proving keep/drop.</p>`
-        : keptMiss
-          ? `<p class="lede">Train will fit BC on ${keep.length} of ${total} episodes (${keptOk} ok · ${keptMiss} miss). Drop misses unless you are proving keep/drop.</p>`
-          : `<p class="lede">Train will fit BC on ${keep.length} of ${total} episodes. That filter writes <code>data.keep_episodes</code>.</p>`;
+  const summary = keepTrainSummary(emptyKeep, keptMiss, keptOk, keep, total);
   const host = document.getElementById("keep-summary");
   if (host) host.innerHTML = summary;
   const btn = document.getElementById("train-from-data");
@@ -680,7 +731,9 @@ async function recordDemos() {
   err.textContent = "";
   try {
     if (!state.starter) {
-      const detail = await api("/api/recipes/pick-and-place");
+      const imitate = firstImitateRecipe();
+      if (!imitate) throw new Error("No imitation recipe in the catalog.");
+      const detail = await api(`/api/recipes/${imitate.id}`);
       state.starter = detail.starter_spec;
       state.selected = detail.recipe;
     }
@@ -773,19 +826,21 @@ function runDemoHint(run) {
   if (keep) bits.push(`keep=${keep}`);
   if (frames) bits.push(`${frames} frames`);
   if (bc) bits.push(`bc_steps=${bc}`);
+  const rec = (state.recipes || []).find((r) => r.id === run.recipe);
   if (
-    run.recipe === "pick-and-place" &&
+    rec &&
+    rec.imitate &&
     run.status !== "queued" &&
     run.status !== "running" &&
     !hasBcEvidence(notes)
   ) {
     bits.push("stale? re-train for BC");
   }
-  if (run.recipe === "g1-walk" && run.status === "blocked") {
-    bits.push("needs Playground + GPU");
-  }
-  if (run.recipe === "g1-reach" && run.status === "blocked") {
-    bits.push("needs mjlab + GPU");
+  if (run.status === "blocked") {
+    const rec = (state.recipes || []).find((r) => r.id === run.recipe);
+    if (rec && rec.availability === "gpu") {
+      bits.push(rec.blocked_hint || "needs a GPU");
+    }
   }
   return bits.length ? ` · ${bits.join(" · ")}` : "";
 }
@@ -823,7 +878,7 @@ function renderRuns() {
   main.innerHTML = `
     <h1>Runs</h1>
     <p class="lede">Click a run to watch the video. Green means the task succeeded. Orange means it finished but failed, or it cannot train on this computer.</p>
-    <ul class="runs">${rows || "<li class='lede'>No runs yet. Open Cartpole from Tasks and click Train.</li>"}</ul>
+    <ul class="runs">${rows || `<li class='lede'>No runs yet. Open ${escapeHtml(firstReadyRecipe()?.title || "a task")} from Tasks and click Train.</li>`}</ul>
   `;
   main.querySelectorAll("[data-run]").forEach((el) => {
     el.addEventListener("click", () => showRun(el.dataset.run));
@@ -865,9 +920,13 @@ function paintRun(run, logText) {
         ? "completed"
         : run.status || "";
   const headline = englishRunStatus(run);
+  const readyTitles = readyRecipes(state.recipes).map((r) => r.title);
+  const laterTitles = laterRecipes(state.recipes).map((r) => r.title);
   const blockedHelp =
     run.status === "blocked"
-      ? `<p class="lede">This is expected. Use Cartpole, G1 stand, or Pick and place on this computer. Walking and reach need a GPU box.</p>`
+      ? `<p class="lede">This is expected.${
+          readyTitles.length ? ` Use ${escapeHtml(englishList(readyTitles))} on this computer.` : ""
+        }${laterTitles.length ? ` ${escapeHtml(englishList(laterTitles))} need a GPU box.` : ""}</p>`
       : "";
   main.innerHTML = `
     ${stepsHTML("video")}
@@ -900,28 +959,24 @@ function paintRun(run, logText) {
 }
 
 function prettyRecipe(id) {
-  const map = {
-    "cartpole-balance": "Cartpole",
-    "g1-stand": "G1 stand",
-    "g1-walk": "G1 walk",
-    "g1-reach": "G1 reach",
-    "pick-and-place": "Pick and place",
-  };
-  return map[id] || id || "Run";
+  const hit = (state.recipes || []).find((r) => r.id === id);
+  return (hit && hit.title) || id || "Run";
 }
 
 function plainError(err) {
   const text = String(err);
-  if (text.includes("Playground")) {
-    return "Walking needs MuJoCo Playground on a GPU machine. Not available here.";
-  }
-  if (text.includes("mjlab")) {
-    return "Reach needs mjlab on a GPU machine. Not available here.";
-  }
   if (text.includes("keep_episodes is empty")) {
     return "Keep at least one demo, then Train.";
   }
+  const rec = recipeById(state.run?.recipe) || state.selected;
+  if (rec && rec.availability === "gpu" && rec.blocked_hint && runIsEngineBlock(text)) {
+    return rec.blocked_hint;
+  }
   return text;
+}
+
+function runIsEngineBlock(text) {
+  return /Playground|mjlab|Isaac|GPU/i.test(text);
 }
 
 async function showRun(runId) {
@@ -952,7 +1007,7 @@ async function showRun(runId) {
         paintRun(run, logText);
       }
       const statusEl = document.querySelector("main .status");
-      if (statusEl) statusEl.textContent = run.status;
+      if (statusEl) statusEl.textContent = englishRunStatus(run);
       if (!["queued", "running"].includes(run.status)) {
         stopPoll();
         paintRun(run, logText);

@@ -12,10 +12,13 @@ from humanoid_training.server import app
 def test_health_and_recipes() -> None:
     client = TestClient(app)
     assert client.get("/api/health").json()["ok"] is True
-    recipes = client.get("/api/recipes").json()["recipes"]
+    catalog = client.get("/api/recipes").json()
+    recipes = catalog["recipes"]
     ids = {r["id"] for r in recipes}
     assert "cartpole-balance" in ids
     assert "g1-walk" in ids
+    assert "cartpole-balance" in catalog["ready"]
+    assert "g1-walk" in catalog["later"]
     page = client.get("/")
     assert page.status_code == 200
     assert "Humanoid Training" in page.text
@@ -164,6 +167,18 @@ def test_api_g1_walk_blocks_with_next_step(tmp_path: Path, monkeypatch) -> None:
     err = body.get("error") or ""
     assert "Playground" in err
     assert "CPU studio" in err or "g1-stand" in err
+
+
+def test_studio_js_projects_catalog_not_recipe_ids() -> None:
+    """The browser must group and fall back from GET /api/recipes, not baked-in ids."""
+    js = (Path(__file__).resolve().parents[1] / "studio" / "app.js").read_text(encoding="utf-8")
+    assert "function worksHere" in js
+    assert "function firstReadyRecipe" in js
+    assert "function firstImitateRecipe" in js
+    assert "/api/recipes/pick-and-place" not in js
+    assert '"cartpole-balance"' not in js
+    assert "run.recipe === \"pick-and-place\"" not in js
+    assert "function keepTrainSummary" in js
 
 
 def test_studio_js_bc_freshness_contract() -> None:
