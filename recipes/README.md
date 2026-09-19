@@ -8,7 +8,7 @@ blank reward function. See [ROADMAP.md](../docs/ROADMAP.md).
 | `cartpole-balance` | yes (CPU) | gymnasium |
 | `g1-stand` | yes (CPU) | mujoco + Menagerie G1 — stand + both-arm wave, pelvis pinned, not walking |
 | `g1-walk` | blocked on CPU (compile only) | playground / mjlab / isaaclab — needs GPU |
-| `g1-reach` | compile only | mjlab / isaaclab |
+| `g1-reach` | blocked on CPU (compile only) | mjlab / isaaclab — needs GPU |
 | `pick-and-place` | yes (CPU BC) | mujoco + LeRobot demos; BC steers mustard, arm plays poses |
 
 Each folder is:

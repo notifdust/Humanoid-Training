@@ -40,6 +40,9 @@ function pill(recipe) {
   if (recipe.id === "g1-walk") {
     return `<span class="pill blocked">blocked · GPU walk</span>`;
   }
+  if (recipe.id === "g1-reach") {
+    return `<span class="pill blocked">blocked · GPU reach</span>`;
+  }
   return `<span class="pill blocked">compile only · later phase</span>`;
 }
 
@@ -260,9 +263,11 @@ function renderRecipe() {
     ? `<p class="lede">Fits linear BC on demos (canvas or scripted). Eval: G1 reaches, then BC steers the mustard into the bowl while the arm follows. Not finger grasping.</p>`
     : r.id === "g1-walk"
       ? `<p class="lede">Blocked on this CPU. Train still compiles Playground / mjlab / Isaac Lab payloads, then stops with a next-step sentence — install Playground on a GPU box, or use <code>g1-stand</code> for a CPU hold preview. This is not a frozen walk clip.</p>`
-      : r.runnable
-        ? ""
-        : `<p class="lede">Compile only on this CPU. Train still runs and will block with a next-step sentence (usually Playground / Isaac Lab + GPU).</p>`;
+      : r.id === "g1-reach"
+        ? `<p class="lede">Blocked on this CPU. Train compiles an mjlab / Isaac Lab reach payload, then stops — needs a GPU box with mjlab. Use <code>pick-and-place</code> for a CPU arm+mustard preview, or <code>g1-stand</code> for a hold. Not a silent reach success.</p>`
+        : r.runnable
+          ? ""
+          : `<p class="lede">Compile only on this CPU. Train still runs and will block with a next-step sentence (usually Playground / Isaac Lab + GPU).</p>`;
   const boundDs = (state.starter?.data?.datasets || [])[0];
   const boundKeep = state.starter?.data?.keep_episodes;
   const boundHint =
@@ -769,6 +774,9 @@ function runDemoHint(run) {
   if (run.recipe === "g1-walk" && run.status === "blocked") {
     bits.push("needs Playground + GPU");
   }
+  if (run.recipe === "g1-reach" && run.status === "blocked") {
+    bits.push("needs mjlab + GPU");
+  }
   return bits.length ? ` · ${bits.join(" · ")}` : "";
 }
 
@@ -837,8 +845,12 @@ function paintRun(run, logText) {
       }${escapeHtml(hintText)}</p>`
     : "";
   const blockedHelp =
-    run.status === "blocked" && (run.recipe === "g1-walk" || (run.error || "").includes("Playground"))
-      ? `<p class="lede">Next step: on a machine with an NVIDIA GPU, <code>pip install playground</code> then run the generated <code>train.sh</code>, or open <code>g1-stand</code> for a CPU hold preview. Blocked is expected here — not a silent failure.</p>`
+    run.status === "blocked" &&
+    (run.recipe === "g1-walk" ||
+      run.recipe === "g1-reach" ||
+      (run.error || "").includes("Playground") ||
+      (run.error || "").includes("mjlab"))
+      ? `<p class="lede">Next step: use a GPU box for the compiled train script, or open <code>g1-stand</code> / <code>pick-and-place</code> for a CPU preview. Blocked is expected here — not a silent failure.</p>`
       : "";
   main.innerHTML = `
     ${stepsHTML("train")}

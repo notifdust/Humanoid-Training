@@ -65,6 +65,8 @@ class MJLabAdapter:
     ) -> EvalResult:
         log("mjlab launch is not enabled in this phase")
         raise AdapterUnavailable(
-            "mjlab execution needs a GPU box with mjlab installed. "
-            f"Compiled train_mjlab.sh is in {run_dir}."
+            "G1 reach / mjlab train is blocked on this CPU studio — not a silent failure. "
+            "On a GPU box with mjlab installed, run the generated train_mjlab.sh. "
+            "For a CPU preview use g1-stand (hold) or pick-and-place (mustard BC). "
+            f"Compiled payload: {run_dir}"
         )
