@@ -201,11 +201,13 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
     mjcf = resolve_mjcf(str(cfg.get("mjcf")), log=log)
     os.environ.setdefault("MUJOCO_GL", "glfw")
     local = resolve_local_dataset(spec)
+    dataset_source = "local"
     if local:
         data_dir = Path(local["path"])
         log(f"using LeRobot dataset {data_dir}")
     else:
         data_dir = run_dir / "lerobot_dataset"
+        dataset_source = "auto-scripted"
         n_ep = int((spec.get("data") or {}).get("min_episodes") or 4)
         n_ep = max(2, min(n_ep, 8))
         log("no local LeRobot dataset; recording scripted object-space demos")
@@ -223,7 +225,12 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
         log(f"wrote {meta.get('total_episodes')} episodes / {meta.get('total_frames')} frames")
 
     keep = (spec.get("data") or {}).get("keep_episodes")
-    obs, act = load_lerobot_arrays(data_dir, keep_episodes=keep)
+    try:
+        obs, act = load_lerobot_arrays(data_dir, keep_episodes=keep)
+    except ValueError as err:
+        raise AdapterUnavailable(
+            f"{err} Uncheck fewer takes in Data, or clear data.keep_episodes."
+        ) from err
     log(f"BC fitting on {len(obs)} frames")
     weights = fit_linear_bc(obs, act)
     save_bc(run_dir / "checkpoint.npz", weights)
@@ -310,7 +317,7 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
                         np.hypot(start[0] - bowl_xy[0], start[1] - bowl_xy[1])
                     )
                     waypoint = start.copy()
-                    log(f"grasp at step {_step} hand_mustard_dist={dist_h:.3f}m")
+                    log(f"attach at step {_step} hand_mustard_dist={dist_h:.3f}m")
                 return
             if grasped and not released:
                 obs_t = np.array(
@@ -375,7 +382,7 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
                     grasped = True
                     grasp_step = _step
                     waypoint = start.copy()
-                    log(f"grasp at step {_step} hand_mustard_dist={dist_h:.3f}m")
+                    log(f"attach at step {_step} hand_mustard_dist={dist_h:.3f}m")
                 return
             if grasped and not released:
                 obs_t = np.array(
@@ -454,12 +461,12 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
         passed=passed,
         notes=[
             "G1 arm: pick pose playback; mustard carry: linear BC on demos — mocap, not finger grasping, not ACT",
-            f"frames={len(obs)} keep_episodes={keep if keep is not None else 'all'} bc_steps={bc_steps}",
+            f"dataset={dataset_source} frames={len(obs)} keep_episodes={keep if keep is not None else 'all'} bc_steps={bc_steps}",
             f"mustard_bowl_dist={dist:.3f}",
             f"mean_pelvis_z={mean_z:.3f}",
             f"arm_mode={'playback+BC' if puppet else ('IK+BC' if use_arm else 'mocap-BC')}",
             *(["pelvis pinned (no balance policy)"] if pin_base is not None else []),
-            f"grasped_step={grasp_step} placed_step={place_step}",
+            f"attach_step={grasp_step} placed_step={place_step}",
             *_video_notes(frames),
         ],
     )

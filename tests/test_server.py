@@ -141,3 +141,37 @@ def test_api_train_cartpole(tmp_path: Path, monkeypatch) -> None:
     video = client.get(f"/api/runs/{run_id}/artifacts/eval.mp4")
     assert video.status_code == 200
     assert video.headers["content-type"].startswith("video/")
+
+
+def test_api_g1_walk_blocks_with_next_step(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HT_RUNS_DIR", str(tmp_path))
+    os.environ["HT_RUNS_DIR"] = str(tmp_path)
+    client = TestClient(app)
+    from humanoid_training.spec import load_spec
+
+    spec = load_spec(Path(__file__).resolve().parents[1] / "spec" / "examples" / "g1-walk.json")
+    created = client.post("/api/runs", json={"spec": spec})
+    assert created.status_code == 200, created.text
+    run_id = created.json()["run_id"]
+    deadline = time.time() + 30
+    body = {}
+    while time.time() < deadline:
+        body = client.get(f"/api/runs/{run_id}").json()
+        if body.get("status") not in {"queued", "running"}:
+            break
+        time.sleep(0.1)
+    assert body.get("status") == "blocked", body
+    err = body.get("error") or ""
+    assert "Playground" in err
+    assert "CPU studio" in err or "g1-stand" in err
+
+
+def test_studio_js_bc_freshness_contract() -> None:
+    """Runs UI must not stale-label honest linear-BC / keep_episodes notes."""
+    js = (Path(__file__).resolve().parents[1] / "studio" / "app.js").read_text(encoding="utf-8")
+    assert "function hasBcEvidence" in js
+    assert 'notes.includes("linear BC")' in js
+    assert "keep_episodes=" in js
+    assert "arm_ik=on" in js
+    assert "Keep at least one episode" in js
+    assert "keepEpisodes: null" in js

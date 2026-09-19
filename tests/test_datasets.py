@@ -113,6 +113,14 @@ def test_keep_drop_changes_bc_eval_outcome(tmp_path: Path) -> None:
     ), "kept-only failures must miss the bowl — otherwise keep/drop is theater"
 
 
+def test_empty_keep_episodes_raises_clear_error(tmp_path: Path) -> None:
+    spec = _pick_spec()
+    dest = tmp_path / "demos"
+    record_scripted_pick_place(spec, dest, episodes=2, include_failure=False, seed=1)
+    with pytest.raises(ValueError, match="keep_episodes is empty"):
+        load_lerobot_arrays(dest, keep_episodes=[])
+
+
 def test_record_requires_scene_objects(tmp_path: Path) -> None:
     spec = _pick_spec()
     spec["scene"]["objects"] = []

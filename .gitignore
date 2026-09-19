@@ -15,3 +15,4 @@ runs/
 *.raw
 node_modules/
 .DS_Store
+MUJOCO_LOG.TXT
