@@ -502,7 +502,7 @@ function renderData() {
         <thead><tr><th>keep</th><th>#</th><th>length</th><th>tasks</th><th>success</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      ${trainSummary}
+      <div id="keep-summary">${trainSummary}</div>
       <div class="actions">
         <button class="primary" id="train-from-data" ${emptyKeep ? "disabled" : ""}>Train pick eval (${keep.length} kept)</button>
         <button class="ghost" id="keep-successes">Keep successes only</button>
@@ -555,9 +555,39 @@ function renderData() {
   main.querySelectorAll("[data-ep]").forEach((box) => {
     box.addEventListener("change", () => {
       syncKeepEpisodes();
-      renderData();
+      refreshKeepSummary();
     });
   });
+}
+
+function refreshKeepSummary() {
+  const inspected = state.dataset;
+  if (!inspected || !inspected.ok) return;
+  const episodes = inspected.episodes || [];
+  const total = episodes.length;
+  const keepExplicit = Array.isArray(state.keepEpisodes);
+  const keep = keepExplicit
+    ? state.keepEpisodes
+    : episodes.map((ep) => ep.episode_index);
+  const emptyKeep = keepExplicit && keep.length === 0;
+  const keptEps = episodes.filter((ep) => keep.includes(ep.episode_index));
+  const keptOk = keptEps.filter((ep) => ep.success !== false).length;
+  const keptMiss = keptEps.filter((ep) => ep.success === false).length;
+  const summary =
+    emptyKeep
+      ? `<p class="error">No episodes kept — train would fit BC on 0 frames. Check at least one take.</p>`
+      : keptMiss && !keptOk
+        ? `<p class="error">Keeping only misses (${keptMiss}) — train pick eval should fail mustard-in-bowl. Prefer success takes unless you are proving keep/drop.</p>`
+        : keptMiss
+          ? `<p class="lede">Train will fit BC on ${keep.length} of ${total} episodes (${keptOk} ok · ${keptMiss} miss). Drop misses unless you are proving keep/drop.</p>`
+          : `<p class="lede">Train will fit BC on ${keep.length} of ${total} episodes. That filter writes <code>data.keep_episodes</code>.</p>`;
+  const host = document.getElementById("keep-summary");
+  if (host) host.innerHTML = summary;
+  const btn = document.getElementById("train-from-data");
+  if (btn) {
+    btn.disabled = emptyKeep;
+    btn.textContent = `Train pick eval (${keep.length} kept)`;
+  }
 }
 
 async function recordDemos() {
