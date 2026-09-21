@@ -206,6 +206,32 @@ def load_lerobot_arrays(
     )
 
 
+def load_lerobot_episode_records(path: str | Path) -> list[dict[str, Any]]:
+    """Reload frames+success so a later Save can append instead of clobber."""
+    info = inspect_lerobot_dataset(str(path))
+    if not info.get("ok"):
+        return []
+    dest = Path(str(info.get("path") or path))
+    records: list[dict[str, Any]] = []
+    for ep in info.get("episodes") or []:
+        idx = int(ep["episode_index"])
+        frame_path = dest / "data" / "chunk-000" / f"episode_{idx:06d}.jsonl"
+        frames: list[dict[str, Any]] = []
+        if frame_path.is_file():
+            for line in frame_path.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                row = json.loads(line)
+                frames.append(
+                    {
+                        "observation": _as_list(row.get("observation.state"), OBS_DIM),
+                        "action": _as_list(row.get("action"), ACT_DIM),
+                    }
+                )
+        records.append({"frames": frames, "success": bool(ep.get("success", True))})
+    return records
+
+
 def _as_path(raw: str) -> Path:
     path = Path(raw.removeprefix("file:")).expanduser()
     if not path.is_absolute():

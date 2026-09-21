@@ -200,7 +200,7 @@ empty runs, and Data-room record hints is generated from the catalog.
 
 Canonical demos: LeRobot v2 layout on disk (`meta/info.json` + episode
 JSONL). Canvas drag, WASD, and gamepad sticks all write that same
-table-frame trajectory schema. Hugging Face Hub import is closed until we wrap their API.
+table-frame trajectory schema. A second Save **appends** takes. Hugging Face Hub import is closed until we wrap their API.
 `keep_episodes` is a spec field. Empty keep is refused. Failure-only
 keep must miss mustard-in-bowl.
 

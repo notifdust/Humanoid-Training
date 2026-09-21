@@ -136,8 +136,15 @@ def run_job_via_docker(
     if log:
         log(" ".join(cmd))
     proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    try:
+        incoming.unlink(missing_ok=True)
+    except OSError:
+        pass
     if proc.stdout and log:
         for line in proc.stdout.splitlines():
+            log(line)
+    if proc.returncode != 0 and proc.stderr and log:
+        for line in proc.stderr.splitlines()[:40]:
             log(line)
     run_dir = host_runs / run_id
     manifest_path = run_dir / "manifest.json"

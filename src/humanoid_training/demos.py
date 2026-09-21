@@ -7,7 +7,7 @@ import numpy as np
 
 from humanoid_training.assets import cache_dir
 from humanoid_training.compose import object_world_pos, primitive_for, table_layout
-from humanoid_training.datasets import write_lerobot_dataset
+from humanoid_training.datasets import load_lerobot_episode_records, write_lerobot_dataset
 from humanoid_training.errors import RecipeError
 
 
@@ -78,12 +78,16 @@ def record_object_trajectories(
     spec: dict[str, Any],
     dest: Path,
     trajectories: Sequence[Sequence[dict[str, Any]]],
+    *,
+    append: bool = True,
 ) -> dict[str, Any]:
     """Write a LeRobot dataset from table-frame x/y paths.
 
     Canvas drag, WASD, and gamepad sticks all send this same shape.
     Same observation/action schema as the scripted expert: world-xy mustard
     and bowl, action = delta. Not G1 grasping.
+
+    Default append=True so a second Save adds takes instead of wiping the first.
     """
     _mustard, bowl = require_pick_objects(spec)
     layout = table_layout(spec.get("scene") or {})
@@ -114,6 +118,9 @@ def record_object_trajectories(
         recorded.append({"frames": frames, "success": success})
     if not recorded:
         raise RecipeError("No canvas trajectories to save. Drag the mustard into the bowl first.")
+    dest = Path(dest)
+    if append:
+        recorded = load_lerobot_episode_records(dest) + recorded
     return _write_pick_dataset(spec, dest, recorded)
 
 
