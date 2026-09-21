@@ -89,7 +89,8 @@ means launch will **block** here with a next step (compile payloads,
 no fake walk clip). `start_here` defaults to `availability == cpu` when
 omitted.
 
-Gold notes stay in `recipe.yaml` until `gold/eval.mp4` is CI.
+Gold notes stay in `recipe.yaml` until `gold/eval.mp4` is CI
+(Phase 2.5 in [ROADMAP.md](./ROADMAP.md)).
 
 ---
 
@@ -104,14 +105,15 @@ launch(spec, payload, run_dir) -> EvalResult   # boolean + optional video
 ```
 
 `poll` / `eval` as separate RPCs are not built. Launch is in-process and
-returns the eval. That is enough for CPU recipes; GPU jobs will need the
-split later.
+returns the eval. That is enough for CPU recipes. Phase 3a (Playground
+walk) is the first job that needs the split: submit → stream `run.log`
+→ harvest `eval.mp4`.
 
 | Adapter | Role today |
 |---|---|
 | `gymnasium` | Cartpole RL + eval video |
 | `mujoco` | G1 stand hold; pick-and-place linear-BC + arm poses |
-| `playground` | Compile G1 walk; launch blocked without Playground |
+| `playground` | Compile G1 walk; launch blocked until Phase 3a (even if Playground is installed) |
 | `mjlab` | Compile reach/walk; launch blocked on CPU |
 | `isaaclab` | Compile OSMO YAML; launch not wired |
 | `lerobot` | Compile future ACT script; CPU imitation stays on mujoco |
