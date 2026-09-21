@@ -20,6 +20,7 @@ const state = {
   teleopPath: null,
   teleopOrigin: null,
   teleopCommitLock: false,
+  teleopNeedRelease: false,
   keys: null,
 };
 
@@ -588,7 +589,15 @@ function mustardObject() {
   return (state.starter?.scene?.objects || []).find((item) => item.id === id) || null;
 }
 
+function movementCodesHeld() {
+  const keys = state.keys || new Set();
+  return ["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].some((code) =>
+    keys.has(code)
+  );
+}
+
 function stepTeleop(delta) {
+  if (state.teleopNeedRelease) return;
   const obj = mustardObject();
   if (!obj) return;
   if (!state.teleopPath) {
@@ -622,6 +631,9 @@ function finishTeleopTake(opts) {
   }
   state.teleopPath = null;
   state.teleopOrigin = null;
+  state.teleopCommitLock = true;
+  state.teleopNeedRelease = true;
+  if (state.keys) state.keys.delete("Space");
   if (rerender) renderRecipe();
 }
 
@@ -652,6 +664,11 @@ function startTeleopLoop() {
     const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
     last = now;
     const gp = readGamepadStick();
+    if (state.teleopNeedRelease) {
+      const padLive = gp && Math.hypot(gp.ax || 0, gp.ay || 0) > 0.2;
+      if (!padLive && !movementCodesHeld()) state.teleopNeedRelease = false;
+      else return;
+    }
     const fromKeys = keyTeleopDelta(state.keys || new Set(), dt);
     const fromPad = gp ? stickToTableDelta(gp.ax, gp.ay, dt) : { x: 0, y: 0 };
     const delta = { x: fromKeys.x + fromPad.x, y: fromKeys.y + fromPad.y };
@@ -697,6 +714,7 @@ function onTeleopKeyDown(event) {
   state.keys.add(event.code);
   if (event.code === "Space") {
     if (state.teleopPath && state.teleopPath.length >= 2) finishTeleopTake({ rerender: true });
+    state.teleopCommitLock = true;
     return;
   }
   // One sample per keydown so a take still records if rAF is throttled.
@@ -707,6 +725,8 @@ function onTeleopKeyUp(event) {
   if (!state.keys) return;
   if (state.recording && event.code === "Space") event.preventDefault();
   state.keys.delete(event.code);
+  if (event.code === "Space") state.teleopCommitLock = false;
+  if (!movementCodesHeld()) state.teleopNeedRelease = false;
 }
 
 async function saveCanvasDemos() {
