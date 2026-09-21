@@ -81,6 +81,7 @@ def run_job(
         "run_dir": str(run_dir),
         "artifacts": {},
         "metrics": {},
+        "facts": {},
         "adapter": None,
         "error": None,
     }
@@ -124,6 +125,7 @@ def run_job(
             "passed": result.passed,
         }
         manifest["notes"] = result.notes
+        manifest["facts"] = dict(result.facts or {})
         manifest["artifacts"] = collect_artifacts(run_dir, result.video_path)
         emit(
             f"eval success_rate={result.success_rate:.2f} "

@@ -651,21 +651,33 @@ function renderData() {
   } else if (inspected && inspected.error) {
     body = `<p class="error">${escapeHtml(inspected.error)}</p>`;
   }
+  const imitateOpen = Boolean(state.selected?.imitate);
+  const otherReady = readyRecipes(state.recipes)
+    .filter((r) => !r.imitate)
+    .map((r) => r.title);
+  const recordActions = imitateOpen
+    ? `<div class="actions" style="margin-top:12px">
+        <button class="primary" id="record-ds">Record scripted demos</button>
+      </div>`
+    : `<div class="actions" style="margin-top:12px">
+        <button class="primary" id="open-imitate">Open an imitation task</button>
+      </div>
+      <p class="lede">Recording belongs on a demonstration recipe.${
+        otherReady.length ? ` Train on ${escapeHtml(englishList(otherReady))} from Tasks.` : ""
+      }</p>`;
+  const dataLede =
+    state.selected?.imitate && state.selected.record_hint
+      ? state.selected.record_hint
+      : "This room is for demonstration data. Open an imitation task, record takes, uncheck the bad ones, then Train.";
   main.innerHTML = `
     <h1>Data</h1>
     <p class="lede">
-      ${escapeHtml(
-        state.selected?.record_hint ||
-          firstImitateRecipe()?.record_hint ||
-          "This room is for demonstration data. Open an imitation task, record takes, uncheck the bad ones, then Train."
-      )}
+      ${escapeHtml(dataLede)}
     </p>
     <section>
       <h2>On this job</h2>
       ${datasetList}
-      <div class="actions" style="margin-top:12px">
-        <button class="primary" id="record-ds">Record scripted demos</button>
-      </div>
+      ${recordActions}
       <p class="status" id="record-status"></p>
       <p class="error" id="record-error"></p>
     </section>
@@ -681,6 +693,11 @@ function renderData() {
   `;
   document.getElementById("inspect-ds").addEventListener("click", inspectDataset);
   document.getElementById("record-ds")?.addEventListener("click", recordDemos);
+  document.getElementById("open-imitate")?.addEventListener("click", () => {
+    const imitate = firstImitateRecipe();
+    if (imitate) openRecipe(imitate.id);
+    else switchView("tasks");
+  });
   document.getElementById("train-from-data")?.addEventListener("click", trainCurrent);
   document.getElementById("keep-successes")?.addEventListener("click", () => {
     if (!state.dataset?.episodes) return;
@@ -802,8 +819,13 @@ function syncKeepEpisodes() {
   }
 }
 
-function hasBcEvidence(notes) {
-  // Honest BC-era runs, including older note vocab — do not call these stale.
+function hasBcEvidence(run) {
+  const facts = runFacts(run);
+  if (facts.kind === "imitation") return true;
+  if (facts.arm_mode) return true;
+  if (typeof facts.bc_steps === "number") return true;
+  // Older manifests only had English notes — do not stale-label those.
+  const notes = (run.notes || []).join(" ");
   if (/arm_mode=(playback|IK|mocap)[+_]BC/.test(notes)) return true;
   if (/bc_steps=\d+/.test(notes)) return true;
   if (notes.includes("linear BC")) return true;
@@ -812,32 +834,55 @@ function hasBcEvidence(notes) {
   return false;
 }
 
+function runFacts(run) {
+  return (run && run.facts) || {};
+}
+
+function formatKeep(value) {
+  if (value === undefined || value === null) return "";
+  if (Array.isArray(value)) return JSON.stringify(value);
+  return String(value);
+}
+
 function runDemoHint(run) {
+  const facts = runFacts(run);
   const notes = (run.notes || []).join(" ");
-  const keep = (notes.match(/keep_episodes=(\[[^\]]*\]|all)/) || [])[1];
-  const frames = (notes.match(/frames=(\d+)/) || [])[1];
-  const bc = (notes.match(/bc_steps=(\d+)/) || [])[1];
-  const modeMatch = notes.match(/arm_mode=(playback\+BC|IK\+BC|mocap-BC|[-\w+]+)/);
-  let mode = modeMatch ? `arm_mode=${modeMatch[1]}` : "";
-  if (!mode && notes.includes("linear BC")) mode = "linear-BC";
-  if (!mode && notes.includes("arm_ik=on")) mode = "legacy-BC";
+  let mode = facts.arm_mode || "";
+  if (mode) mode = `arm_mode=${mode}`;
+  if (!mode) {
+    const modeMatch = notes.match(/arm_mode=(playback\+BC|IK\+BC|mocap-BC|[-\w+]+)/);
+    mode = modeMatch ? `arm_mode=${modeMatch[1]}` : "";
+    if (!mode && notes.includes("linear BC")) mode = "linear-BC";
+    if (!mode && notes.includes("arm_ik=on")) mode = "legacy-BC";
+  }
+  const keep =
+    formatKeep(facts.keep_episodes) ||
+    (notes.match(/keep_episodes=(\[[^\]]*\]|all)/) || [])[1] ||
+    "";
+  const frames =
+    facts.frames != null
+      ? String(facts.frames)
+      : (notes.match(/frames=(\d+)/) || [])[1] || "";
+  const bc =
+    facts.bc_steps != null
+      ? String(facts.bc_steps)
+      : (notes.match(/bc_steps=(\d+)/) || [])[1] || "";
   const bits = [];
   if (mode) bits.push(mode);
   if (keep) bits.push(`keep=${keep}`);
   if (frames) bits.push(`${frames} frames`);
   if (bc) bits.push(`bc_steps=${bc}`);
-  const rec = (state.recipes || []).find((r) => r.id === run.recipe);
+  const rec = recipeById(run.recipe);
   if (
     rec &&
     rec.imitate &&
     run.status !== "queued" &&
     run.status !== "running" &&
-    !hasBcEvidence(notes)
+    !hasBcEvidence(run)
   ) {
     bits.push("stale? re-train for BC");
   }
   if (run.status === "blocked") {
-    const rec = (state.recipes || []).find((r) => r.id === run.recipe);
     if (rec && rec.availability === "gpu") {
       bits.push(rec.blocked_hint || "needs a GPU");
     }
@@ -867,7 +912,7 @@ function renderRuns() {
       <li>
         <div class="run-row" data-run="${run.run_id}">
           <div>
-            <strong>${run.recipe || run.run_id}</strong>
+            <strong>${escapeHtml(prettyRecipe(run.recipe))}</strong>
             <div class="meta">${run.run_id}${run.artifacts && run.artifacts["eval.mp4"] ? " · eval.mp4" : ""}${hint}${failedHint}</div>
           </div>
           <div class="status ${statusClass}">${englishRunStatus(run)}</div>
@@ -999,6 +1044,7 @@ async function showRun(runId) {
       run.error = msg.error;
       run.artifacts = msg.artifacts || run.artifacts;
       if (msg.notes) run.notes = msg.notes;
+      if (msg.facts) run.facts = msg.facts;
       const logEl = document.getElementById("run-log");
       if (logEl) {
         logEl.textContent = logText;

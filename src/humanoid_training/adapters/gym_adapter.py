@@ -137,4 +137,9 @@ class GymnasiumAdapter:
             video_path=video_path,
             passed=passed,
             notes=notes,
+            facts={
+                "kind": "rl",
+                "greedy_train_eval": float(greedy_eval),
+                "success_threshold": threshold,
+            },
         )

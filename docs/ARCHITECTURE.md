@@ -141,12 +141,17 @@ may write (`RUN_ARTIFACTS`) and the names the studio HTTP API may
 stream (`SERVED_ARTIFACTS`). `collect_artifacts` and
 `GET /api/runs/.../artifacts/{name}` share that list.
 
+`EvalResult.facts` is the machine-readable eval. The runner copies it
+onto `manifest.json` as `facts`. Notes stay English for humans. The
+studio **projects** `facts` (arm_mode, bc_steps, keep_episodes, kind)
+and only scrapes notes for older runs that have none.
+
 Every run directory contains:
 
 | File | Meaning |
 |---|---|
 | `spec.json` | expanded public spec |
-| `manifest.json` | status, metrics, notes, artifact paths |
+| `manifest.json` | status, metrics, facts, notes, artifact paths |
 | `run.log` | line log (studio SSE tails this) |
 | `eval.mp4` | when GLFW/display can render |
 | `checkpoint.npz` | policy weights when the adapter trains |
