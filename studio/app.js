@@ -601,12 +601,15 @@ function successCheckPhrase() {
 }
 
 function renderData() {
+  const imitateOpen = Boolean(state.selected?.imitate);
   const datasets = state.starter?.data?.datasets || state.expanded?.spec?.data?.datasets || [];
   const datasetList = datasets.length
     ? `<ul class="runs">${datasets
         .map((d) => `<li class="run-row"><code>${escapeHtml(d)}</code></li>`)
         .join("")}</ul>`
-    : `<p class="lede">No demos on this job yet. Train on an imitation task still works — it writes built-in takes. Record here when you want to keep or drop episodes.</p>`;
+    : imitateOpen
+      ? `<p class="lede">No demos on this job yet. Train still works — it writes built-in takes. Record here when you want to keep or drop episodes.</p>`
+      : `<p class="lede">No demos on this job yet.</p>`;
   const inspected = state.dataset;
   let body = "";
   if (inspected && inspected.ok) {
@@ -651,7 +654,6 @@ function renderData() {
   } else if (inspected && inspected.error) {
     body = `<p class="error">${escapeHtml(inspected.error)}</p>`;
   }
-  const imitateOpen = Boolean(state.selected?.imitate);
   const otherReady = readyRecipes(state.recipes)
     .filter((r) => !r.imitate)
     .map((r) => r.title);
