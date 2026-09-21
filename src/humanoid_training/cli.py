@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from humanoid_training.catalog import load_robot_catalog
-from humanoid_training.errors import AdapterError, RecipeError, SpecError
+from humanoid_training.errors import AdapterError, AdapterUnavailable, RecipeError, SpecError
 from humanoid_training.recipes import english_list, expand_spec, list_recipes, public_catalog
 from humanoid_training.runner import default_runs_dir, run_job
 from humanoid_training.spec import load_spec, validate_spec
@@ -36,6 +36,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Write engine payload files without launching the engine",
     )
+    p_train.add_argument(
+        "--docker",
+        action="store_true",
+        help="Launch the same job inside the CPU Docker image (Phase 1 runner)",
+    )
 
     p_serve = sub.add_parser("serve", help="Run the studio API + UI")
     p_serve.add_argument("--host", default="127.0.0.1")
@@ -61,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "expand":
             return _cmd_expand(args.spec)
         if args.cmd == "train":
-            return _cmd_train(args.spec, args.out, args.compile_only)
+            return _cmd_train(args.spec, args.out, args.compile_only, args.docker)
         if args.cmd == "serve":
             return _cmd_serve(args.host, args.port)
         if args.cmd == "fetch-assets":
@@ -113,14 +118,28 @@ def _cmd_expand(path: str) -> int:
     return 0
 
 
-def _cmd_train(path: str, out: Path | None, compile_only: bool) -> int:
+def _cmd_train(path: str, out: Path | None, compile_only: bool, docker: bool = False) -> int:
     spec = load_spec(path)
-    manifest = run_job(
-        spec,
-        runs_dir=out or default_runs_dir(),
-        log=print,
-        compile_only=compile_only,
-    )
+    try:
+        if docker:
+            from humanoid_training.docker_runner import run_job_via_docker
+
+            manifest = run_job_via_docker(
+                spec,
+                runs_dir=out or default_runs_dir(),
+                log=print,
+                compile_only=compile_only,
+            )
+        else:
+            manifest = run_job(
+                spec,
+                runs_dir=out or default_runs_dir(),
+                log=print,
+                compile_only=compile_only,
+            )
+    except AdapterUnavailable as err:
+        print(err, file=sys.stderr)
+        return 12
     print(json.dumps({k: manifest[k] for k in ("run_id", "status", "adapter", "metrics", "error") if k in manifest}, indent=2, default=str))
     status = manifest.get("status")
     if status in {"passed", "completed", "compiled"}:

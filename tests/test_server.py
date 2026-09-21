@@ -180,6 +180,7 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "run.recipe === \"pick-and-place\"" not in js
     assert "function keepTrainSummary" in js
     assert "function runFacts" in js
+    assert 'facts.runner === "docker"' in js
     assert "id=\"open-imitate\"" in js
 
 

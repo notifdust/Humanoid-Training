@@ -58,7 +58,11 @@ python -m humanoid_training.cli train spec/examples/cartpole-balance.json
 python -m humanoid_training.cli fetch-assets unitree_g1
 python -m humanoid_training.cli train spec/examples/g1-stand.json
 python -m humanoid_training.cli train spec/examples/g1-walk.json --compile-only
+python -m humanoid_training.cli train spec/examples/cartpole-balance.json --docker
 ```
+
+`--docker` is the Phase 1 container runner (CPU image in `Dockerfile`).
+If Docker is missing it stops with a next step; in-process Train still works.
 
 Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
 

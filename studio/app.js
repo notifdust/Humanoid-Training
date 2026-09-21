@@ -884,6 +884,7 @@ function runDemoHint(run) {
   ) {
     bits.push("stale? re-train for BC");
   }
+  if (facts.runner === "docker") bits.push("Docker");
   if (run.status === "blocked") {
     if (rec && rec.availability === "gpu") {
       bits.push(rec.blocked_hint || "needs a GPU");
