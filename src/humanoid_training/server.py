@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from humanoid_training import __version__
 from humanoid_training.catalog import load_robot_catalog
 from humanoid_training.datasets import inspect_lerobot_dataset
 from humanoid_training.demos import (
@@ -24,6 +25,15 @@ from humanoid_training.runner import default_runs_dir, load_manifest, new_run_id
 from humanoid_training.spec import validate_spec
 
 app = FastAPI(title="Humanoid Training Studio", version="0.1.0")
+
+
+@app.middleware("http")
+async def studio_no_store(request, call_next):
+    """Studio JS/CSS must not stick after a pull. Eval videos stay cacheable under /api."""
+    response = await call_next(request)
+    if request.url.path in {"/", "/index.html", "/app.js", "/styles.css"}:
+        response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 class SpecBody(BaseModel):
@@ -59,7 +69,7 @@ def _find_run(run_id: str) -> Path:
 
 @app.get("/api/health")
 def health() -> dict[str, Any]:
-    return {"ok": True, "name": "humanoid-training"}
+    return {"ok": True, "name": "humanoid-training", "version": __version__}
 
 
 @app.get("/api/robots")

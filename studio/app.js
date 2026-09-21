@@ -96,7 +96,8 @@ function stepsHTML(active) {
 
 function recipesForRobot() {
   if (!state.robot) return state.recipes;
-  return state.recipes.filter((r) => r.robot === state.robot.id);
+  // Keep start_here smoke tests visible when a humanoid is selected.
+  return state.recipes.filter((r) => r.robot === state.robot.id || r.start_here);
 }
 
 function renderRobots() {
@@ -159,7 +160,7 @@ function renderRecipes() {
     )
     .join("");
   const filter = state.robot
-    ? `Tasks for ${escapeHtml(state.robot.name || state.robot.id)}.`
+    ? `Showing tasks for ${escapeHtml(state.robot.name || state.robot.id)}, plus the laptop smoke tests.`
     : "";
   const skipLine = later.length
     ? ` ${englishList(later.map((r) => r.title))} ${
@@ -308,6 +309,67 @@ function sceneHTML(spec) {
   `;
 }
 
+function boundDemoHint(recipe) {
+  if (!recipe || !recipe.imitate) return "";
+  const nTakes = state.pendingTrajectories.length;
+  if (state.recording || nTakes) return "";
+  const boundDs = (state.starter?.data?.datasets || [])[0];
+  if (!boundDs) {
+    return `<p class="meta">No demos saved yet — Train will use built-in scripted takes. Or record by dragging ${escapeHtml(objectLabel())} below.</p>`;
+  }
+  const eps = (state.dataset && state.dataset.ok && state.dataset.episodes) || [];
+  const hits = eps.filter((ep) => ep.success === true).length;
+  const misses = eps.filter((ep) => ep.success === false).length;
+  const dest = recordContainerId() || "the target";
+  let extra = "";
+  if (hits && misses) extra = ` · ${hits} reached the ${dest}, ${misses} missed`;
+  else if (hits) extra = ` · ${dest} reached`;
+  else if (misses) extra = ` · missed the ${dest} — record a take that ends in it`;
+  const keep = state.starter?.data?.keep_episodes;
+  const keepBit = Array.isArray(keep) ? ` (${keep.length} kept)` : "";
+  return `<p class="meta">Using your recorded demos${keepBit}${extra}.</p>`;
+}
+
+function demoSaveSummary(result) {
+  const eps = result.episodes || [];
+  const n = result.total_episodes ?? eps.length;
+  const hits = eps.filter((ep) => ep.success === true).length;
+  const misses = eps.filter((ep) => ep.success === false).length;
+  const dest = recordContainerId() || "the target";
+  let msg = `wrote ${n} demo${n === 1 ? "" : "s"}`;
+  if (hits && misses) msg += ` · ${hits} in the ${dest}, ${misses} missed`;
+  else if (hits) msg += ` · ${dest} reached`;
+  else if (misses) {
+    msg += ` · missed the ${dest} — Train will likely fail. Record a take that ends in the ${dest}.`;
+  }
+  return msg;
+}
+
+function pathReachedContainer(path) {
+  const spec = state.expanded?.spec || state.starter;
+  const destId = recordContainerId();
+  const dest = (spec?.scene?.objects || []).find((obj) => String(obj.id) === destId);
+  if (!dest || !path || !path.length) return null;
+  const last = path[path.length - 1];
+  const dist = Math.hypot(
+    (Number(last.x) || 0) - (Number(dest.x) || 0),
+    (Number(last.y) || 0) - (Number(dest.y) || 0)
+  );
+  return dist <= 0.09;
+}
+
+function pendingTakeMessage() {
+  const n = state.pendingTrajectories.length;
+  if (!n) return "";
+  const last = state.pendingTrajectories[n - 1];
+  const hit = pathReachedContainer(last);
+  const dest = recordContainerId();
+  let extra = "";
+  if (hit === true && dest) extra = ` · last take reached the ${dest}`;
+  if (hit === false && dest) extra = ` · last take missed the ${dest}`;
+  return `${n} take(s) in memory${extra}`;
+}
+
 function renderRecipe() {
   const r = state.selected;
   const spec = state.expanded?.spec || state.starter;
@@ -316,17 +378,8 @@ function renderRecipe() {
   const trainLabel = cpu ? "Train" : "Compile (will stop — needs GPU)";
   const hintText = r.train_hint || r.promise || r.summary || "";
   const trainHint = hintText ? `<p class="lede">${escapeHtml(hintText)}</p>` : "";
-  const boundDs = (state.starter?.data?.datasets || [])[0];
-  const boundKeep = state.starter?.data?.keep_episodes;
-  const boundHint =
-    r.imitate && boundDs
-      ? `<p class="meta">Using your recorded demos${
-          Array.isArray(boundKeep) ? ` (${boundKeep.length} kept)` : ""
-        }.</p>`
-      : r.imitate
-        ? `<p class="meta">No demos saved yet — Train will use built-in scripted takes. Or record by dragging ${escapeHtml(objectLabel())} below.</p>`
-        : "";
   const nTakes = state.pendingTrajectories.length;
+  const boundHint = boundDemoHint(r);
   const saveBtn = nTakes
     ? `<button class="primary" id="save-demos">Save ${nTakes} demo${nTakes === 1 ? "" : "s"}</button>
        <button class="ghost" id="undo-demo">Undo last</button>`
@@ -337,7 +390,7 @@ function renderRecipe() {
           ${saveBtn}
         </div>
         <p class="lede">${state.recording ? `Drag ${escapeHtml(objectLabel())}${recordContainerId() ? ` into the ${escapeHtml(recordContainerId())}` : ""}, or steer with WASD / a gamepad. Space or gamepad (A) ends the take.` : "Optional: record a take on the canvas (drag, WASD, or gamepad), then Save, then Train."}</p>
-        <p class="status" id="demo-status">${escapeHtml(state.lastDemoMessage || (nTakes ? `${nTakes} take(s) in memory` : ""))}</p>
+        <p class="status" id="demo-status">${escapeHtml(state.lastDemoMessage || pendingTakeMessage())}</p>
         <p class="error" id="demo-error"></p>`
     : "";
   main.innerHTML = `
@@ -383,17 +436,13 @@ function renderRecipe() {
     state.recording = !state.recording;
     state.lastDemoMessage = state.recording
       ? `recording — drag ${objectLabel()}${recordContainerId() ? ` into the ${recordContainerId()}` : ""}, or WASD / gamepad. Space ends the take.`
-      : state.pendingTrajectories.length
-        ? `${state.pendingTrajectories.length} take(s) in memory`
-        : "";
+      : pendingTakeMessage();
     renderRecipe();
   });
   document.getElementById("save-demos")?.addEventListener("click", saveCanvasDemos);
   document.getElementById("undo-demo")?.addEventListener("click", () => {
     state.pendingTrajectories.pop();
-    state.lastDemoMessage = state.pendingTrajectories.length
-      ? `${state.pendingTrajectories.length} take(s) in memory`
-      : "";
+    state.lastDemoMessage = pendingTakeMessage();
     renderRecipe();
   });
   bindSceneDrag();
@@ -475,7 +524,7 @@ function bindSceneDrag() {
         if (recordingMustard) {
           if (path.length >= 2) {
             state.pendingTrajectories.push(path);
-            state.lastDemoMessage = `${state.pendingTrajectories.length} take(s) in memory`;
+            state.lastDemoMessage = pendingTakeMessage();
           }
           const start = state.starter.scene.objects.find((item) => item.id === id);
           if (start) applyTokenStyle(token, start);
@@ -564,7 +613,7 @@ function finishTeleopTake(opts) {
   const path = state.teleopPath;
   if (path && path.length >= 2) {
     state.pendingTrajectories.push(path);
-    state.lastDemoMessage = `${state.pendingTrajectories.length} take(s) in memory`;
+    state.lastDemoMessage = pendingTakeMessage();
   }
   const obj = mustardObject();
   if (obj && state.teleopOrigin) {
@@ -687,8 +736,7 @@ async function saveCanvasDemos() {
     }
     state.pendingTrajectories = [];
     state.recording = false;
-    const n = result.total_episodes;
-    state.lastDemoMessage = `wrote ${n} demo${n === 1 ? "" : "s"} → ${result.path || result.dest}`;
+    state.lastDemoMessage = demoSaveSummary(result);
     renderRecipe();
   } catch (error) {
     if (err) err.textContent = error.message;
@@ -1312,7 +1360,7 @@ async function boot() {
   try {
     const health = await api("/api/health");
     document.getElementById("health").textContent = health.ok
-      ? "local · studio online"
+      ? `local · v${health.version || "dev"}`
       : "offline";
     const [recipes, robots] = await Promise.all([
       api("/api/recipes"),

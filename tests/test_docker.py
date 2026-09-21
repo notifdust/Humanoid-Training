@@ -103,7 +103,7 @@ def test_docker_success_stamps_runner_and_does_not_recurse(
     assert "host_spec_hash" in manifest["facts"]
     assert "--docker" not in captured["cmd"]
     assert "HT_IN_CONTAINER=1" in captured["cmd"]
-    assert (tmp_path / "dock-1.spec.json").is_file()
+    assert not (tmp_path / "dock-1.spec.json").is_file()
 
 
 def test_docker_preserves_blocked_manifest(

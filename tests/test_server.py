@@ -11,7 +11,9 @@ from humanoid_training.server import app
 
 def test_health_and_recipes() -> None:
     client = TestClient(app)
-    assert client.get("/api/health").json()["ok"] is True
+    health = client.get("/api/health").json()
+    assert health["ok"] is True
+    assert health.get("version")
     catalog = client.get("/api/recipes").json()
     recipes = catalog["recipes"]
     ids = {r["id"] for r in recipes}
@@ -26,8 +28,11 @@ def test_health_and_recipes() -> None:
     assert "Data" in page.text
     js = client.get("/app.js")
     assert js.status_code == 200
+    assert js.headers.get("cache-control") == "no-store"
     assert "Start here" in js.text
     assert "Train again" in js.text
+    css = client.get("/styles.css")
+    assert css.headers.get("cache-control") == "no-store"
 
 
 def test_inspect_dataset_fixture() -> None:
@@ -97,6 +102,39 @@ def test_record_canvas_trajectories_api(tmp_path: Path, monkeypatch) -> None:
     assert data["total_episodes"] == 1
     assert data["episodes"][0]["success"] is True
     assert "canvas" in data["path"]
+
+
+def test_record_canvas_api_appends_second_save(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HT_CACHE", str(tmp_path / "cache"))
+    client = TestClient(app)
+    spec = {
+        "spec_version": "0.1.0",
+        "name": "pick-and-place",
+        "robot": {"id": "unitree-g1-29dof", "source": "catalog"},
+        "task": {"recipe": "pick-and-place"},
+        "train": {"method": "imitation"},
+        "scene": {
+            "template": "kitchen-counter-v1",
+            "objects": [
+                {"id": "mustard", "asset": "ycb-mustard", "x": -0.18, "y": 0.04},
+                {"id": "bowl", "asset": "bowl-white", "x": 0.16, "y": -0.02},
+            ],
+        },
+    }
+    mustard = spec["scene"]["objects"][0]
+    bowl = spec["scene"]["objects"][1]
+    traj = [
+        {
+            "x": mustard["x"] + (t / 11) * (bowl["x"] - mustard["x"]),
+            "y": mustard["y"] + (t / 11) * (bowl["y"] - mustard["y"]),
+        }
+        for t in range(12)
+    ]
+    first = client.post("/api/datasets/record", json={"spec": spec, "trajectories": [traj]})
+    assert first.status_code == 200, first.text
+    second = client.post("/api/datasets/record", json={"spec": spec, "trajectories": [traj]})
+    assert second.status_code == 200, second.text
+    assert second.json()["total_episodes"] == 2
 
 
 def test_record_without_objects_is_400(tmp_path: Path, monkeypatch) -> None:
@@ -185,6 +223,9 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "function startTeleopLoop" in js
     assert "function finishTeleopTake" in js
     assert "function readGamepadStick" in js
+    assert "function demoSaveSummary" in js
+    assert "function boundDemoHint" in js
+    assert "r.start_here" in js
     assert "id=\"open-imitate\"" in js
 
 
