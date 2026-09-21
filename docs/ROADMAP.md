@@ -61,7 +61,7 @@ click Train, watch eval clips. The UI is a projection of the spec.
 | Scene canvas (object placement writes the spec) | done (pick-and-place) |
 | Dragged objects compiled into MuJoCo | done (MjSpec: table + primitives + eval camera) |
 | Spec editor in the recipe view | done (collapsed behind Advanced) |
-| Local Docker runner | later |
+| Local Docker runner | done (`ht train --docker`; studio stays in-process) |
 
 ---
 

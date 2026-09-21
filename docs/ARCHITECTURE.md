@@ -12,7 +12,7 @@ Job spec (JSON)      source of truth for one run
         │
         ├─ expand    recipe.yaml defaults, user overlay wins
         ├─ compile   adapter → engine payload files
-        └─ launch    in-process runner today; Docker / OSMO later
+        └─ launch    in-process by default; `ht train --docker` uses the CPU image
                      → eval.mp4 + boolean + manifest
 ```
 
@@ -23,7 +23,7 @@ does not belong in the UI.
 
 ## 1. Job spec
 
-A run is a document. Schema: `spec/schema.json`. Examples: `spec/examples/`.
+A run is a document. Schema: `spec/job_spec.schema.json`. Examples: `spec/examples/`.
 
 ```json
 {
@@ -134,7 +134,9 @@ claim success without the spec's eval.
 ## 4. Runner
 
 `run_job` is the only orchestrator today: expand → compile → launch →
-manifest. It is in-process, not Docker.
+manifest. It is in-process by default. `ht train --docker` runs that
+same loop inside the CPU image (`Dockerfile`). Missing Docker fails
+closed; Cartpole still trains without it.
 
 `src/humanoid_training/artifacts.py` is the inventory of files a run
 may write (`RUN_ARTIFACTS`) and the names the studio HTTP API may
@@ -166,8 +168,13 @@ Status:
 - `compiled` — `--compile-only`
 - `failed` — unexpected exception
 
-Docker / HF Jobs / OSMO runners are Phase 3. The studio-server does not
-SSH and does not put cloud credentials in the browser.
+The CPU Docker image is Phase 1 (`ht train --docker`). It remounts only
+`/runs`, sets `HT_RUN_ID`, and runs in-process train inside the container
+(never `--docker`, or it would recurse). Walk/reach `backend.compute:
+local-docker` still means a future GPU/Isaac container — the studio does
+not auto-route those onto this CPU image. HF Jobs / OSMO are Phase 3.
+The studio-server stays in-process: it does not SSH and does not put
+cloud credentials in the browser.
 
 ---
 
@@ -211,6 +218,7 @@ src/humanoid_training/
     mujoco_runtime.py      # simulate / render
     mujoco_control.py      # poses / IK
   runner.py                # in-process job
+  docker_runner.py         # Phase 1 CPU `ht train --docker`
   server.py                # studio API
 spec/                      # schema + examples
 recipes/<id>/recipe.yaml   # defaults + studio contract

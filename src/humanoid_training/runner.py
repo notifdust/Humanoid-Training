@@ -56,10 +56,12 @@ def run_job(
     run_id: str | None = None,
 ) -> dict[str, Any]:
     """Expand, compile, optionally train. Always writes a manifest."""
+    import os
+
     expanded = expand_spec(user_spec)
     public_spec = {k: v for k, v in expanded.items() if not str(k).startswith("_")}
     hashed = spec_hash(public_spec)
-    run_id = run_id or new_run_id(str(public_spec.get("name") or "job"))
+    run_id = run_id or os.environ.get("HT_RUN_ID") or new_run_id(str(public_spec.get("name") or "job"))
     run_dir = Path(runs_dir or default_runs_dir()) / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     emit = _log_file(run_dir, log)
@@ -145,6 +147,9 @@ def run_job(
         manifest["traceback"] = traceback.format_exc()
         emit(f"failed: {err}")
     finally:
+        facts = dict(manifest.get("facts") or {})
+        facts.setdefault("runner", "inprocess")
+        manifest["facts"] = facts
         manifest["finished_at"] = datetime.now(timezone.utc).isoformat()
         write_manifest(run_dir, manifest)
 
