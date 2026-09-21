@@ -24,6 +24,11 @@ def test_health_and_recipes() -> None:
     by_id = {r["id"]: r for r in recipes}
     assert by_id["cartpole-balance"]["has_gold"] is True
     assert by_id["g1-walk"]["has_gold"] is False
+    assert by_id["g1-walk"]["launch_here"] is False
+    assert by_id["g1-reach"]["launch_here"] is False
+    assert by_id["cartpole-balance"]["launch_here"] is True
+    assert health.get("engines")
+    assert "playground_ready" in health["engines"]
     gold = client.get("/api/recipes/cartpole-balance/gold/eval.mp4")
     assert gold.status_code == 200
     assert gold.headers["content-type"].startswith("video/")
@@ -238,8 +243,10 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "teleopNeedRelease" in js
     assert "r.start_here" in js
     assert "id=\"open-imitate\"" in js
-    assert "r.has_gold" in js
-    assert "/gold/eval.mp4" in js
+    assert "r.launch_here" in js
+    assert "function backendBadge" in js
+    assert "facts.engine" in js
+    assert "id=\"backend-badge\"" in js
 
 
 def test_studio_js_bc_freshness_contract() -> None:

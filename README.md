@@ -46,7 +46,9 @@ still scores success; it will not write `eval.mp4`.
 2. **G1 stand → Train.** Humanoid holds a pose and waves. Not walking.
 3. **Pick and place → Train.** Mustard goes in the bowl; the arm follows. Not finger grasping.
 
-Skip **G1 walk** and **G1 reach** on a laptop — they need a GPU and will stop on purpose.
+Skip **G1 reach** on a laptop. **G1 walk** also stops on a laptop (needs
+an NVIDIA GPU and `pip install playground`). On a GPU box it launches
+for real — not a stand clip.
 
 Rooms: Robots · Tasks · Data · Runs. Job spec is under **Advanced**.
 
@@ -58,11 +60,24 @@ python -m humanoid_training.cli train spec/examples/cartpole-balance.json
 python -m humanoid_training.cli fetch-assets unitree_g1
 python -m humanoid_training.cli train spec/examples/g1-stand.json
 python -m humanoid_training.cli train spec/examples/g1-walk.json --compile-only
+python -m humanoid_training.cli train spec/examples/g1-walk.json
 python -m humanoid_training.cli train spec/examples/cartpole-balance.json --docker
 ```
 
 `--docker` is the Phase 1 container runner (CPU image in `Dockerfile`).
-If Docker is missing it stops with a next step; in-process Train still works.
+GPU recipes are refused there. If Docker is missing it stops with a next
+step; in-process Train still works.
+
+On a machine with an NVIDIA GPU:
+
+```bash
+pip install playground
+python -m humanoid_training.cli train spec/examples/g1-walk.json
+```
+
+That runs `train-jax-ppo --env_name G1JoystickFlatTerrain`, copies
+`rollout0.mp4` to `eval.mp4`, and stamps `facts.engine=playground`.
+Without a GPU the same command compiles payloads and exits 12.
 
 Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
 
@@ -78,7 +93,7 @@ Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
 |---|---|
 | `cartpole-balance` | Gymnasium RL on CPU, eval video, gold clip |
 | `g1-stand` | MuJoCo G1 from Menagerie, stand + both-arm wave, eval video, gold clip |
-| `g1-walk` | Compile to Playground / mjlab / Isaac Lab (GPU to launch) |
+| `g1-walk` | Compile to Playground / mjlab / Isaac Lab. **Launches** Playground PPO when a GPU and `train-jax-ppo` are present. |
 | `g1-reach` | Compile to mjlab / Isaac Lab |
 | `pick-and-place` | Demos → linear BC steers mustard; G1 arm plays pick/lift/place. Gold clip. Not finger grasping, not ACT. |
 

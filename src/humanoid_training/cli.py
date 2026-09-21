@@ -39,7 +39,7 @@ def main(argv: list[str] | None = None) -> int:
     p_train.add_argument(
         "--docker",
         action="store_true",
-        help="Launch the same job inside the CPU Docker image (Phase 1 runner)",
+        help="Launch the same job inside the CPU Docker image (Phase 1). GPU recipes are refused.",
     )
 
     p_serve = sub.add_parser("serve", help="Run the studio API + UI")

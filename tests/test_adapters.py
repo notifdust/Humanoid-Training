@@ -30,6 +30,10 @@ def test_g1_walk_compiles_playground() -> None:
     assert payload.env_name == "G1JoystickFlatTerrain"
     assert "train.sh" in payload.files
     assert "G1JoystickFlatTerrain" in payload.files["train.sh"]
+    assert "--num_timesteps" in payload.files["train.sh"]
+    assert "--logdir" in payload.files["train.sh"]
+    assert "--seed" in payload.command
+    assert "Phase 1/3" not in payload.files["train.sh"]
 
 
 def test_g1_walk_compiles_isaac_when_preferred() -> None:

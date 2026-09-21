@@ -40,6 +40,13 @@ class Recipe:
         start_here = studio.get("start_here")
         if start_here is None:
             start_here = availability == "cpu"
+        launch_here = _launch_here(self, availability)
+        if launch_here:
+            promise = str(studio.get("ready_promise") or studio.get("promise") or self.summary)
+            train_hint = str(studio.get("ready_hint") or studio.get("train_hint") or "")
+        else:
+            promise = str(studio.get("promise") or self.summary)
+            train_hint = str(studio.get("train_hint") or "")
         return {
             "id": self.id,
             "title": self.title,
@@ -49,9 +56,10 @@ class Recipe:
             "robot": self.data.get("robot"),
             "runnable": runnable,
             "availability": availability,
+            "launch_here": launch_here,
             "start_here": bool(start_here),
-            "promise": str(studio.get("promise") or self.summary),
-            "train_hint": str(studio.get("train_hint") or ""),
+            "promise": promise,
+            "train_hint": train_hint,
             "blocked_hint": str(studio.get("blocked_hint") or ""),
             "scene_hint": str(studio.get("scene_hint") or ""),
             "record_hint": str(studio.get("record_hint") or ""),
@@ -94,11 +102,34 @@ def _validate_studio(recipe_id: str, data: dict[str, Any]) -> None:
         raise RecipeError(f"{recipe_id}: studio.availability must be cpu or gpu")
 
 
+def _playground_launch_configured(data: dict[str, Any]) -> bool:
+    adapters = data.get("adapters") or {}
+    pg = adapters.get("playground") or {}
+    if not isinstance(pg, dict) or pg.get("unsupported"):
+        return False
+    return bool(pg.get("env_name") or pg.get("train_command"))
+
+
+def _launch_here(recipe: Recipe, availability: str) -> bool:
+    """True when Train on this machine will launch, not merely compile-and-block.
+
+    CPU recipes always launch. GPU recipes launch only when Playground is
+    configured (not `unsupported`) and `hardware.playground_ready()`.
+    """
+    if availability == "cpu":
+        return True
+    if not _playground_launch_configured(recipe.data):
+        return False
+    from humanoid_training.hardware import playground_ready
+
+    return playground_ready()
+
+
 def public_catalog() -> dict[str, Any]:
     """Grouped recipe list. The studio projects this; it must not invent groups."""
     recipes = [r.as_public_dict() for r in list_recipes()]
-    ready = [r for r in recipes if r["availability"] == "cpu"]
-    later = [r for r in recipes if r["availability"] != "cpu"]
+    ready = [r for r in recipes if r["launch_here"]]
+    later = [r for r in recipes if not r["launch_here"]]
     return {
         "recipes": recipes,
         "ready": [r["id"] for r in ready],

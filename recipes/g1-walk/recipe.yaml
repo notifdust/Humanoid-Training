@@ -1,9 +1,9 @@
 id: g1-walk
-version: 0.1.0
-phase: 0
-runnable: false
+version: 0.2.0
+phase: 3
+runnable: true
 title: G1 walk (flat)
-summary: Unitree G1 velocity tracking on flat terrain. Compiles Playground / mjlab / Isaac Lab payloads; live train needs a GPU (blocked on CPU studio).
+summary: Unitree G1 velocity tracking on flat terrain. Launches MuJoCo Playground PPO when train-jax-ppo and an NVIDIA GPU are present; otherwise compiles payloads and blocks.
 language: Walk forward on flat ground without falling.
 robot: unitree-g1-29dof
 success:
@@ -38,11 +38,15 @@ adapters:
     unsupported: "Walking RL is not the CPU hold adapter. Use g1-stand for a MuJoCo preview, or playground for walk."
 gold:
   notes: |
-    Needs an NVIDIA GPU and either MuJoCo Playground (`pip install playground`)
-    or Isaac Lab. Phase 0 writes the engine payload; live training is Phase 1/3.
+    Needs an NVIDIA GPU and MuJoCo Playground (`pip install playground`).
+    Phase 3a launches `train-jax-ppo --env_name G1JoystickFlatTerrain` and
+    copies `rollout0.mp4` to `eval.mp4`. Do not check in gold/eval.mp4 —
+    a stand clip is not a walk.
 studio:
   availability: gpu
   start_here: false
   promise: Walking is not available on this computer.
+  ready_promise: Playground PPO on this GPU. The eval video should show the G1 walking, not standing still.
   train_hint: Walking is not available on this computer. Clicking Train writes GPU job files and stops. Use G1 stand to see the humanoid move here.
+  ready_hint: This computer can launch Playground. Train runs G1JoystickFlatTerrain PPO and should write a walking eval.mp4 — not a stand clip.
   blocked_hint: Needs MuJoCo Playground on a GPU box. Not a frozen walk clip.
