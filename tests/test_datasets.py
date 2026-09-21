@@ -159,6 +159,25 @@ def test_record_canvas_trajectory_reaches_bowl(tmp_path: Path) -> None:
     assert float(np.hypot(pos[0] - goal[0], pos[1] - goal[1])) <= radius
 
 
+def test_dense_teleop_style_trajectory_uses_same_lerobot_schema(tmp_path: Path) -> None:
+    """WASD/gamepad samples many small x/y steps. Same record_object_trajectories path."""
+    spec = _pick_spec()
+    mustard = spec["scene"]["objects"][0]
+    bowl = spec["scene"]["objects"][1]
+    n = 48
+    traj = [
+        {
+            "x": mustard["x"] + (i / (n - 1)) * (bowl["x"] - mustard["x"]),
+            "y": mustard["y"] + (i / (n - 1)) * (bowl["y"] - mustard["y"]),
+        }
+        for i in range(n)
+    ]
+    meta = record_object_trajectories(spec, tmp_path / "teleop", [traj])
+    assert meta["ok"] is True
+    assert meta["episodes"][0]["success"] is True
+    assert (tmp_path / "teleop" / "meta" / "info.json").is_file()
+
+
 def test_record_empty_trajectories_raises(tmp_path: Path) -> None:
     spec = _pick_spec()
     with pytest.raises(RecipeError, match="No canvas trajectories"):

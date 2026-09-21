@@ -69,5 +69,5 @@ studio:
   promise: Mustard slides into the bowl. The arm follows. Not finger grasping.
   train_hint: You will see the mustard move into the bowl and the G1 arm follow. That is a demo-following preview, not a grasping policy.
   scene_hint: Top-down kitchen counter. Drag mustard if you want. Train still works if you do not.
-  record_hint: Show the robot the task. Record mustard-into-bowl takes, uncheck the bad ones, then Train. Gamepad teleop is later. This is demonstration following, not finger grasping.
+  record_hint: Show the robot the task. Drag mustard, or steer with WASD / a gamepad, uncheck the bad takes, then Train. This is demonstration following, not finger grasping.
 

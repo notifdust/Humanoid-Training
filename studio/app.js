@@ -16,6 +16,11 @@ const state = {
   recording: false,
   pendingTrajectories: [],
   lastDemoMessage: "",
+  teleopRaf: 0,
+  teleopPath: null,
+  teleopOrigin: null,
+  teleopCommitLock: false,
+  keys: null,
 };
 
 const main = document.getElementById("main");
@@ -213,6 +218,8 @@ function clearDemoSession() {
   state.pendingTrajectories = [];
   state.recording = false;
   state.lastDemoMessage = "";
+  cancelTeleopTake();
+  stopTeleopLoop();
 }
 
 function rebindDatasetOntoStarter() {
@@ -329,7 +336,7 @@ function renderRecipe() {
           <button class="ghost" id="toggle-record">${state.recording ? "Stop recording" : "Record a demo"}</button>
           ${saveBtn}
         </div>
-        <p class="lede">${state.recording ? `Drag ${escapeHtml(objectLabel())}${recordContainerId() ? ` into the ${escapeHtml(recordContainerId())}` : ""}. Each release is one take.` : "Optional: record a take on the canvas, then Save, then Train."}</p>
+        <p class="lede">${state.recording ? `Drag ${escapeHtml(objectLabel())}${recordContainerId() ? ` into the ${escapeHtml(recordContainerId())}` : ""}, or steer with WASD / a gamepad. Space or gamepad (A) ends the take.` : "Optional: record a take on the canvas (drag, WASD, or gamepad), then Save, then Train."}</p>
         <p class="status" id="demo-status">${escapeHtml(state.lastDemoMessage || (nTakes ? `${nTakes} take(s) in memory` : ""))}</p>
         <p class="error" id="demo-error"></p>`
     : "";
@@ -369,9 +376,13 @@ function renderRecipe() {
   document.getElementById("back").addEventListener("click", () => switchView("tasks"));
   document.getElementById("apply-spec").addEventListener("click", applySpecEditor);
   document.getElementById("toggle-record")?.addEventListener("click", () => {
+    if (state.recording) {
+      if (state.teleopPath && state.teleopPath.length >= 2) finishTeleopTake({ rerender: false });
+      else cancelTeleopTake();
+    }
     state.recording = !state.recording;
     state.lastDemoMessage = state.recording
-      ? `recording — drag ${objectLabel()}${recordContainerId() ? ` into the ${recordContainerId()}` : ""}`
+      ? `recording — drag ${objectLabel()}${recordContainerId() ? ` into the ${recordContainerId()}` : ""}, or WASD / gamepad. Space ends the take.`
       : state.pendingTrajectories.length
         ? `${state.pendingTrajectories.length} take(s) in memory`
         : "";
@@ -386,6 +397,9 @@ function renderRecipe() {
     renderRecipe();
   });
   bindSceneDrag();
+  bindTeleopKeys();
+  if (state.recording) startTeleopLoop();
+  else stopTeleopLoop();
 }
 
 async function applySpecEditor() {
@@ -477,6 +491,166 @@ function bindSceneDrag() {
   });
 }
 
+function stickToTableDelta(ax, ay, dt) {
+  const dead = 0.18;
+  const nx = Math.abs(ax) < dead ? 0 : Number(ax) || 0;
+  const ny = Math.abs(ay) < dead ? 0 : Number(ay) || 0;
+  const speed = 0.55;
+  const step = Number(dt) || 0;
+  // Stick right → canvas right (+y). Stick up → canvas up (+x).
+  return { x: -ny * speed * step, y: nx * speed * step };
+}
+
+function keyTeleopDelta(keys, dt) {
+  const held = keys || new Set();
+  let ax = 0;
+  let ay = 0;
+  if (held.has("ArrowRight") || held.has("KeyD")) ax += 1;
+  if (held.has("ArrowLeft") || held.has("KeyA")) ax -= 1;
+  if (held.has("ArrowDown") || held.has("KeyS")) ay += 1;
+  if (held.has("ArrowUp") || held.has("KeyW")) ay -= 1;
+  return stickToTableDelta(ax, ay, dt);
+}
+
+function readGamepadStick() {
+  if (typeof navigator === "undefined" || !navigator.getGamepads) return null;
+  const pads = navigator.getGamepads();
+  for (let i = 0; i < pads.length; i += 1) {
+    const pad = pads[i];
+    if (!pad) continue;
+    return {
+      ax: Number(pad.axes && pad.axes[0]) || 0,
+      ay: Number(pad.axes && pad.axes[1]) || 0,
+      commit: Boolean(pad.buttons && pad.buttons[0] && pad.buttons[0].pressed),
+    };
+  }
+  return null;
+}
+
+function clampTablePoint(pt) {
+  return {
+    y: Math.max(-0.28, Math.min(0.28, Number(pt.y) || 0)),
+    x: Math.max(-0.36, Math.min(0.36, Number(pt.x) || 0)),
+  };
+}
+
+function mustardObject() {
+  const id = recordTargetId();
+  return (state.starter?.scene?.objects || []).find((item) => item.id === id) || null;
+}
+
+function stepTeleop(delta) {
+  const obj = mustardObject();
+  if (!obj) return;
+  if (!state.teleopPath) {
+    state.teleopOrigin = { x: Number(obj.x) || 0, y: Number(obj.y) || 0 };
+    state.teleopPath = [{ x: state.teleopOrigin.x, y: state.teleopOrigin.y }];
+  }
+  const next = clampTablePoint({
+    x: (Number(obj.x) || 0) + (Number(delta.x) || 0),
+    y: (Number(obj.y) || 0) + (Number(delta.y) || 0),
+  });
+  obj.x = next.x;
+  obj.y = next.y;
+  state.teleopPath.push(next);
+  const token = document.querySelector(`.token[data-id="${recordTargetId()}"]`);
+  if (token) applyTokenStyle(token, next);
+  const svg = document.getElementById("scene-trail");
+  if (svg) svg.innerHTML = trailPolylines(state.teleopPath);
+}
+
+function finishTeleopTake(opts) {
+  const rerender = !opts || opts.rerender !== false;
+  const path = state.teleopPath;
+  if (path && path.length >= 2) {
+    state.pendingTrajectories.push(path);
+    state.lastDemoMessage = `${state.pendingTrajectories.length} take(s) in memory`;
+  }
+  const obj = mustardObject();
+  if (obj && state.teleopOrigin) {
+    obj.x = state.teleopOrigin.x;
+    obj.y = state.teleopOrigin.y;
+  }
+  state.teleopPath = null;
+  state.teleopOrigin = null;
+  if (rerender) renderRecipe();
+}
+
+function cancelTeleopTake() {
+  const obj = mustardObject();
+  if (obj && state.teleopOrigin) {
+    obj.x = state.teleopOrigin.x;
+    obj.y = state.teleopOrigin.y;
+  }
+  state.teleopPath = null;
+  state.teleopOrigin = null;
+}
+
+function stopTeleopLoop() {
+  if (state.teleopRaf) {
+    cancelAnimationFrame(state.teleopRaf);
+    state.teleopRaf = 0;
+  }
+}
+
+function startTeleopLoop() {
+  stopTeleopLoop();
+  bindTeleopKeys();
+  let last = performance.now();
+  const tick = (now) => {
+    state.teleopRaf = requestAnimationFrame(tick);
+    if (!state.recording) return;
+    const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+    last = now;
+    const gp = readGamepadStick();
+    const fromKeys = keyTeleopDelta(state.keys || new Set(), dt);
+    const fromPad = gp ? stickToTableDelta(gp.ax, gp.ay, dt) : { x: 0, y: 0 };
+    const delta = { x: fromKeys.x + fromPad.x, y: fromKeys.y + fromPad.y };
+    if (Math.hypot(delta.x, delta.y) > 1e-8) stepTeleop(delta);
+    const commit = (state.keys && state.keys.has("Space")) || (gp && gp.commit);
+    if (commit && !state.teleopCommitLock) {
+      state.teleopCommitLock = true;
+      if (state.teleopPath && state.teleopPath.length >= 2) finishTeleopTake({ rerender: true });
+    } else if (!commit) {
+      state.teleopCommitLock = false;
+    }
+  };
+  state.teleopRaf = requestAnimationFrame(tick);
+}
+
+function bindTeleopKeys() {
+  if (state.teleopKeysBound) return;
+  state.teleopKeysBound = true;
+  state.keys = state.keys || new Set();
+  window.addEventListener("keydown", onTeleopKeyDown);
+  window.addEventListener("keyup", onTeleopKeyUp);
+}
+
+function onTeleopKeyDown(event) {
+  if (!state.recording) return;
+  if (event.target && /^(INPUT|TEXTAREA)$/.test(event.target.tagName)) return;
+  const codes = new Set([
+    "Space",
+    "KeyW",
+    "KeyA",
+    "KeyS",
+    "KeyD",
+    "ArrowUp",
+    "ArrowDown",
+    "ArrowLeft",
+    "ArrowRight",
+  ]);
+  if (!codes.has(event.code)) return;
+  event.preventDefault();
+  if (!state.keys) state.keys = new Set();
+  state.keys.add(event.code);
+}
+
+function onTeleopKeyUp(event) {
+  if (!state.keys) return;
+  state.keys.delete(event.code);
+}
+
 async function saveCanvasDemos() {
   const err = document.getElementById("demo-error");
   const status = document.getElementById("demo-status");
@@ -504,7 +678,7 @@ async function saveCanvasDemos() {
     }
     state.pendingTrajectories = [];
     state.recording = false;
-    state.lastDemoMessage = `wrote ${result.total_episodes} canvas demos → ${result.path || result.dest}`;
+    state.lastDemoMessage = `wrote ${result.total_episodes} demos → ${result.path || result.dest}`;
     renderRecipe();
   } catch (error) {
     if (err) err.textContent = error.message;
