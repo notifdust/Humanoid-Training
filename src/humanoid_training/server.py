@@ -181,6 +181,7 @@ def run_events(run_id: str):
                 "error": man.get("error"),
                 "artifacts": man.get("artifacts") or {},
                 "notes": man.get("notes") or [],
+                "facts": man.get("facts") or {},
             }
             yield f"data: {json.dumps(payload)}\n\n"
             if man.get("status") not in {None, "queued", "running"}:
@@ -230,6 +231,7 @@ def start_run(body: SpecBody) -> dict[str, Any]:
         "run_dir": str(run_dir),
         "error": None,
         "metrics": {},
+        "facts": {},
         "artifacts": {},
     }
     write_manifest(run_dir, queued)

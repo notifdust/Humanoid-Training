@@ -179,12 +179,15 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert '"cartpole-balance"' not in js
     assert "run.recipe === \"pick-and-place\"" not in js
     assert "function keepTrainSummary" in js
+    assert "function runFacts" in js
+    assert "id=\"open-imitate\"" in js
 
 
 def test_studio_js_bc_freshness_contract() -> None:
     """Runs UI must not stale-label honest linear-BC / keep_episodes notes."""
     js = (Path(__file__).resolve().parents[1] / "studio" / "app.js").read_text(encoding="utf-8")
     assert "function hasBcEvidence" in js
+    assert "function runFacts" in js
     assert 'notes.includes("linear BC")' in js
     assert "keep_episodes=" in js
     assert "arm_ik=on" in js

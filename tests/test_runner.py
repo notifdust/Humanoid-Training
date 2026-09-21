@@ -30,6 +30,8 @@ def test_cartpole_train_writes_video(tmp_path: Path) -> None:
     assert "eval.mp4" in manifest["artifacts"]
     assert "checkpoint.npz" in manifest["artifacts"]
     assert "train_returns.json" in manifest["artifacts"]
+    assert manifest.get("facts", {}).get("kind") == "rl"
+    assert "greedy_train_eval" in (manifest.get("facts") or {})
 
 
 def test_g1_walk_is_blocked_without_playground(tmp_path: Path) -> None:
@@ -83,6 +85,8 @@ def test_g1_stand_hold_mini_humanoid(tmp_path: Path) -> None:
     # mini_humanoid has no actuators — must not claim arm wave.
     assert "no actuators" in notes or "arm actuators not mapped" in notes
     assert "raise and wave" not in notes
+    assert (manifest.get("facts") or {}).get("kind") == "hold"
+    assert (manifest.get("facts") or {}).get("nu") == 0
 
 
 def test_pick_and_place_preview_composes_scene(tmp_path: Path) -> None:
@@ -149,6 +153,12 @@ def test_pick_and_place_imitation_puts_mustard_in_bowl(tmp_path: Path) -> None:
     notes = " ".join(manifest.get("notes") or [])
     assert "linear BC" in notes
     assert "mustard_bowl_dist" in notes
+    facts = manifest.get("facts") or {}
+    assert facts.get("kind") == "imitation"
+    assert facts.get("arm_mode")
+    assert facts.get("object") == "mustard"
+    assert facts.get("container") == "bowl"
+    assert "bc_steps" in facts
 
 
 def test_idle_stand_ctrl_raises_both_arms() -> None:
@@ -254,6 +264,8 @@ def test_pick_and_place_arm_fixture_moves_joints(tmp_path: Path) -> None:
     manifest = run_job(spec, runs_dir=tmp_path)
     notes = " ".join(manifest.get("notes") or [])
     assert "arm_mode=IK+BC" in notes, notes
+    assert (manifest.get("facts") or {}).get("arm_mode") == "IK+BC"
+    assert (manifest.get("facts") or {}).get("kind") == "imitation"
     log = (Path(manifest["run_dir"]) / "run.log").read_text(encoding="utf-8")
     assert "right-arm IK+BC" in log or "IK+BC" in log
     # Mini arm cannot reach mustard — must not silently pass as if BC ran.

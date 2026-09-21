@@ -42,6 +42,8 @@ class EvalResult:
     video_path: Path | None
     passed: bool
     notes: list[str] = field(default_factory=list)
+    # Machine-readable eval. The studio projects this; it must not scrape notes.
+    facts: dict[str, Any] = field(default_factory=dict)
 
 
 class Adapter(Protocol):

@@ -236,6 +236,15 @@ def _launch_hold(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: Any) -
         video_path=video_path,
         passed=passed,
         notes=notes,
+        facts={
+            "kind": "scene_preview"
+            if preview and success_type == "object-in-container"
+            else "hold",
+            "mean_pelvis_z": mean_z,
+            "arm_driven": bool(arm_driven),
+            "pinned": pin_base is not None,
+            "nu": int(model.nu),
+        },
     )
 
 
@@ -503,29 +512,35 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
     mean_z = float(np.mean(zs)) if zs else 0.0
     arm_mode = "playback+BC" if puppet else ("IK+BC" if use_arm else "mocap-BC")
     never_attached = bool(use_arm and grasp_step < 0)
+    container_id = str(success_cfg.get("container") or bowl.get("id") or "bowl")
     if never_attached:
         in_bowl = False
-        log("arm never attached — BC carry did not run; marking mustard-in-bowl failed")
+        log(
+            f"arm never attached — BC carry did not run; marking {obj_id}-in-{container_id} failed"
+        )
     passed = bool(in_bowl and stand_rate >= 0.9 and mean_z >= min_z and not never_attached)
     if arm_mode == "mocap-BC":
         lead = (
-            "mustard carry: linear BC on demos (mocap only) — no arm actuators; "
+            f"{obj_id} carry: linear BC on demos (mocap only) — no arm actuators; "
             "not finger grasping, not ACT"
         )
     elif arm_mode == "IK+BC":
         lead = (
-            "G1 arm: IK reach + linear BC mustard — mocap attach, not finger grasping, not ACT"
+            f"G1 arm: IK reach + linear BC {obj_id} — mocap attach, not finger grasping, not ACT"
         )
     else:
         lead = (
-            "G1 arm: pick pose playback; mustard carry: linear BC on demos — "
+            f"G1 arm: pick pose playback; {obj_id} carry: linear BC on demos — "
             "mocap, not finger grasping, not ACT"
         )
-    log(f"mustard-to-bowl dist={report_dist:.3f}m radius={radius:.3f}m in_bowl={in_bowl}")
+    log(
+        f"{obj_id}-to-{container_id} dist={report_dist:.3f}m radius={radius:.3f}m in_bowl={in_bowl}"
+    )
+    dist_note = f"{obj_id}_{container_id}_dist={report_dist:.3f}"
     notes = [
         lead,
         f"dataset={dataset_source} frames={len(obs)} keep_episodes={keep if keep is not None else 'all'} bc_steps={bc_steps}",
-        f"mustard_bowl_dist={report_dist:.3f}",
+        dist_note,
         f"mean_pelvis_z={mean_z:.3f}",
         f"arm_mode={arm_mode}",
         *(["pelvis pinned (no balance policy)"] if pin_base is not None else []),
@@ -541,4 +556,19 @@ def _launch_imitation(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: A
         video_path=video_path,
         passed=passed,
         notes=notes,
+        facts={
+            "kind": "imitation",
+            "arm_mode": arm_mode,
+            "bc_steps": int(bc_steps),
+            "frames": int(len(obs)),
+            "keep_episodes": keep if keep is not None else "all",
+            "dataset": dataset_source,
+            "object": obj_id,
+            "container": container_id,
+            "object_container_dist": report_dist,
+            "attach_step": int(grasp_step),
+            "placed_step": int(place_step),
+            "never_attached": never_attached,
+            "pinned": pin_base is not None,
+        },
     )
