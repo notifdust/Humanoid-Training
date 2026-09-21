@@ -79,8 +79,9 @@ def record_object_trajectories(
     dest: Path,
     trajectories: Sequence[Sequence[dict[str, Any]]],
 ) -> dict[str, Any]:
-    """Write a LeRobot dataset from canvas-drag paths in table-frame x/y.
+    """Write a LeRobot dataset from table-frame x/y paths.
 
+    Canvas drag, WASD, and gamepad sticks all send this same shape.
     Same observation/action schema as the scripted expert: world-xy mustard
     and bowl, action = delta. Not G1 grasping.
     """

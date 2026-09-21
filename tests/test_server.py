@@ -181,6 +181,10 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "function keepTrainSummary" in js
     assert "function runFacts" in js
     assert 'facts.runner === "docker"' in js
+    assert "function stickToTableDelta" in js
+    assert "function startTeleopLoop" in js
+    assert "function finishTeleopTake" in js
+    assert "function readGamepadStick" in js
     assert "id=\"open-imitate\"" in js
 
 
