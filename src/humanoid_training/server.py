@@ -69,7 +69,14 @@ def _find_run(run_id: str) -> Path:
 
 @app.get("/api/health")
 def health() -> dict[str, Any]:
-    return {"ok": True, "name": "humanoid-training", "version": __version__}
+    from humanoid_training.hardware import engine_status
+
+    return {
+        "ok": True,
+        "name": "humanoid-training",
+        "version": __version__,
+        "engines": engine_status(),
+    }
 
 
 @app.get("/api/robots")

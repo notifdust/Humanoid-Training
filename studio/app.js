@@ -40,7 +40,7 @@ async function api(path, options) {
 }
 
 function worksHere(recipe) {
-  return recipe && recipe.availability === "cpu";
+  return Boolean(recipe && recipe.launch_here);
 }
 
 function recipeById(id) {
@@ -74,6 +74,9 @@ function englishList(items) {
 }
 
 function pill(recipe) {
+  if (worksHere(recipe) && recipe.availability === "gpu") {
+    return `<span class="pill live">works on this GPU</span>`;
+  }
   if (worksHere(recipe)) return `<span class="pill live">works on this computer</span>`;
   if (recipe.availability === "gpu") return `<span class="pill blocked">needs a GPU — skip for now</span>`;
   return `<span class="pill blocked">later</span>`;
@@ -375,8 +378,8 @@ function renderRecipe() {
   const r = state.selected;
   const spec = state.expanded?.spec || state.starter;
   const hasScene = Boolean(spec?.scene?.objects?.length);
-  const cpu = worksHere(r);
-  const trainLabel = cpu ? "Train" : "Compile (will stop — needs GPU)";
+  const canLaunch = Boolean(r.launch_here);
+  const trainLabel = canLaunch ? "Train" : "Compile (will stop — needs GPU)";
   const hintText = r.train_hint || r.promise || r.summary || "";
   const trainHint = hintText ? `<p class="lede">${escapeHtml(hintText)}</p>` : "";
   const nTakes = state.pendingTrajectories.length;
@@ -1140,6 +1143,8 @@ function runDemoHint(run) {
   ) {
     bits.push("stale? re-train for BC");
   }
+  if (facts.engine) bits.push(facts.engine);
+  if (facts.device) bits.push(facts.device);
   if (facts.runner === "docker") bits.push("Docker");
   if (run.status === "blocked") {
     if (rec && rec.availability === "gpu") {
@@ -1199,7 +1204,17 @@ function englishRunStatus(run) {
   return run.status || "";
 }
 
+function backendBadge(facts) {
+  const parts = [];
+  if (facts.engine) parts.push(facts.engine);
+  if (facts.device) parts.push(facts.device);
+  if (facts.runner === "docker") parts.push("Docker");
+  if (!parts.length) return "";
+  return `<p class="meta" id="backend-badge">${escapeHtml(parts.join(" · "))}</p>`;
+}
+
 function paintRun(run, logText) {
+  const facts = runFacts(run);
   const video = run.artifacts && run.artifacts["eval.mp4"]
     ? `<video controls autoplay muted src="/api/runs/${run.run_id}/artifacts/eval.mp4?t=${Date.now()}"></video>`
     : `<p class="lede">${
@@ -1246,6 +1261,7 @@ function paintRun(run, logText) {
     <div class="detail">
       <section>
         <h2>Did it work?</h2>
+        ${backendBadge(facts)}
         ${video}
         ${scene}
       </section>

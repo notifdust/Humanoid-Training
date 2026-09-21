@@ -26,6 +26,16 @@ def test_cli_train_help_lists_docker(capsys: pytest.CaptureFixture[str]) -> None
     assert "--docker" in out
 
 
+def test_cli_docker_refuses_gpu_walk(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    spec = Path(__file__).resolve().parents[1] / "spec" / "examples" / "g1-walk.json"
+    assert main(["train", str(spec), "--docker", "--out", str(tmp_path)]) == 12
+    err = capsys.readouterr().err
+    assert "CPU Docker" in err
+    assert "g1-walk.json" in err
+
+
 def test_cli_docker_without_daemon_is_blocked(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

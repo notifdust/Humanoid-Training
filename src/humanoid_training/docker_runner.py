@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from humanoid_training.errors import AdapterUnavailable, repo_root
-from humanoid_training.recipes import expand_spec
+from humanoid_training.recipes import expand_spec, load_recipe
 from humanoid_training.runner import default_runs_dir, load_manifest, new_run_id, write_manifest
 from humanoid_training.spec import spec_hash
 
@@ -102,6 +102,37 @@ def ensure_image(image: str, log: LogFn | None = None) -> None:
         )
 
 
+def docker_gpu_requested() -> bool:
+    raw = os.environ.get("HT_DOCKER_GPU")
+    if raw is None:
+        return False
+    return raw.strip().lower() not in {"", "0", "false", "no", "off"}
+
+
+def _refuse_gpu_on_cpu_image(user_spec: dict[str, Any]) -> None:
+    """Phase 1 image is Cartpole / stand / pick-and-place. Walk needs a GPU image."""
+    if docker_gpu_requested():
+        return
+    recipe_id = (user_spec.get("task") or {}).get("recipe")
+    if not recipe_id:
+        return
+    recipe = load_recipe(str(recipe_id))
+    studio = recipe.data.get("studio") or {}
+    availability = str(studio.get("availability") or "").strip().lower()
+    runnable = bool(recipe.data.get("runnable", False))
+    if availability not in {"cpu", "gpu"}:
+        availability = "cpu" if runnable else "gpu"
+    if availability != "gpu":
+        return
+    raise AdapterUnavailable(
+        "GPU recipes cannot run on the Phase 1 CPU Docker image. "
+        "On a machine with an NVIDIA GPU, train in-process:\n"
+        "  ht train spec/examples/g1-walk.json\n"
+        "Set HT_DOCKER_GPU=1 only once a GPU image exists. "
+        "Cartpole, G1 stand, and pick-and-place still use ht train --docker."
+    )
+
+
 def run_job_via_docker(
     user_spec: dict[str, Any],
     runs_dir: Path | None = None,
@@ -110,6 +141,7 @@ def run_job_via_docker(
     run_id: str | None = None,
 ) -> dict[str, Any]:
     """Launch the same expand→compile→launch loop inside the CPU container."""
+    _refuse_gpu_on_cpu_image(user_spec)
     docker = docker_bin()
     if not docker:
         raise AdapterUnavailable(

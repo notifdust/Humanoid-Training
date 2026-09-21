@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from humanoid_training.recipes import expand_spec, list_recipes
 from humanoid_training.spec import load_spec
 
@@ -81,6 +83,23 @@ def test_recipe_catalog_is_the_studio_contract() -> None:
     assert by_id["g1-stand"]["has_gold"] is True
     assert by_id["pick-and-place"]["has_gold"] is True
     assert by_id["g1-walk"]["has_gold"] is False
+    assert by_id["g1-walk"]["launch_here"] is False
+    assert by_id["g1-reach"]["launch_here"] is False
+    assert by_id["cartpole-balance"]["launch_here"] is True
+
+
+def test_launch_here_walk_when_playground_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+    from humanoid_training.recipes import public_catalog
+
+    monkeypatch.setattr("humanoid_training.hardware.playground_ready", lambda: True)
+    catalog = public_catalog()
+    by_id = {r["id"]: r for r in catalog["recipes"]}
+    assert by_id["g1-walk"]["launch_here"] is True
+    assert by_id["g1-reach"]["launch_here"] is False
+    assert "g1-walk" in catalog["ready"]
+    assert "g1-reach" in catalog["later"]
+    assert "Playground" in by_id["g1-walk"]["promise"] or "walking" in by_id["g1-walk"]["promise"].lower()
+    assert "stand clip" in by_id["g1-walk"]["train_hint"]
 
 
 def test_recipes_module_does_not_hardcode_start_here_ids() -> None:

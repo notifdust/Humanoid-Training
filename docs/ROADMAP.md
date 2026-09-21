@@ -9,7 +9,8 @@ Phase 0  contract + one real train loop     ← done (Cartpole on CPU)
 Phase 1  studio shell (pick recipe → video) ← done (rooms + G1 stand + CPU Docker)
 Phase 2  demonstration data (LeRobot)       ← done with substitutions (linear-BC, not ACT)
 Phase 2.5 recipe gold + CI videos           ← done
-Phase 3  GPU engines (Playground, then Isaac)
+Phase 3a first real G1 walk (Playground)    ← launch path done (needs a GPU box for the walking clip)
+Phase 3b mjlab reach, then Isaac / OSMO
 Phase 4  real G1/H1 deploy with safety gates
 ```
 
@@ -26,8 +27,12 @@ A beginner on a laptop can:
 
 1. Open the studio (`./run-studio.sh` → http://127.0.0.1:8000).
 2. Train **Cartpole**, **G1 stand**, or **Pick and place** and play `eval.mp4`.
-3. Click **G1 walk** / **G1 reach** and get a blocked next step plus compiled
-   payloads — not a crash and not a frozen walk clip.
+3. Click **G1 walk** and get a blocked next step plus compiled
+   payloads — unless this machine has an NVIDIA GPU and
+   `train-jax-ppo` on PATH, in which case Train launches Playground PPO
+   and plays the engine's `rollout0.mp4` as `eval.mp4`.
+4. Click **G1 reach** and still get a blocked next step (mjlab / Isaac,
+   not Playground locomotion).
 
 The compiler contract holds: job spec → recipe expansion → adapter
 compile/launch → `manifest.json` with `facts` → studio projects those
@@ -39,7 +44,7 @@ the original names):
 
 | Vision asked for | What ships | What it is not |
 |---|---|---|
-| G1 walk train | Compile to Playground / mjlab / Isaac; launch blocked on CPU | Not walking, not a gold walk clip |
+| G1 walk train | Playground `train-jax-ppo` on a GPU box; blocked next step on CPU | Not a gold walk clip; not mjlab/Isaac yet |
 | ACT / diffusion | Linear-BC on LeRobot v2 JSONL; G1 arm pose playback | Not finger grasping, not ACT |
 | Gamepad teleop | Canvas drag, WASD, and a gamepad stick write the same table-frame takes | Not a Unitree XR / leader-arm stack |
 | Balance / locomotion RL | G1 stand holds a pinned pelvis and waves | Not walking, not a balance policy |
@@ -59,7 +64,7 @@ the original names):
 | Recipe packages + expansion (user spec overlays defaults) | done |
 | Adapter protocol: compile / launch / eval, fail closed | done |
 | `gymnasium` adapter: CartPole RL + eval video on CPU | done |
-| `playground` adapter: compile G1 walk to `G1JoystickFlatTerrain` | done (compile; launch blocked even if Playground is installed — GPU runner not wired) |
+| `playground` adapter: compile G1 walk to `G1JoystickFlatTerrain` | done (Phase 3a launches `train-jax-ppo` when GPU + CLI are present) |
 | `isaaclab` adapter: compile G1 walk to `Isaac-Velocity-Flat-G1-v0` | done (payload only) |
 | Local in-process runner + CLI `ht` | done |
 | Run manifest (spec hash, adapter, seed, metrics, `facts`) | done |
@@ -107,7 +112,7 @@ pass. ACT is **not** that exit test.
 | `cartpole-balance` | yes (CPU) | gymnasium | Pole stays up. Gold `eval.mp4` in-tree. |
 | `g1-stand` | yes (CPU) | mujoco + Menagerie G1 | Stand + both-arm wave, pelvis pinned. Gold clip. |
 | `pick-and-place` | yes (CPU) | mujoco + LeRobot demos | Mustard into bowl via linear-BC. Gold clip. |
-| `g1-walk` | compile only | playground / mjlab / isaaclab | Blocked until a GPU runner launches the payload. |
+| `g1-walk` | yes on GPU + Playground; blocked on CPU | playground / mjlab / isaaclab | Walking eval from Playground rollout. No gold clip. |
 | `g1-reach` | compile only | mjlab / isaaclab | Blocked. Playground mapping is a **locomotion placeholder** — do not call that a reach env. |
 | Unitree H1 | catalog only | — | No recipe. Do not add one until G1 walk trains for real. |
 
@@ -170,35 +175,42 @@ ht gold
 
 ---
 
-## Next — Phase 3a: first real G1 walk (Playground)
-
-This is the first item that matches the original vision’s "humanoid
-trains." It cannot be done by playing the stand clip faster.
+## Phase 3a — first real G1 walk (Playground) (launch path done)
 
 **Exit test.** On a machine with an NVIDIA GPU and
 `pip install playground`, `ht train spec/examples/g1-walk.json` launches
 (not merely compiles), writes `eval.mp4` of **walking**, stamps
 `facts.kind=rl` and `facts.engine=playground`, and the studio Plays
 that video with a backend badge. Without GPU / Playground, behavior
-stays today’s blocked next step.
+stays the blocked next step (compile payloads, exit 12).
 
-Work, in order:
+This repo's CI and the CPU studio **do not** have a GPU. The launch
+path is tested with a fake `train-jax-ppo` that writes `rollout0.mp4`.
+A live walking video is still the GPU-box proof. Do not check in a
+walk gold clip.
 
-1. **Split launch from eval.** `poll` / `eval` as separate adapter RPCs
-   are not built. In-process `launch` is enough for Cartpole; a 100k-step
-   PPO job is not. Submit → stream `run.log` (SSE already exists) →
-   harvest video when the process exits.
-2. **Run the payload that already compiles.** `train.sh` +
-   `train-jax-ppo --env_name G1JoystickFlatTerrain`. Today `PlaygroundAdapter.launch`
-   still raises even when Playground is installed, on purpose. Replace
-   that raise with a real subprocess on a GPU box. Copy the engine’s
-   eval clip into `eval.mp4`. Fail closed on missing CUDA / missing
-   binary — same sentence a beginner can act on.
-3. **Do not route GPU recipes onto the CPU Docker image.**
-   `backend.compute: local-docker` on walk/reach means a *future GPU
-   container*. The Phase 1 image is Cartpole / stand / pick-and-place.
-4. **Studio badge.** Project `facts.engine` / `facts.runner` ("playground ·
-   GPU") the same way Runs already projects `facts.runner=docker`.
+| Deliverable | Status |
+|---|---|
+| `PlaygroundAdapter.launch` runs `train-jax-ppo --env_name G1JoystickFlatTerrain` | done |
+| Stream stdout into `run.log`; write `job.json` | done |
+| Harvest `**/rollout*.mp4` → `eval.mp4`; fail closed if exit 0 and no clip | done |
+| `facts.kind=rl`, `facts.engine=playground`, `facts.device=gpu` | done |
+| Catalog `launch_here`; studio Train vs Compile and backend badge | done |
+| CPU Docker refuses GPU recipes (`HT_DOCKER_GPU=1` escape hatch) | done |
+| `g1-reach` must not launch walk (Playground mapping stays `unsupported`) | done |
+| No fake walk gold / stand-clip substitute | done |
+
+```bash
+# GPU box
+pip install playground
+ht train spec/examples/g1-walk.json
+# CPU laptop — still exit 12, payloads on disk
+ht train spec/examples/g1-walk.json
+# Do not:
+ht train spec/examples/g1-walk.json --docker   # refused (Phase 1 CPU image)
+```
+
+Host probes (no recipe ids): `HT_PLAYGROUND_GPU`, `HT_PLAYGROUND_CLI`.
 
 ---
 

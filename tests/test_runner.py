@@ -37,6 +37,8 @@ def test_cartpole_train_writes_video(tmp_path: Path) -> None:
 def test_g1_walk_is_blocked_without_playground(tmp_path: Path) -> None:
     spec = load_spec(Path(__file__).resolve().parents[1] / "spec" / "examples" / "g1-walk.json")
     manifest = run_job(spec, runs_dir=tmp_path)
+    spec = load_spec(Path(__file__).resolve().parents[1] / "spec" / "examples" / "g1-walk.json")
+    manifest = run_job(spec, runs_dir=tmp_path)
     assert manifest["status"] == "blocked"
     err = manifest["error"] or ""
     assert "Playground" in err
