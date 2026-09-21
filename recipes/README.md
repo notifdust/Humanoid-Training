@@ -14,6 +14,10 @@ blank reward function. See [ROADMAP.md](../docs/ROADMAP.md).
 Each folder is:
 
 ```
-recipe.yaml     # defaults, success, adapter maps
-gold/           # later: eval.mp4 + notes that CI should resemble
+recipe.yaml     # defaults, success, adapter maps, studio: UI contract
+gold/           # not checked in yet — Phase 2.5: eval.mp4 CI should resemble
 ```
+
+See [ROADMAP.md](../docs/ROADMAP.md) for what is live vs next (Playground
+walk launch, ACT, Isaac/OSMO). Do not add recipes that cannot train or
+honestly block.
