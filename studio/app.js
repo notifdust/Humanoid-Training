@@ -299,7 +299,7 @@ function sceneHTML(spec) {
   return `
     <h2>Scene</h2>
     <p class="lede">${escapeHtml(sceneLede)}</p>
-    <div class="canvas-wrap${state.recording ? " recording" : ""}" id="scene-canvas">
+    <div class="canvas-wrap${state.recording ? " recording" : ""}" id="scene-canvas" tabindex="0">
       <svg class="trail" id="scene-trail" viewBox="0 0 100 100" preserveAspectRatio="none">${trailPolylines()}</svg>
       <span class="canvas-label">${escapeHtml(spec.scene.template || "scene")}</span>
       <span class="robot-mark">G1</span>
@@ -622,8 +622,8 @@ function bindTeleopKeys() {
   if (state.teleopKeysBound) return;
   state.teleopKeysBound = true;
   state.keys = state.keys || new Set();
-  window.addEventListener("keydown", onTeleopKeyDown);
-  window.addEventListener("keyup", onTeleopKeyUp);
+  window.addEventListener("keydown", onTeleopKeyDown, true);
+  window.addEventListener("keyup", onTeleopKeyUp, true);
 }
 
 function onTeleopKeyDown(event) {
@@ -642,12 +642,21 @@ function onTeleopKeyDown(event) {
   ]);
   if (!codes.has(event.code)) return;
   event.preventDefault();
+  if (event.target && event.target.tagName === "BUTTON") event.target.blur();
   if (!state.keys) state.keys = new Set();
+  const first = !state.keys.has(event.code);
   state.keys.add(event.code);
+  if (event.code === "Space") {
+    if (state.teleopPath && state.teleopPath.length >= 2) finishTeleopTake({ rerender: true });
+    return;
+  }
+  // One sample per keydown so a take still records if rAF is throttled.
+  if (first) stepTeleop(keyTeleopDelta(new Set([event.code]), 1 / 30));
 }
 
 function onTeleopKeyUp(event) {
   if (!state.keys) return;
+  if (state.recording && event.code === "Space") event.preventDefault();
   state.keys.delete(event.code);
 }
 
@@ -670,15 +679,16 @@ async function saveCanvasDemos() {
     state.starter.data.datasets = [result.path || result.dest];
     state.datasetUri = result.path || result.dest;
     state.dataset = result;
-    state.keepEpisodes = (result.episodes || [])
-      .filter((ep) => ep.success !== false)
-      .map((ep) => ep.episode_index);
-    if (state.dataset && state.dataset.ok) {
+    // User-recorded takes: keep all by default. Auto-dropping misses left
+    // keep_episodes=[] which Train refuses. Uncheck misses in Data.
+    state.keepEpisodes = (result.episodes || []).map((ep) => ep.episode_index);
+    if (state.keepEpisodes.length) {
       state.starter.data.keep_episodes = state.keepEpisodes;
     }
     state.pendingTrajectories = [];
     state.recording = false;
-    state.lastDemoMessage = `wrote ${result.total_episodes} demos → ${result.path || result.dest}`;
+    const n = result.total_episodes;
+    state.lastDemoMessage = `wrote ${n} demo${n === 1 ? "" : "s"} → ${result.path || result.dest}`;
     renderRecipe();
   } catch (error) {
     if (err) err.textContent = error.message;
