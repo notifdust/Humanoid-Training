@@ -33,6 +33,7 @@ adapters:
     task: Isaac-Velocity-Flat-G1-v0
     unsupported: "Stand preview runs on CPU MuJoCo. Use g1-walk for Isaac Lab locomotion."
 gold:
+  clip: eval.mp4
   notes: |
     First run downloads Unitree G1 from MuJoCo Menagerie (~30MB).
     Success is pelvis height while holding the stand keyframe. Both arms

@@ -77,6 +77,10 @@ def test_recipe_catalog_is_the_studio_contract() -> None:
     assert set(catalog["ready"]) == {"cartpole-balance", "g1-stand", "pick-and-place"}
     assert set(catalog["later"]) == {"g1-walk", "g1-reach"}
     assert set(catalog["start_here"]) == {"cartpole-balance", "g1-stand", "pick-and-place"}
+    assert by_id["cartpole-balance"]["has_gold"] is True
+    assert by_id["g1-stand"]["has_gold"] is True
+    assert by_id["pick-and-place"]["has_gold"] is True
+    assert by_id["g1-walk"]["has_gold"] is False
 
 
 def test_recipes_module_does_not_hardcode_start_here_ids() -> None:

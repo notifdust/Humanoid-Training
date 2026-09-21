@@ -15,9 +15,9 @@ Each folder is:
 
 ```
 recipe.yaml     # defaults, success, adapter maps, studio: UI contract
-gold/           # not checked in yet — Phase 2.5: eval.mp4 CI should resemble
+gold/           # eval.mp4 + notes.md for CPU recipes; CI retrains and compares
 ```
 
-See [ROADMAP.md](../docs/ROADMAP.md) for what is live vs next (Playground
-walk launch, ACT, Isaac/OSMO). Do not add recipes that cannot train or
-honestly block.
+See [ROADMAP.md](../docs/ROADMAP.md). Do not add a gold clip on a GPU
+recipe (that would look like a fake walk). Do not add recipes that
+cannot train or honestly block.

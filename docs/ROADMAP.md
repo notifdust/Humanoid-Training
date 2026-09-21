@@ -8,7 +8,7 @@ phase is not done, even if the UI looks finished.
 Phase 0  contract + one real train loop     ← done (Cartpole on CPU)
 Phase 1  studio shell (pick recipe → video) ← done (rooms + G1 stand + CPU Docker)
 Phase 2  demonstration data (LeRobot)       ← done with substitutions (linear-BC, not ACT)
-Phase 2.5 recipe gold + CI videos           ← next CPU-safe work
+Phase 2.5 recipe gold + CI videos           ← done
 Phase 3  GPU engines (Playground, then Isaac)
 Phase 4  real G1/H1 deploy with safety gates
 ```
@@ -104,16 +104,17 @@ pass. ACT is **not** that exit test.
 
 | Recipe | Runnable today | Engine | Honest result |
 |---|---|---|---|
-| `cartpole-balance` | yes (CPU) | gymnasium | Pole stays up. Proof Train → video. |
-| `g1-stand` | yes (CPU) | mujoco + Menagerie G1 | Stand + both-arm wave, pelvis pinned. |
-| `pick-and-place` | yes (CPU) | mujoco + LeRobot demos | Mustard into bowl via linear-BC; arm follows. |
+| `cartpole-balance` | yes (CPU) | gymnasium | Pole stays up. Gold `eval.mp4` in-tree. |
+| `g1-stand` | yes (CPU) | mujoco + Menagerie G1 | Stand + both-arm wave, pelvis pinned. Gold clip. |
+| `pick-and-place` | yes (CPU) | mujoco + LeRobot demos | Mustard into bowl via linear-BC. Gold clip. |
 | `g1-walk` | compile only | playground / mjlab / isaaclab | Blocked until a GPU runner launches the payload. |
 | `g1-reach` | compile only | mjlab / isaaclab | Blocked. Playground mapping is a **locomotion placeholder** — do not call that a reach env. |
 | Unitree H1 | catalog only | — | No recipe. Do not add one until G1 walk trains for real. |
 
-Gold notes live in each `recipe.yaml`. There is **no** `recipes/<id>/gold/eval.mp4`
-and CI (`HT_NO_RENDER=1`) does not require a video. That is the first
-gap that is still CPU-safe to close.
+Gold notes live in each `recipe.yaml`. CPU recipes also ship
+`gold/eval.mp4` + `gold/notes.md`. CI’s `gold` job retrains those recipes
+under xvfb and compares decoded frames to the checked-in clip. GPU
+recipes must not check in a success video.
 
 ---
 
@@ -143,32 +144,29 @@ It did not.
 
 ---
 
-## Next — Phase 2.5: pin the CPU library
+## Phase 2.5 — Gold clips + CI video (done)
 
-This is the only remaining work that does **not** need a GPU. Do it
-before adding rooms or robots.
+**Exit test (met).** Every `availability: cpu` recipe has `gold/eval.mp4`
+and `gold/notes.md`. `pytest` probes those files. The GitHub `gold` job
+runs `xvfb-run pytest -m gold`, which retrains each CPU recipe and
+fails if the new `eval.mp4` does not coarsely match gold (duration +
+downscaled frames — not a byte hash, not a learned judge). GPU recipes
+have no success clip.
 
-1. **Gold clips.** Check in `recipes/cartpole-balance/gold/eval.mp4`,
-   `recipes/g1-stand/gold/eval.mp4`, `recipes/pick-and-place/gold/eval.mp4`
-   plus a one-line `notes.md`. These *are* the product.
-2. **CI that can see a video.** Today GitHub Actions sets `HT_NO_RENDER=1`
-   so MuJoCo never builds a GLFW renderer (that would abort). Gymnasium
-   still writes Cartpole `eval.mp4`. Next job: `xvfb-run` (or a display)
-   for the three CPU recipes, assert `eval.mp4` exists, later compare
-   against gold (hash or a coarse frame check — not a learned judge).
-3. **Keep the catalog/`facts` contract.** New copy, grouping, or run
-   badges still come from `recipe.yaml` `studio:` and `EvalResult.facts`.
-   Do not hardcode recipe ids in `studio/app.js`.
-4. **Do not expand the robot catalog.** H1 stays listed. No new humanoid
-   until G1 walk is a launched train.
+| Deliverable | Status |
+|---|---|
+| `recipes/<id>/gold/eval.mp4` + `notes.md` for CPU recipes | done |
+| `ht gold` to regenerate clips from the beginner spec | done |
+| Catalog `has_gold`; studio plays the clip on the task page | done |
+| CI xvfb job retrains and compares frames | done |
+| GPU recipes must not ship a fake walk clip | done (test) |
 
-Optional CPU polish (only if it removes a lie):
+Regenerate clips after a CPU recipe’s eval changes:
 
-- Empty keep, miss-take copy, append-Save, Space-release, G1 filter
-  keeping `start_here` — already tested; do not regress.
-- Favicon 404 is noise; ignore it.
-- Gymnasium ignoring `HT_NO_RENDER` is why Cartpole video exists in CI.
-  Leave it unless you add an xvfb job and then make the flag consistent.
+```bash
+unset HT_NO_RENDER
+ht gold
+```
 
 ---
 

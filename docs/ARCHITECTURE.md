@@ -89,8 +89,10 @@ means launch will **block** here with a next step (compile payloads,
 no fake walk clip). `start_here` defaults to `availability == cpu` when
 omitted.
 
-Gold notes stay in `recipe.yaml` until `gold/eval.mp4` is CI
-(Phase 2.5 in [ROADMAP.md](./ROADMAP.md)).
+Gold clips live in `recipes/<id>/gold/eval.mp4` for `availability: cpu`
+recipes. CI’s xvfb job retrains and compares frames. GPU recipes must
+not check in a success clip. The studio projects `has_gold` from that
+file; see [ROADMAP.md](./ROADMAP.md) Phase 2.5.
 
 ---
 
@@ -222,9 +224,11 @@ src/humanoid_training/
     mujoco_control.py      # poses / IK
   runner.py                # in-process job
   docker_runner.py         # Phase 1 CPU `ht train --docker`
+  gold.py                  # gold/eval.mp4 record + coarse compare
   server.py                # studio API
 spec/                      # schema + examples
 recipes/<id>/recipe.yaml   # defaults + studio contract
+recipes/<id>/gold/         # eval.mp4 + notes.md (CPU recipes)
 robots/catalog.yaml
 ```
 

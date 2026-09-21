@@ -112,6 +112,26 @@ def recipes() -> dict[str, Any]:
     return public_catalog()
 
 
+@app.get("/api/recipes/{recipe_id}/gold/{name}")
+def recipe_gold(recipe_id: str, name: str):
+    from humanoid_training.gold import GOLD_FILES, gold_dir
+
+    if name not in GOLD_FILES:
+        raise HTTPException(status_code=400, detail="Unknown gold file")
+    try:
+        recipe = load_recipe(recipe_id)
+    except RecipeError as err:
+        raise HTTPException(status_code=404, detail=str(err)) from err
+    path = gold_dir(recipe) / name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail=f"{recipe_id} has no gold/{name}")
+    if name.endswith(".mp4"):
+        media = "video/mp4"
+    else:
+        media = "text/plain; charset=utf-8"
+    return FileResponse(path, media_type=media, filename=name)
+
+
 @app.get("/api/recipes/{recipe_id}")
 def recipe_detail(recipe_id: str) -> dict[str, Any]:
     try:
