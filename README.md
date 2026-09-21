@@ -76,11 +76,11 @@ Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
 
 | Recipe | What happens |
 |---|---|
-| `cartpole-balance` | Gymnasium RL on CPU, eval video |
-| `g1-stand` | MuJoCo G1 from Menagerie, stand + both-arm wave, eval video |
+| `cartpole-balance` | Gymnasium RL on CPU, eval video, gold clip |
+| `g1-stand` | MuJoCo G1 from Menagerie, stand + both-arm wave, eval video, gold clip |
 | `g1-walk` | Compile to Playground / mjlab / Isaac Lab (GPU to launch) |
 | `g1-reach` | Compile to mjlab / Isaac Lab |
-| `pick-and-place` | Demos → linear BC steers mustard; G1 arm plays pick/lift/place. Not finger grasping, not ACT. |
+| `pick-and-place` | Demos → linear BC steers mustard; G1 arm plays pick/lift/place. Gold clip. Not finger grasping, not ACT. |
 
 ## Non-goals (for now)
 
@@ -93,6 +93,8 @@ Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
 
 ```bash
 pytest
+# Retrain CPU recipes and compare eval.mp4 to gold clips (needs ffmpeg + a display or xvfb):
+# HT_GOLD=1 xvfb-run -a pytest -m gold
 ```
 
 ## License

@@ -21,6 +21,16 @@ def test_health_and_recipes() -> None:
     assert "g1-walk" in ids
     assert "cartpole-balance" in catalog["ready"]
     assert "g1-walk" in catalog["later"]
+    by_id = {r["id"]: r for r in recipes}
+    assert by_id["cartpole-balance"]["has_gold"] is True
+    assert by_id["g1-walk"]["has_gold"] is False
+    gold = client.get("/api/recipes/cartpole-balance/gold/eval.mp4")
+    assert gold.status_code == 200
+    assert gold.headers["content-type"].startswith("video/")
+    missing = client.get("/api/recipes/g1-walk/gold/eval.mp4")
+    assert missing.status_code == 404
+    bad = client.get("/api/recipes/cartpole-balance/gold/secret.bin")
+    assert bad.status_code == 400
     page = client.get("/")
     assert page.status_code == 200
     assert "Humanoid Training" in page.text
@@ -228,6 +238,8 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "teleopNeedRelease" in js
     assert "r.start_here" in js
     assert "id=\"open-imitate\"" in js
+    assert "r.has_gold" in js
+    assert "/gold/eval.mp4" in js
 
 
 def test_studio_js_bc_freshness_contract() -> None:

@@ -285,6 +285,13 @@ video {
   border: 1px solid var(--line);
 }
 
+video.gold {
+  max-height: 280px;
+  width: auto;
+  max-width: 100%;
+  display: block;
+}
+
 .error {
   color: var(--bad);
   white-space: pre-wrap;

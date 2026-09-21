@@ -408,6 +408,10 @@ function renderRecipe() {
         <p class="status" id="train-status"></p>
         <p class="error" id="train-error"></p>
         ${trainHint}
+        ${r.has_gold
+          ? `<video class="gold" controls muted playsinline src="/api/recipes/${encodeURIComponent(r.id)}/gold/eval.mp4"></video>
+             <p class="meta">Gold clip — what Train should look like on this computer.</p>`
+          : ""}
         ${boundHint}
         ${demoControls}
         ${sceneHTML(spec)}

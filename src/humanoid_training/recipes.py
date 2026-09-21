@@ -55,6 +55,7 @@ class Recipe:
             "blocked_hint": str(studio.get("blocked_hint") or ""),
             "scene_hint": str(studio.get("scene_hint") or ""),
             "record_hint": str(studio.get("record_hint") or ""),
+            "has_gold": (self.path / "gold" / "eval.mp4").is_file(),
             "has_scene": bool(self.data.get("scene")),
             "scene_preview": bool(
                 ((self.data.get("adapters") or {}).get("mujoco") or {}).get("scene_preview")

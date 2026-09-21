@@ -58,6 +58,7 @@ adapters:
     policy: act
     unsupported: "Full ACT needs the lerobot package and a GPU. CPU linear-BC runs on the mujoco adapter from the same LeRobot dataset."
 gold:
+  clip: eval.mp4
   notes: |
     Demos (scripted or canvas) fit linear BC. Eval: G1 reaches with a pick
     pose, then BC moves the mocap mustard toward the bowl while the arm

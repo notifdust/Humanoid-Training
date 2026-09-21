@@ -55,6 +55,23 @@ def main(argv: list[str] | None = None) -> int:
     p_record.add_argument("--episodes", type=int, default=4)
     p_record.add_argument("--include-failure", action="store_true")
 
+    p_gold = sub.add_parser(
+        "gold",
+        help="Record gold/eval.mp4 for CPU recipes (what Train should look like)",
+    )
+    p_gold.add_argument(
+        "recipe",
+        nargs="?",
+        default=None,
+        help="Recipe id. Omit to record every availability:cpu recipe.",
+    )
+    p_gold.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Write under this directory instead of recipes/<id>/gold",
+    )
+
     args = parser.parse_args(argv)
     try:
         if args.cmd == "recipes":
@@ -73,6 +90,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_fetch(args.robot)
         if args.cmd == "record":
             return _cmd_record(args.spec, args.out, args.episodes, args.include_failure)
+        if args.cmd == "gold":
+            return _cmd_gold(args.recipe, args.out)
     except (SpecError, RecipeError, AdapterError, FileNotFoundError) as err:
         print(err, file=sys.stderr)
         return 2
@@ -171,6 +190,23 @@ def _cmd_record(path: str, out: Path, episodes: int, include_failure: bool) -> i
     )
     print(json.dumps({k: result.get(k) for k in ("ok", "path", "total_episodes", "total_frames", "format")}, indent=2))
     return 0 if result.get("ok") else 1
+
+
+def _cmd_gold(recipe_id: str | None, out: Path | None) -> int:
+    from humanoid_training.gold import cpu_recipes, record_all_gold, record_gold
+
+    try:
+        if recipe_id:
+            rows = [record_gold(recipe_id, dest_root=out, log=print)]
+        else:
+            ids = ", ".join(r.id for r in cpu_recipes()) or "(none)"
+            print(f"recording gold clips for: {ids}")
+            rows = record_all_gold(dest_root=out, log=print)
+    except AdapterUnavailable as err:
+        print(err, file=sys.stderr)
+        return 12
+    print(json.dumps(rows, indent=2, default=str))
+    return 0 if rows and all(r.get("ok") for r in rows) else 1
 
 
 def _cmd_serve(host: str, port: int) -> int:
