@@ -301,6 +301,11 @@ video {
   overflow: hidden;
 }
 
+.canvas-wrap:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .canvas-label {
   position: absolute;
   left: 10px;
