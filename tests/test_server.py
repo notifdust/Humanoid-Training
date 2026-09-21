@@ -225,6 +225,7 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "function readGamepadStick" in js
     assert "function demoSaveSummary" in js
     assert "function boundDemoHint" in js
+    assert "teleopNeedRelease" in js
     assert "r.start_here" in js
     assert "id=\"open-imitate\"" in js
 
