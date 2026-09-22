@@ -13,7 +13,7 @@ Phase 3a  first real G1 walk (Playground)    ← launch path done
 Phase 3b  mjlab / Isaac G1 walk + OSMO       ← launch path done (no G1 reach env upstream)
 Phase 3c  GPU-box walk proof                 ← next (`ht proof walk`; live clip still needs a GPU)
 Phase 3d  remote harvest (OSMO / GPU queue)  ← launch path done (needs OSMO pool for live proof)
-Phase 3e  ACT on the same demos
+Phase 3e  ACT on the same demos                 ← launch path done (needs GPU for live ACT)
 Phase 3f  honest G1 manipulation recipe
 Phase 3g  compare two runs in Runs
 Phase 4   real G1/H1 deploy with safety gates
@@ -51,7 +51,7 @@ the original names):
 | Vision asked for | What ships | What it is not |
 |---|---|---|
 | G1 walk train | Playground / mjlab / Isaac Lab on a GPU box; blocked next step on CPU | Not a gold walk clip |
-| ACT / diffusion | Linear-BC on LeRobot v2 JSONL; G1 arm pose playback | Not finger grasping, not ACT |
+| ACT / diffusion | ACT on LeRobot demos when GPU + `lerobot` ready; else linear-BC on mujoco | Not finger grasping; not live ACT on a CPU laptop |
 | Gamepad teleop | Canvas drag, WASD, and a gamepad stick write the same table-frame takes | Not a Unitree XR / leader-arm stack |
 | Balance / locomotion RL | G1 stand holds a pinned pelvis and waves | Not walking, not a balance policy |
 | Isaac / OSMO job | Local isaaclab.sh / GPU Docker, or OSMO submit→poll→rsync harvest | Not a silent Isaac success without a clip |

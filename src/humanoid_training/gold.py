@@ -295,6 +295,8 @@ def _notes_text(recipe: Recipe, manifest: dict[str, Any]) -> str:
     extra = []
     if kind:
         extra.append(f"kind={kind}")
+    if facts.get("policy"):
+        extra.append(f"policy={facts['policy']}")
     if facts.get("arm_mode"):
         extra.append(f"arm_mode={facts['arm_mode']}")
     passed = (manifest.get("metrics") or {}).get("passed")
