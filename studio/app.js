@@ -1216,7 +1216,7 @@ function paintCompareColumn(run) {
         : run.status || "";
   const video =
     run.artifacts && run.artifacts["eval.mp4"]
-      ? `<video controls muted src="/api/runs/${run.run_id}/artifacts/eval.mp4"></video>`
+      ? `<video controls muted src="${runArtifactUrl(run.run_id, "eval.mp4")}"></video>`
       : `<p class="lede">No eval video.</p>`;
   const metrics =
     run.metrics && run.metrics.eval_episodes != null
@@ -1294,13 +1294,13 @@ function renderRuns() {
       const checked = (state.compareIds || []).includes(run.run_id) ? "checked" : "";
       return `
       <li>
-        <div class="run-row" data-run="${run.run_id}">
-          <label class="run-check" data-compare-toggle="${run.run_id}">
+        <div class="run-row" data-run="${escapeHtml(run.run_id)}">
+          <label class="run-check" data-compare-toggle="${escapeHtml(run.run_id)}">
             <input type="checkbox" ${checked} aria-label="Select for compare" />
           </label>
           <div class="run-main">
             <strong>${escapeHtml(prettyRecipe(run.recipe))}</strong>
-            <div class="meta">${run.run_id}${run.artifacts && run.artifacts["eval.mp4"] ? " · eval.mp4" : ""}${hint}${failedHint}</div>
+            <div class="meta">${escapeHtml(run.run_id)}${run.artifacts && run.artifacts["eval.mp4"] ? " · eval.mp4" : ""}${hint}${failedHint}</div>
           </div>
           <div class="status ${statusClass}">${englishRunStatus(run)}</div>
         </div>
@@ -1358,7 +1358,7 @@ function backendBadge(facts) {
 function paintRun(run, logText) {
   const facts = runFacts(run);
   const video = run.artifacts && run.artifacts["eval.mp4"]
-    ? `<video controls autoplay muted src="/api/runs/${run.run_id}/artifacts/eval.mp4?t=${Date.now()}"></video>`
+    ? `<video controls autoplay muted src="${runArtifactUrl(run.run_id, "eval.mp4")}?t=${Date.now()}"></video>`
     : `<p class="lede">${
         run.status === "blocked"
           ? "No video — this task cannot train on this computer."
@@ -1367,7 +1367,7 @@ function paintRun(run, logText) {
             : "No eval video. On a machine without a display, Train still scores success but skips the clip."
       }</p>`;
   const scene = run.artifacts && run.artifacts["composed_scene.xml"]
-    ? `<p class="lede"><a href="/api/runs/${run.run_id}/artifacts/composed_scene.xml">Scene file</a> — open in MuJoCo if you want.</p>`
+    ? `<p class="lede"><a href="${runArtifactUrl(run.run_id, "composed_scene.xml")}">Scene file</a> — open in MuJoCo if you want.</p>`
     : "";
   const notes = (run.notes || []).map((n) => escapeHtml(n)).join(" · ");
   const hasMetrics = run.metrics && run.metrics.eval_episodes != null;
@@ -1498,7 +1498,13 @@ function escapeHtml(text) {
   return String(text)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function runArtifactUrl(runId, name) {
+  return `/api/runs/${encodeURIComponent(String(runId))}/artifacts/${encodeURIComponent(String(name))}`;
 }
 
 function stopPoll() {

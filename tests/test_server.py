@@ -255,6 +255,9 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "function toggleCompareId" in js
     assert "function renderCompare" in js
     assert "function factsListHTML" in js
+    assert "function runArtifactUrl" in js
+    assert "encodeURIComponent" in js
+    assert "&quot;" in js
     assert "id=\"compare-runs\"" in js
     assert "compare-grid" in js
     assert "Pick two runs of the same task." in js
