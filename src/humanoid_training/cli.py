@@ -72,6 +72,26 @@ def main(argv: list[str] | None = None) -> int:
         help="Write under this directory instead of recipes/<id>/gold",
     )
 
+    p_proof = sub.add_parser(
+        "proof",
+        help="Phase 3c: run a short G1 walk on this GPU and require eval.mp4",
+    )
+    p_proof.add_argument(
+        "what",
+        nargs="?",
+        default="walk",
+        choices=["walk"],
+        help="What to prove (only walk today)",
+    )
+    p_proof.add_argument(
+        "--prefer",
+        nargs="+",
+        default=None,
+        help="Engine order, e.g. mjlab isaaclab playground",
+    )
+    p_proof.add_argument("--steps", type=int, default=None, help="Override train steps (default: short proof)")
+    p_proof.add_argument("--out", type=Path, default=None, help="Runs directory")
+
     args = parser.parse_args(argv)
     try:
         if args.cmd == "recipes":
@@ -92,6 +112,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_record(args.spec, args.out, args.episodes, args.include_failure)
         if args.cmd == "gold":
             return _cmd_gold(args.recipe, args.out)
+        if args.cmd == "proof":
+            return _cmd_proof(args.what, args.prefer, args.steps, args.out)
     except (SpecError, RecipeError, AdapterError, FileNotFoundError) as err:
         print(err, file=sys.stderr)
         return 2
@@ -207,6 +229,31 @@ def _cmd_gold(recipe_id: str | None, out: Path | None) -> int:
         return 12
     print(json.dumps(rows, indent=2, default=str))
     return 0 if rows and all(r.get("ok") for r in rows) else 1
+
+
+def _cmd_proof(
+    what: str,
+    prefer: list[str] | None,
+    steps: int | None,
+    out: Path | None,
+) -> int:
+    from humanoid_training.proof import PROOF_STEPS, run_walk_proof
+
+    if what != "walk":
+        print(f"Unknown proof target {what!r}. Use: ht proof walk", file=sys.stderr)
+        return 2
+    try:
+        report = run_walk_proof(
+            runs_dir=out or default_runs_dir(),
+            prefer=prefer,
+            steps=int(steps) if steps is not None else PROOF_STEPS,
+            log=print,
+        )
+    except AdapterUnavailable as err:
+        print(err, file=sys.stderr)
+        return 12
+    print(json.dumps(report, indent=2, default=str))
+    return 0 if report.get("ok") else 1
 
 
 def _cmd_serve(host: str, port: int) -> int:
