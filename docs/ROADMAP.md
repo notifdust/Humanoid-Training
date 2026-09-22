@@ -14,7 +14,7 @@ Phase 3b  mjlab / Isaac G1 walk + OSMO       ← launch path done (no G1 reach e
 Phase 3c  GPU-box walk proof                 ← next (`ht proof walk`; live clip still needs a GPU)
 Phase 3d  remote harvest (OSMO / GPU queue)  ← launch path done (needs OSMO pool for live proof)
 Phase 3e  ACT on the same demos                 ← launch path done (needs GPU for live ACT)
-Phase 3f  honest G1 manipulation recipe
+Phase 3f  honest G1 manipulation recipe     ← done (deleted dishonest g1-reach)
 Phase 3g  compare two runs in Runs
 Phase 4   real G1/H1 deploy with safety gates
 ```
@@ -37,8 +37,9 @@ A beginner on a laptop can:
    engine (Playground `train-jax-ppo`, mjlab, or Isaac Lab
    `isaaclab.sh` / GPU Docker), in which case Train launches that
    engine and plays its eval clip.
-4. Click **G1 reach** and still get a blocked next step: there is
-   no G1 reach environment in Playground, mjlab, or Isaac Lab.
+
+There is no **G1 reach** recipe. No upstream G1 reach env exists; the
+CPU arm preview is **Pick and place**.
 
 The compiler contract holds: job spec → recipe expansion → adapter
 compile/launch → `manifest.json` with `facts` → studio projects those
@@ -120,8 +121,11 @@ pass. ACT is **not** that exit test.
 | `g1-stand` | yes (CPU) | mujoco + Menagerie G1 | Stand + both-arm wave, pelvis pinned. Gold clip. |
 | `pick-and-place` | yes (CPU linear-BC; ACT on GPU+LeRobot) | lerobot / mujoco | Same demos. `facts.policy=act` or `linear-bc`. Gold clip is CPU linear-BC. |
 | `g1-walk` | yes on GPU + Playground, mjlab, or Isaac Lab; blocked on CPU | playground / mjlab / isaaclab | Walking eval from the engine that launched. No gold clip. |
-| `g1-reach` | no | — | Blocked. No G1 reach env in Playground, mjlab, or Isaac Lab. Do not map locomotion or Franka Reach as G1 reach. |
 | Unitree H1 | catalog only | — | No recipe. Do not add one until G1 walk trains for real. |
+
+`g1-reach` was deleted in Phase 3f. There is no upstream G1 reach env
+to pin; do not invent `G1Reach-v0` / `Isaac-Reach-G1-v0`. CPU arm motion
+is `pick-and-place`.
 
 Gold notes live in each `recipe.yaml`. CPU recipes also ship
 `gold/eval.mp4` + `gold/notes.md`. CI’s `gold` job retrains those recipes
@@ -135,7 +139,7 @@ recipes must not check in a success video.
 Live, not just “the tests used to pass”:
 
 - `pytest -q` — green.
-- CLI: `ht recipes` groups cpu/gpu; Cartpole compile; G1 walk/reach **exit 12**
+- CLI: `ht recipes` groups cpu/gpu; Cartpole compile; G1 walk **exit 12**
   with Playground / mjlab next steps; payloads include
   `engines/mjlab/train_mjlab.sh` and `engines/isaaclab/osmo_workflow.yaml`.
 - `ht train --docker` — **exit 12**, "Docker is not on PATH"; in-process
@@ -204,7 +208,7 @@ walk gold clip.
 | `facts.kind=rl`, `facts.engine=playground`, `facts.device=gpu` | done |
 | Catalog `launch_here`; studio Train vs Compile and backend badge | done |
 | CPU Docker refuses GPU recipes (`HT_DOCKER_GPU=1` escape hatch) | done |
-| `g1-reach` must not launch walk (Playground mapping stays `unsupported`) | done |
+| Walk recipe must not invent reach env ids (`G1Reach-v0`) | done |
 | No fake walk gold / stand-clip substitute | done |
 
 ```bash
@@ -231,23 +235,23 @@ eval-video UI as Cartpole, with a backend badge
 (`mjlab · gpu` / `isaaclab · gpu`). Without that engine, behavior
 stays the blocked next step.
 
-**Reach is pinned, not launched.** There is no G1 reach environment
-upstream:
+**No G1 reach recipe.** There is no G1 reach environment upstream:
 
 - mjlab G1: `Mjlab-Velocity-Flat-Unitree-G1`, Rough, Tracking. Cube
   lift is YAM (`Mjlab-Lift-Cube-Yam`), not G1.
 - Isaac Lab G1: `Isaac-Velocity-Flat-G1-v0` / Rough. Reach is
-  Franka / UR10 / OpenArm. G1 manipulation is PickPlace, not Reach.
+  Franka / UR10 / OpenArm. G1 manipulation is PickPlace, not Reach
+  (PickPlace is not pinned here until a real task id is confirmed).
 - Playground `G1JoystickFlatTerrain` is walking. It is not a reach env.
 
-`g1-reach` marks every adapter `unsupported`. Train blocks. Do not
-invent `G1Reach-v0` or `Isaac-Reach-G1-v0`.
+Do not invent `G1Reach-v0` or `Isaac-Reach-G1-v0`. Phase 3f deletes the
+blocked `g1-reach` stub rather than keep a fake catalog card.
 
 | Deliverable | Status |
 |---|---|
 | Pin `g1-walk` mjlab to `Mjlab-Velocity-Flat-Unitree-G1` | done |
 | Pin `g1-walk` Isaac to `Isaac-Velocity-Flat-G1-v0` | done |
-| Delete Playground walk placeholder from `g1-reach` | done |
+| Delete dishonest `g1-reach` recipe (Phase 3f) | done |
 | `MJLabAdapter.launch` runs `python -m mjlab.scripts.train TASK --video True` | done |
 | Harvest mjlab `*.mp4` under `--log-root`; fail closed if exit 0 and no clip | done |
 | `IsaacLabAdapter.launch` via `isaaclab.sh` train+play, or GPU Docker | done |
@@ -255,7 +259,6 @@ invent `G1Reach-v0` or `Isaac-Reach-G1-v0`.
 | `osmo workflow submit` → poll → rsync harvest `ht_eval/*.mp4` | done (Phase 3d harness) |
 | Catalog `launch_here` for playground **or** mjlab **or** isaac ready | done |
 | `select_adapter` first launch-ready GPU engine, else first compile-ok | done |
-| `g1-reach` stays `launch_here=false` even if mjlab is ready | done |
 | No fake walk/reach gold / stand-clip substitute | done |
 
 ```bash
@@ -269,7 +272,6 @@ ht train spec/examples/g1-walk.json   # overlay backend.prefer: [isaaclab]
 HT_DOCKER_GPU=1 ht train spec/examples/g1-walk.json  # prefer isaaclab
 # CPU laptop — still exit 12
 ht train spec/examples/g1-walk.json
-ht train spec/examples/g1-reach.json
 ```
 
 This repo's CI and the CPU studio **do not** have a GPU. Launch is
@@ -353,8 +355,19 @@ Fake CLI for CI: `HT_LEROBOT_CLI=/path/to/fake` with `HT_GPU=1`.
 
 ### Phase 3f — Honest G1 manipulation recipe
 
-**Exit test.** Delete `g1-reach`, or replace it with a real upstream
+**Exit test (met).** Delete `g1-reach`, or replace it with a real upstream
 task id under an honest name. No invented env ids.
+
+| Deliverable | Status |
+|---|---|
+| Delete `recipes/g1-reach` + `spec/examples/g1-reach.json` | done |
+| Catalog `later` is only `g1-walk` on CPU | done |
+| Unknown `g1-reach` recipe id fails closed (`RecipeError`) | done |
+| Do not invent `G1Reach-v0` / `Isaac-Reach-G1-v0` | done |
+| Pin Isaac G1 PickPlace under a new honest recipe | **not done** (no confirmed upstream task id in-repo) |
+
+CPU arm motion stays `pick-and-place`. Add a PickPlace recipe only after
+confirming a real Isaac/mjlab task string on a GPU box.
 
 ### Phase 3g — Compare two runs (Evaluate in Runs)
 

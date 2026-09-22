@@ -25,7 +25,7 @@ def test_health_and_recipes() -> None:
     assert by_id["cartpole-balance"]["has_gold"] is True
     assert by_id["g1-walk"]["has_gold"] is False
     assert by_id["g1-walk"]["launch_here"] is False
-    assert by_id["g1-reach"]["launch_here"] is False
+    assert "g1-reach" not in by_id
     assert by_id["cartpole-balance"]["launch_here"] is True
     assert health.get("engines")
     assert "playground_ready" in health["engines"]

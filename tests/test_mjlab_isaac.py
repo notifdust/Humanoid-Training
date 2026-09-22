@@ -331,7 +331,7 @@ def test_osmo_ready_makes_walk_launch_here(monkeypatch: pytest.MonkeyPatch) -> N
     catalog = public_catalog()
     by_id = {r["id"]: r for r in catalog["recipes"]}
     assert by_id["g1-walk"]["launch_here"] is True
-    assert by_id["g1-reach"]["launch_here"] is False
+    assert "g1-reach" not in by_id
 
 
 def test_parse_workflow_id_and_status() -> None:
@@ -343,21 +343,21 @@ def test_parse_workflow_id_and_status() -> None:
     assert parse_workflow_status('{"status": "FAILED"}') == "FAILED"
 
 
-def test_g1_reach_stays_blocked_when_mjlab_ready(
+def test_walk_does_not_claim_invented_reach_ids(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Phase 3f: no g1-reach recipe. Walk payloads must not invent reach env ids."""
     cli = _write_cli(tmp_path, "mjlab-train", FAKE_MJLAB)
     monkeypatch.setenv("HT_MJLAB_CLI", str(cli))
     monkeypatch.setenv("HT_GPU", "1")
-    spec = load_spec(Path(__file__).resolve().parents[1] / "spec" / "examples" / "g1-reach.json")
+    spec = _walk_spec(backend={"prefer": ["mjlab"], "compute": "local"})
     manifest = run_job(spec, runs_dir=tmp_path / "runs")
-    assert manifest["status"] == "blocked"
-    err = manifest.get("error") or ""
-    assert "reach" in err.lower()
-    assert "G1Reach-v0" not in err
-    assert not (Path(manifest["run_dir"]) / "eval.mp4").is_file()
+    assert manifest["status"] == "passed", manifest.get("error")
+    payload = (Path(manifest["run_dir"]) / "train_mjlab.sh").read_text(encoding="utf-8")
+    assert "Mjlab-Velocity-Flat-Unitree-G1" in payload
+    assert "G1Reach-v0" not in payload
+    assert "Isaac-Reach-G1-v0" not in payload
     from humanoid_training.recipes import public_catalog
 
-    by_id = {r["id"]: r for r in public_catalog()["recipes"]}
-    assert by_id["g1-reach"]["launch_here"] is False
-    assert by_id["g1-walk"]["launch_here"] is True
+    catalog = public_catalog()
+    assert "g1-reach" not in {r["id"] for r in catalog["recipes"]}

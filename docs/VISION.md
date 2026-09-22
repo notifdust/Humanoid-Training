@@ -189,7 +189,7 @@ boundaries, and [ROADMAP.md](./ROADMAP.md) for what is implemented now.
 These are product requirements, not niceties.
 
 1. **Working recipes beat empty canvases.** Ship 5–10 tasks that train to a
-   visible success on a public humanoid (G1 walk, G1 reach, pick-and-place)
+   visible success on a public humanoid (G1 walk, pick-and-place)
    with pinned seeds, hardware notes, and "this took 40 minutes on an L4."
 2. **Success is a video and a boolean**, not a reward plot. Show the
    failure mode in English: "fell at 1.2s," "gripper closed early."

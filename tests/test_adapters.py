@@ -80,10 +80,19 @@ def test_g1_stand_selects_mujoco() -> None:
     assert "unitree_g1" in payload.env_name
 
 
-def test_g1_reach_has_no_engine_to_compile() -> None:
-    spec = _expand("g1-reach.json")
-    with pytest.raises(NoAdapter, match="no G1 reach"):
-        select_adapter(spec)
+def test_deleted_g1_reach_is_unknown_recipe() -> None:
+    from humanoid_training.errors import RecipeError
+
+    with pytest.raises(RecipeError, match="Unknown recipe 'g1-reach'"):
+        expand_spec(
+            {
+                "spec_version": "0.1.0",
+                "name": "missing-reach",
+                "robot": {"id": "unitree-g1-29dof", "source": "catalog"},
+                "task": {"recipe": "g1-reach"},
+                "train": {"method": "rl"},
+            }
+        )
 
 
 def test_pick_and_place_selects_mujoco_preview() -> None:
