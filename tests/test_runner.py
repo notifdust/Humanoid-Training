@@ -3,7 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pytest
 
+from humanoid_training.errors import RecipeError
 from humanoid_training.recipes import expand_spec
 from humanoid_training.runner import run_job
 from humanoid_training.spec import load_spec
@@ -50,18 +52,17 @@ def test_g1_walk_is_blocked_without_playground(tmp_path: Path) -> None:
     assert "Velocity-G1-Flat-v0" not in mjlab_sh
 
 
-def test_g1_reach_is_blocked_with_cpu_next_step(tmp_path: Path) -> None:
-    spec = load_spec(Path(__file__).resolve().parents[1] / "spec" / "examples" / "g1-reach.json")
-    manifest = run_job(spec, runs_dir=tmp_path)
-    assert manifest["status"] == "blocked"
-    err = manifest["error"] or ""
-    assert "reach" in err.lower()
-    assert "pick-and-place" in err.lower()
-    assert "G1Reach-v0" not in err
-    assert "Isaac-Reach-G1-v0" not in err
-    run_dir = Path(manifest["run_dir"])
-    assert not (run_dir / "train_mjlab.sh").is_file()
-    assert not (run_dir / "eval.mp4").is_file()
+def test_unknown_recipe_blocks_without_invented_reach_ids(tmp_path: Path) -> None:
+    """Phase 3f: g1-reach is gone. Missing recipes fail closed; no fake reach ids."""
+    spec = {
+        "spec_version": "0.1.0",
+        "name": "missing-reach",
+        "robot": {"id": "unitree-g1-29dof", "source": "catalog"},
+        "task": {"recipe": "g1-reach"},
+        "train": {"method": "rl"},
+    }
+    with pytest.raises(RecipeError, match="g1-reach"):
+        run_job(spec, runs_dir=tmp_path)
 
 
 def test_g1_walk_compile_only(tmp_path: Path) -> None:

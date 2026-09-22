@@ -74,14 +74,14 @@ studio:
 {
   "recipes": [/* as_public_dict() */],
   "ready": ["cartpole-balance", "g1-stand", "pick-and-place"],
-  "later": ["g1-walk", "g1-reach"],
+  "later": ["g1-walk"],
   "start_here": ["cartpole-balance", "g1-stand", "pick-and-place"]
 }
 ```
 
 On a GPU box with Playground, mjlab, or Isaac Lab ready, `g1-walk`
 moves from `later` to `ready` because `launch_here` is true.
-`g1-reach` stays later: there is no G1 reach env to launch.
+There is no `g1-reach` recipe: no upstream G1 reach env exists to pin.
 
 The browser **projects** `availability`, `launch_here`, `promise`, `train_hint`,
 `blocked_hint`, `scene_hint`, and `record_hint`. It must not hardcode

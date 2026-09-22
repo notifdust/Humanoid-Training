@@ -98,7 +98,6 @@ Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
 | `cartpole-balance` | Gymnasium RL on CPU, eval video, gold clip |
 | `g1-stand` | MuJoCo G1 from Menagerie, stand + both-arm wave, eval video, gold clip |
 | `g1-walk` | Compile to Playground / mjlab / Isaac Lab. **Launches** the first ready engine (local GPU or OSMO harvest). |
-| `g1-reach` | Blocked. No G1 reach env in Playground, mjlab, or Isaac Lab. |
 | `pick-and-place` | Demos → ACT when LeRobot+GPU; else linear-BC on mujoco. Gold clip is CPU linear-BC. Not finger grasping. |
 
 ## Non-goals (for now)
