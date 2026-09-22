@@ -117,16 +117,22 @@ def test_launch_here_walk_when_mjlab_or_isaac_ready(monkeypatch: pytest.MonkeyPa
 
 
 def test_recipes_pin_real_upstream_task_ids() -> None:
+    import yaml
+
     root = Path(__file__).resolve().parents[1]
-    walk = (root / "recipes" / "g1-walk" / "recipe.yaml").read_text(encoding="utf-8")
-    reach = (root / "recipes" / "g1-reach" / "recipe.yaml").read_text(encoding="utf-8")
-    assert "Mjlab-Velocity-Flat-Unitree-G1" in walk
-    assert "Isaac-Velocity-Flat-G1-v0" in walk
-    assert "Velocity-G1-Flat-v0" not in walk
-    assert "G1Reach-v0" not in reach
-    assert "Isaac-Reach-G1-v0" not in reach
-    assert "G1JoystickFlatTerrain" not in reach
-    assert "unsupported" in reach
+    walk = yaml.safe_load((root / "recipes" / "g1-walk" / "recipe.yaml").read_text(encoding="utf-8"))
+    reach = yaml.safe_load((root / "recipes" / "g1-reach" / "recipe.yaml").read_text(encoding="utf-8"))
+    walk_ad = walk.get("adapters") or {}
+    reach_ad = reach.get("adapters") or {}
+    assert (walk_ad.get("mjlab") or {}).get("task") == "Mjlab-Velocity-Flat-Unitree-G1"
+    assert (walk_ad.get("isaaclab") or {}).get("task") == "Isaac-Velocity-Flat-G1-v0"
+    assert (walk_ad.get("playground") or {}).get("env_name") == "G1JoystickFlatTerrain"
+    assert not (reach_ad.get("playground") or {}).get("env_name")
+    assert (reach_ad.get("playground") or {}).get("unsupported")
+    assert (reach_ad.get("mjlab") or {}).get("unsupported")
+    assert (reach_ad.get("isaaclab") or {}).get("unsupported")
+    assert not (reach_ad.get("mjlab") or {}).get("task")
+    assert not (reach_ad.get("isaaclab") or {}).get("task")
 
 
 def test_recipes_module_does_not_hardcode_start_here_ids() -> None:
