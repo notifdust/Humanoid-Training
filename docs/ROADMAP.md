@@ -5,13 +5,18 @@ build a simulator. Each phase has an exit test: if that test fails, the
 phase is not done, even if the UI looks finished.
 
 ```
-Phase 0  contract + one real train loop     ← done (Cartpole on CPU)
-Phase 1  studio shell (pick recipe → video) ← done (rooms + G1 stand + CPU Docker)
-Phase 2  demonstration data (LeRobot)       ← done with substitutions (linear-BC, not ACT)
-Phase 2.5 recipe gold + CI videos           ← done
-Phase 3a first real G1 walk (Playground)    ← launch path done (needs a GPU box for the walking clip)
-Phase 3b mjlab / Isaac G1 walk + OSMO       ← launch path done (no G1 reach env upstream)
-Phase 4  real G1/H1 deploy with safety gates
+Phase 0   contract + one real train loop     ← done (Cartpole on CPU)
+Phase 1   studio shell (pick recipe → video) ← done (rooms + G1 stand + CPU Docker)
+Phase 2   demonstration data (LeRobot)       ← done with substitutions (linear-BC, not ACT)
+Phase 2.5 recipe gold + CI videos            ← done
+Phase 3a  first real G1 walk (Playground)    ← launch path done
+Phase 3b  mjlab / Isaac G1 walk + OSMO       ← launch path done (no G1 reach env upstream)
+Phase 3c  GPU-box walk proof                 ← next (`ht proof walk`; live clip still needs a GPU)
+Phase 3d  remote harvest (OSMO / GPU queue)
+Phase 3e  ACT on the same demos
+Phase 3f  honest G1 manipulation recipe
+Phase 3g  compare two runs in Runs
+Phase 4   real G1/H1 deploy with safety gates
 ```
 
 This file is the **continuation plan from what is actually running**, not
@@ -273,34 +278,65 @@ an mp4. A live walking video is still the GPU-box proof.
 
 ---
 
-## Next — ACT, then grasping (still Phase 2 leftovers)
+## Continuation roadmap (follow in order)
 
-Linear-BC on mocap mustard is the CPU preview. It is not the
-manipulation policy.
+Do not skip ahead to ACT, grasping, or hardware while the walk path
+is still unproven on a real GPU. Each phase has an exit test.
 
-1. **ACT (or another LeRobot policy) on the same dataset.**
-   `engines` already get `train_lerobot.sh`. Needs `pip install lerobot`
-   and a GPU. CPU linear-BC stays as the laptop path. The studio must
-   label which policy ran (`facts.policy=act` vs `linear-bc`).
-2. **Finger grasping is a new policy**, not more pose playback. Do not
-   tighten IK and call it a grasp. When it exists, the recipe
-   `promise` / `train_hint` have to change; the current copy is
-   deliberately narrow.
-3. **Hub import** after local inspect is boring: download into
-   `HT_CACHE`, then the Data room already works.
+### Phase 3c — GPU-box walk proof (next)
 
----
+**Exit test.** On a machine with an NVIDIA GPU:
 
-## Phase 4 — Real robot (not started)
+```bash
+pip install playground   # or mjlab / Isaac Lab
+ht proof walk
+# optional: ht proof walk --prefer mjlab
+# optional: HT_ISAAC_CLI=/path/to/isaaclab.sh ht proof walk --prefer isaaclab
+```
 
-**Exit test.** A sim-successful G1 walk policy runs on hardware at
-reduced speed; a NaN or pose-limit kills the policy; no silent
-checkpoint fallback. Policies stay `sim-only` until a hardware eval
-profile passes.
+That must write a **walking** `eval.mp4`, stamp `facts.engine` to the
+engine that ran, and the studio must Play it with a backend badge.
+`ht proof walk` fails closed on a CPU laptop (exit 12) with the next
+step — that is expected.
 
-Do not start this before Phase 3 produces a real walk video on a GPU
-box. Clamps, watchdog, e-stop are the product here — not a "deploy"
-checkbox.
+| Deliverable | Status |
+|---|---|
+| `ht proof walk` operator command | done (harness) |
+| Short proof train + require `eval.mp4` + `facts.engine` | done (harness) |
+| Live walk clip from a real GPU box | **not done** (needs GPU) |
+| Still no gold walk clip checked into the repo | keep |
+
+Do **not** declare Phase 3c complete from fake-CLI unit tests alone.
+Do **not** check in a stand clip as walk gold.
+
+### Phase 3d — Remote harvest (OSMO / hosted GPU)
+
+**Exit test.** From a laptop without CUDA, Train on `g1-walk` submits
+a job, harvests the remote `eval.mp4`, and the studio Plays it.
+Browser holds no cloud credentials. Emit OSMO / HF Jobs / Docker only.
+
+### Phase 3e — ACT on the same demos
+
+**Exit test.** GPU + LeRobot runs ACT (or another policy) on the same
+local dataset; `facts.policy=act` vs `linear-bc`. CPU linear-BC stays.
+Finger grasping stays out of scope.
+
+### Phase 3f — Honest G1 manipulation recipe
+
+**Exit test.** Delete `g1-reach`, or replace it with a real upstream
+task id under an honest name. No invented env ids.
+
+### Phase 3g — Compare two runs (Evaluate in Runs)
+
+**Exit test.** Side-by-side videos/facts for two run ids of the same
+recipe. No fifth studio room.
+
+### Phase 4 — Real robot (after 3c)
+
+**Exit test.** Sim-successful G1 walk runs on hardware at reduced
+speed; NaN or pose-limit kills the policy; no silent checkpoint
+fallback. Policies stay `sim-only` until a hardware eval profile
+passes.
 
 ---
 
@@ -310,9 +346,10 @@ checkbox.
 - A new cluster orchestrator (emit OSMO / HF Jobs / Docker)
 - Competing with LeLab on SO-ARM101
 - Fleet operations (Foxglove / Formant)
-- A fifth studio room until two checkpoints exist to compare
-  (Evaluate is folded into Runs on purpose)
-- Fake walk / ACT / Isaac success on a CPU laptop
+- A fifth studio room before Phase 3g
+- Fake walk / ACT / Isaac / OSMO success on a CPU laptop
+- Finger grasping before ACT ships
+- Hardware deploy before a live walk clip exists
 
 ---
 

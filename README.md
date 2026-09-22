@@ -73,16 +73,14 @@ On a machine with an NVIDIA GPU:
 
 ```bash
 pip install playground
+python -m humanoid_training.cli proof walk
+# or: train the full beginner spec
 python -m humanoid_training.cli train spec/examples/g1-walk.json
-# or mjlab / Isaac Lab, via backend.prefer
 ```
 
-Playground runs `train-jax-ppo --env_name G1JoystickFlatTerrain`.
-mjlab runs `python -m mjlab.scripts.train Mjlab-Velocity-Flat-Unitree-G1 --video True`.
-Isaac Lab runs `isaaclab.sh` for `Isaac-Velocity-Flat-G1-v0` (or GPU
-Docker / `osmo workflow submit` without remote harvest).
-The engine clip becomes `eval.mp4` with `facts.engine` set.
-Without a GPU the same command compiles payloads and exits 12.
+`ht proof walk` is the Phase 3c exit command: short train, require
+`eval.mp4`, stamp `facts.engine`. Without a GPU it exits 12 with the
+next step.
 
 Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
 

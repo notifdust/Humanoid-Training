@@ -16,6 +16,7 @@ def test_cli_help_lists_fetch_assets_and_record(capsys: pytest.CaptureFixture[st
     assert "record" in out
     assert "serve" in out
     assert "gold" in out
+    assert "proof" in out
 
 
 def test_cli_train_help_lists_docker(capsys: pytest.CaptureFixture[str]) -> None:
