@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from humanoid_training import __version__
 from humanoid_training.catalog import load_robot_catalog
 from humanoid_training.datasets import inspect_lerobot_dataset
 from humanoid_training.demos import (
@@ -24,6 +25,15 @@ from humanoid_training.runner import default_runs_dir, load_manifest, new_run_id
 from humanoid_training.spec import validate_spec
 
 app = FastAPI(title="Humanoid Training Studio", version="0.1.0")
+
+
+@app.middleware("http")
+async def studio_no_store(request, call_next):
+    """Studio JS/CSS must not stick after a pull. Eval videos stay cacheable under /api."""
+    response = await call_next(request)
+    if request.url.path in {"/", "/index.html", "/app.js", "/styles.css"}:
+        response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 class SpecBody(BaseModel):
@@ -59,7 +69,14 @@ def _find_run(run_id: str) -> Path:
 
 @app.get("/api/health")
 def health() -> dict[str, Any]:
-    return {"ok": True, "name": "humanoid-training"}
+    from humanoid_training.hardware import engine_status
+
+    return {
+        "ok": True,
+        "name": "humanoid-training",
+        "version": __version__,
+        "engines": engine_status(),
+    }
 
 
 @app.get("/api/robots")
@@ -100,6 +117,26 @@ def api_record_dataset(body: RecordBody) -> dict[str, Any]:
 @app.get("/api/recipes")
 def recipes() -> dict[str, Any]:
     return public_catalog()
+
+
+@app.get("/api/recipes/{recipe_id}/gold/{name}")
+def recipe_gold(recipe_id: str, name: str):
+    from humanoid_training.gold import GOLD_FILES, gold_dir
+
+    if name not in GOLD_FILES:
+        raise HTTPException(status_code=400, detail="Unknown gold file")
+    try:
+        recipe = load_recipe(recipe_id)
+    except RecipeError as err:
+        raise HTTPException(status_code=404, detail=str(err)) from err
+    path = gold_dir(recipe) / name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail=f"{recipe_id} has no gold/{name}")
+    if name.endswith(".mp4"):
+        media = "video/mp4"
+    else:
+        media = "text/plain; charset=utf-8"
+    return FileResponse(path, media_type=media, filename=name)
 
 
 @app.get("/api/recipes/{recipe_id}")

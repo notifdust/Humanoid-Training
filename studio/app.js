@@ -20,6 +20,7 @@ const state = {
   teleopPath: null,
   teleopOrigin: null,
   teleopCommitLock: false,
+  teleopNeedRelease: false,
   keys: null,
 };
 
@@ -39,7 +40,7 @@ async function api(path, options) {
 }
 
 function worksHere(recipe) {
-  return recipe && recipe.availability === "cpu";
+  return Boolean(recipe && recipe.launch_here);
 }
 
 function recipeById(id) {
@@ -73,6 +74,9 @@ function englishList(items) {
 }
 
 function pill(recipe) {
+  if (worksHere(recipe) && recipe.availability === "gpu") {
+    return `<span class="pill live">works on this GPU</span>`;
+  }
   if (worksHere(recipe)) return `<span class="pill live">works on this computer</span>`;
   if (recipe.availability === "gpu") return `<span class="pill blocked">needs a GPU — skip for now</span>`;
   return `<span class="pill blocked">later</span>`;
@@ -96,7 +100,8 @@ function stepsHTML(active) {
 
 function recipesForRobot() {
   if (!state.robot) return state.recipes;
-  return state.recipes.filter((r) => r.robot === state.robot.id);
+  // Keep start_here smoke tests visible when a humanoid is selected.
+  return state.recipes.filter((r) => r.robot === state.robot.id || r.start_here);
 }
 
 function renderRobots() {
@@ -159,7 +164,7 @@ function renderRecipes() {
     )
     .join("");
   const filter = state.robot
-    ? `Tasks for ${escapeHtml(state.robot.name || state.robot.id)}.`
+    ? `Showing tasks for ${escapeHtml(state.robot.name || state.robot.id)}, plus the laptop smoke tests.`
     : "";
   const skipLine = later.length
     ? ` ${englishList(later.map((r) => r.title))} ${
@@ -275,12 +280,15 @@ function trailPolylines(extra) {
 
 function sceneHTML(spec) {
   const objects = spec?.scene?.objects;
-  if (!objects || !objects.length) {
-    return `
+    if (!objects || !objects.length) {
+      const extra = state.selected?.launch_here
+        ? " Train still writes eval video."
+        : "";
+      return `
       <h2>Scene</h2>
-      <p class="lede">This recipe has no movable objects. Train still writes eval video.</p>
+      <p class="lede">This recipe has no movable objects.${extra}</p>
     `;
-  }
+    }
   const tokens = objects
     .map((obj) => {
       const target = recordTargetId();
@@ -308,25 +316,77 @@ function sceneHTML(spec) {
   `;
 }
 
+function boundDemoHint(recipe) {
+  if (!recipe || !recipe.imitate) return "";
+  const nTakes = state.pendingTrajectories.length;
+  if (state.recording || nTakes) return "";
+  const boundDs = (state.starter?.data?.datasets || [])[0];
+  if (!boundDs) {
+    return `<p class="meta">No demos saved yet — Train will use built-in scripted takes. Or record by dragging ${escapeHtml(objectLabel())} below.</p>`;
+  }
+  const eps = (state.dataset && state.dataset.ok && state.dataset.episodes) || [];
+  const hits = eps.filter((ep) => ep.success === true).length;
+  const misses = eps.filter((ep) => ep.success === false).length;
+  const dest = recordContainerId() || "the target";
+  let extra = "";
+  if (hits && misses) extra = ` · ${hits} reached the ${dest}, ${misses} missed`;
+  else if (hits) extra = ` · ${dest} reached`;
+  else if (misses) extra = ` · missed the ${dest} — record a take that ends in it`;
+  const keep = state.starter?.data?.keep_episodes;
+  const keepBit = Array.isArray(keep) ? ` (${keep.length} kept)` : "";
+  return `<p class="meta">Using your recorded demos${keepBit}${extra}.</p>`;
+}
+
+function demoSaveSummary(result) {
+  const eps = result.episodes || [];
+  const n = result.total_episodes ?? eps.length;
+  const hits = eps.filter((ep) => ep.success === true).length;
+  const misses = eps.filter((ep) => ep.success === false).length;
+  const dest = recordContainerId() || "the target";
+  let msg = `wrote ${n} demo${n === 1 ? "" : "s"}`;
+  if (hits && misses) msg += ` · ${hits} in the ${dest}, ${misses} missed`;
+  else if (hits) msg += ` · ${dest} reached`;
+  else if (misses) {
+    msg += ` · missed the ${dest} — Train will likely fail. Record a take that ends in the ${dest}.`;
+  }
+  return msg;
+}
+
+function pathReachedContainer(path) {
+  const spec = state.expanded?.spec || state.starter;
+  const destId = recordContainerId();
+  const dest = (spec?.scene?.objects || []).find((obj) => String(obj.id) === destId);
+  if (!dest || !path || !path.length) return null;
+  const last = path[path.length - 1];
+  const dist = Math.hypot(
+    (Number(last.x) || 0) - (Number(dest.x) || 0),
+    (Number(last.y) || 0) - (Number(dest.y) || 0)
+  );
+  return dist <= 0.09;
+}
+
+function pendingTakeMessage() {
+  const n = state.pendingTrajectories.length;
+  if (!n) return "";
+  const last = state.pendingTrajectories[n - 1];
+  const hit = pathReachedContainer(last);
+  const dest = recordContainerId();
+  let extra = "";
+  if (hit === true && dest) extra = ` · last take reached the ${dest}`;
+  if (hit === false && dest) extra = ` · last take missed the ${dest}`;
+  return `${n} take(s) in memory${extra}`;
+}
+
 function renderRecipe() {
   const r = state.selected;
   const spec = state.expanded?.spec || state.starter;
   const hasScene = Boolean(spec?.scene?.objects?.length);
-  const cpu = worksHere(r);
-  const trainLabel = cpu ? "Train" : "Compile (will stop — needs GPU)";
+  const canLaunch = Boolean(r.launch_here);
+  const trainLabel = canLaunch ? "Train" : "Compile (will stop — needs GPU)";
   const hintText = r.train_hint || r.promise || r.summary || "";
   const trainHint = hintText ? `<p class="lede">${escapeHtml(hintText)}</p>` : "";
-  const boundDs = (state.starter?.data?.datasets || [])[0];
-  const boundKeep = state.starter?.data?.keep_episodes;
-  const boundHint =
-    r.imitate && boundDs
-      ? `<p class="meta">Using your recorded demos${
-          Array.isArray(boundKeep) ? ` (${boundKeep.length} kept)` : ""
-        }.</p>`
-      : r.imitate
-        ? `<p class="meta">No demos saved yet — Train will use built-in scripted takes. Or record by dragging ${escapeHtml(objectLabel())} below.</p>`
-        : "";
   const nTakes = state.pendingTrajectories.length;
+  const boundHint = boundDemoHint(r);
   const saveBtn = nTakes
     ? `<button class="primary" id="save-demos">Save ${nTakes} demo${nTakes === 1 ? "" : "s"}</button>
        <button class="ghost" id="undo-demo">Undo last</button>`
@@ -337,7 +397,7 @@ function renderRecipe() {
           ${saveBtn}
         </div>
         <p class="lede">${state.recording ? `Drag ${escapeHtml(objectLabel())}${recordContainerId() ? ` into the ${escapeHtml(recordContainerId())}` : ""}, or steer with WASD / a gamepad. Space or gamepad (A) ends the take.` : "Optional: record a take on the canvas (drag, WASD, or gamepad), then Save, then Train."}</p>
-        <p class="status" id="demo-status">${escapeHtml(state.lastDemoMessage || (nTakes ? `${nTakes} take(s) in memory` : ""))}</p>
+        <p class="status" id="demo-status">${escapeHtml(state.lastDemoMessage || pendingTakeMessage())}</p>
         <p class="error" id="demo-error"></p>`
     : "";
   main.innerHTML = `
@@ -354,6 +414,10 @@ function renderRecipe() {
         <p class="status" id="train-status"></p>
         <p class="error" id="train-error"></p>
         ${trainHint}
+        ${r.has_gold
+          ? `<video class="gold" controls muted playsinline src="/api/recipes/${encodeURIComponent(r.id)}/gold/eval.mp4"></video>
+             <p class="meta">Gold clip — what Train should look like on this computer.</p>`
+          : ""}
         ${boundHint}
         ${demoControls}
         ${sceneHTML(spec)}
@@ -383,17 +447,13 @@ function renderRecipe() {
     state.recording = !state.recording;
     state.lastDemoMessage = state.recording
       ? `recording — drag ${objectLabel()}${recordContainerId() ? ` into the ${recordContainerId()}` : ""}, or WASD / gamepad. Space ends the take.`
-      : state.pendingTrajectories.length
-        ? `${state.pendingTrajectories.length} take(s) in memory`
-        : "";
+      : pendingTakeMessage();
     renderRecipe();
   });
   document.getElementById("save-demos")?.addEventListener("click", saveCanvasDemos);
   document.getElementById("undo-demo")?.addEventListener("click", () => {
     state.pendingTrajectories.pop();
-    state.lastDemoMessage = state.pendingTrajectories.length
-      ? `${state.pendingTrajectories.length} take(s) in memory`
-      : "";
+    state.lastDemoMessage = pendingTakeMessage();
     renderRecipe();
   });
   bindSceneDrag();
@@ -475,7 +535,7 @@ function bindSceneDrag() {
         if (recordingMustard) {
           if (path.length >= 2) {
             state.pendingTrajectories.push(path);
-            state.lastDemoMessage = `${state.pendingTrajectories.length} take(s) in memory`;
+            state.lastDemoMessage = pendingTakeMessage();
           }
           const start = state.starter.scene.objects.find((item) => item.id === id);
           if (start) applyTokenStyle(token, start);
@@ -539,7 +599,15 @@ function mustardObject() {
   return (state.starter?.scene?.objects || []).find((item) => item.id === id) || null;
 }
 
+function movementCodesHeld() {
+  const keys = state.keys || new Set();
+  return ["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].some((code) =>
+    keys.has(code)
+  );
+}
+
 function stepTeleop(delta) {
+  if (state.teleopNeedRelease) return;
   const obj = mustardObject();
   if (!obj) return;
   if (!state.teleopPath) {
@@ -564,7 +632,7 @@ function finishTeleopTake(opts) {
   const path = state.teleopPath;
   if (path && path.length >= 2) {
     state.pendingTrajectories.push(path);
-    state.lastDemoMessage = `${state.pendingTrajectories.length} take(s) in memory`;
+    state.lastDemoMessage = pendingTakeMessage();
   }
   const obj = mustardObject();
   if (obj && state.teleopOrigin) {
@@ -573,6 +641,9 @@ function finishTeleopTake(opts) {
   }
   state.teleopPath = null;
   state.teleopOrigin = null;
+  state.teleopCommitLock = true;
+  state.teleopNeedRelease = true;
+  if (state.keys) state.keys.delete("Space");
   if (rerender) renderRecipe();
 }
 
@@ -603,6 +674,11 @@ function startTeleopLoop() {
     const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
     last = now;
     const gp = readGamepadStick();
+    if (state.teleopNeedRelease) {
+      const padLive = gp && Math.hypot(gp.ax || 0, gp.ay || 0) > 0.2;
+      if (!padLive && !movementCodesHeld()) state.teleopNeedRelease = false;
+      else return;
+    }
     const fromKeys = keyTeleopDelta(state.keys || new Set(), dt);
     const fromPad = gp ? stickToTableDelta(gp.ax, gp.ay, dt) : { x: 0, y: 0 };
     const delta = { x: fromKeys.x + fromPad.x, y: fromKeys.y + fromPad.y };
@@ -648,6 +724,7 @@ function onTeleopKeyDown(event) {
   state.keys.add(event.code);
   if (event.code === "Space") {
     if (state.teleopPath && state.teleopPath.length >= 2) finishTeleopTake({ rerender: true });
+    state.teleopCommitLock = true;
     return;
   }
   // One sample per keydown so a take still records if rAF is throttled.
@@ -658,6 +735,8 @@ function onTeleopKeyUp(event) {
   if (!state.keys) return;
   if (state.recording && event.code === "Space") event.preventDefault();
   state.keys.delete(event.code);
+  if (event.code === "Space") state.teleopCommitLock = false;
+  if (!movementCodesHeld()) state.teleopNeedRelease = false;
 }
 
 async function saveCanvasDemos() {
@@ -687,8 +766,7 @@ async function saveCanvasDemos() {
     }
     state.pendingTrajectories = [];
     state.recording = false;
-    const n = result.total_episodes;
-    state.lastDemoMessage = `wrote ${n} demo${n === 1 ? "" : "s"} → ${result.path || result.dest}`;
+    state.lastDemoMessage = demoSaveSummary(result);
     renderRecipe();
   } catch (error) {
     if (err) err.textContent = error.message;
@@ -1068,6 +1146,8 @@ function runDemoHint(run) {
   ) {
     bits.push("stale? re-train for BC");
   }
+  if (facts.engine) bits.push(facts.engine);
+  if (facts.device) bits.push(facts.device);
   if (facts.runner === "docker") bits.push("Docker");
   if (run.status === "blocked") {
     if (rec && rec.availability === "gpu") {
@@ -1127,7 +1207,17 @@ function englishRunStatus(run) {
   return run.status || "";
 }
 
+function backendBadge(facts) {
+  const parts = [];
+  if (facts.engine) parts.push(facts.engine);
+  if (facts.device) parts.push(facts.device);
+  if (facts.runner === "docker") parts.push("Docker");
+  if (!parts.length) return "";
+  return `<p class="meta" id="backend-badge">${escapeHtml(parts.join(" · "))}</p>`;
+}
+
 function paintRun(run, logText) {
+  const facts = runFacts(run);
   const video = run.artifacts && run.artifacts["eval.mp4"]
     ? `<video controls autoplay muted src="/api/runs/${run.run_id}/artifacts/eval.mp4?t=${Date.now()}"></video>`
     : `<p class="lede">${
@@ -1174,6 +1264,7 @@ function paintRun(run, logText) {
     <div class="detail">
       <section>
         <h2>Did it work?</h2>
+        ${backendBadge(facts)}
         ${video}
         ${scene}
       </section>
@@ -1312,7 +1403,7 @@ async function boot() {
   try {
     const health = await api("/api/health");
     document.getElementById("health").textContent = health.ok
-      ? "local · studio online"
+      ? `local · v${health.version || "dev"}`
       : "offline";
     const [recipes, robots] = await Promise.all([
       api("/api/recipes"),

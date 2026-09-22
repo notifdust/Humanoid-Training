@@ -79,17 +79,26 @@ studio:
 }
 ```
 
-The browser **projects** `availability`, `promise`, `train_hint`,
+On a GPU box with Playground, mjlab, or Isaac Lab ready, `g1-walk`
+moves from `later` to `ready` because `launch_here` is true.
+`g1-reach` stays later: there is no G1 reach env to launch.
+
+The browser **projects** `availability`, `launch_here`, `promise`, `train_hint`,
 `blocked_hint`, `scene_hint`, and `record_hint`. It must not hardcode
 recipe ids to decide what works on a laptop, which task to Train as a
 fallback, or which imitation recipe to record.
 
-`runnable` means an adapter can launch something. `availability: gpu`
-means launch will **block** here with a next step (compile payloads,
-no fake walk clip). `start_here` defaults to `availability == cpu` when
-omitted.
+`runnable` means an adapter can launch something when the engine is
+present. `availability: gpu` means the laptop grouping is "needs GPU".
+`launch_here` is the Train button contract: true → launch; false →
+compile and block. `start_here` defaults to `availability == cpu` when
+omitted. GPU recipes may set `ready_promise` / `ready_hint` for the
+GPU-ready copy.
 
-Gold notes stay in `recipe.yaml` until `gold/eval.mp4` is CI.
+Gold clips live in `recipes/<id>/gold/eval.mp4` for `availability: cpu`
+recipes. CI’s xvfb job retrains and compares frames. GPU recipes must
+not check in a success clip. The studio projects `has_gold` from that
+file; see [ROADMAP.md](./ROADMAP.md) Phase 2.5.
 
 ---
 
@@ -104,16 +113,20 @@ launch(spec, payload, run_dir) -> EvalResult   # boolean + optional video
 ```
 
 `poll` / `eval` as separate RPCs are not built. Launch is in-process and
-returns the eval. That is enough for CPU recipes; GPU jobs will need the
-split later.
+returns the eval. CPU recipes train inside that call. Phase 3 GPU walk still returns from `launch`, but the adapter
+**subprocesses** the engine CLI (`train-jax-ppo`, `python -m mjlab.scripts.train`,
+or `isaaclab.sh`), streams stdout into `run.log` (studio SSE tails it),
+then harvests `*.mp4` → `eval.mp4`. Missing CLI / GPU / video
+fails closed. Do not substitute the G1 stand clip. OSMO submit does
+not harvest a remote clip.
 
 | Adapter | Role today |
 |---|---|
 | `gymnasium` | Cartpole RL + eval video |
 | `mujoco` | G1 stand hold; pick-and-place linear-BC + arm poses |
-| `playground` | Compile G1 walk; launch blocked without Playground |
-| `mjlab` | Compile reach/walk; launch blocked on CPU |
-| `isaaclab` | Compile OSMO YAML; launch not wired |
+| `playground` | Compile + launch G1 walk via `train-jax-ppo` when GPU + CLI are present; otherwise compile and block |
+| `mjlab` | Compile + launch G1 walk `Mjlab-Velocity-Flat-Unitree-G1` when mjlab + GPU are present; otherwise compile and block |
+| `isaaclab` | Compile OSMO YAML; launch via `isaaclab.sh` or GPU Docker; OSMO submit without harvest |
 | `lerobot` | Compile future ACT script; CPU imitation stays on mujoco |
 
 The MuJoCo adapter is three modules, not one god file:
@@ -122,7 +135,8 @@ The MuJoCo adapter is three modules, not one god file:
 - `mujoco_runtime.py` — simulate, renderer, pin, body ids
 - `mujoco_control.py` — open-loop poses, qpos drive, Jacobian IK
 
-Selection: `backend.prefer` order, skip `unsupported`, first `support.ok`.
+Selection: `backend.prefer` order, skip `unsupported`, first
+**launch-ready** engine, else first `support.ok` (compile-and-block).
 The runner also compiles **other** supporting adapters into
 `engines/<name>/` so a researcher can take the payload to a GPU box.
 
@@ -145,8 +159,8 @@ stream (`SERVED_ARTIFACTS`). `collect_artifacts` and
 
 `EvalResult.facts` is the machine-readable eval. The runner copies it
 onto `manifest.json` as `facts`. Notes stay English for humans. The
-studio **projects** `facts` (arm_mode, bc_steps, keep_episodes, kind)
-and only scrapes notes for older runs that have none.
+studio **projects** `facts` (arm_mode, bc_steps, keep_episodes, kind,
+engine, device, runner) and only scrapes notes for older runs that have none.
 
 Every run directory contains:
 
@@ -170,11 +184,17 @@ Status:
 
 The CPU Docker image is Phase 1 (`ht train --docker`). It remounts only
 `/runs`, sets `HT_RUN_ID`, and runs in-process train inside the container
-(never `--docker`, or it would recurse). Walk/reach `backend.compute:
-local-docker` still means a future GPU/Isaac container — the studio does
-not auto-route those onto this CPU image. HF Jobs / OSMO are Phase 3.
-The studio-server stays in-process: it does not SSH and does not put
-cloud credentials in the browser.
+(never `--docker`, or it would recurse). GPU recipes (`availability: gpu`)
+are **refused** on that image unless `HT_DOCKER_GPU=1` (future GPU
+container). Walk/reach `backend.compute: local-docker` still means that
+future image — the studio does not auto-route those onto the CPU image.
+HF Jobs / OSMO are later Phase 3. The studio-server stays in-process: it
+does not SSH and does not put cloud credentials in the browser.
+
+`src/humanoid_training/hardware.py` probes GPU (`nvidia-smi` /
+`HT_GPU` / `HT_PLAYGROUND_GPU`) and engine CLIs (`HT_PLAYGROUND_CLI`,
+`HT_MJLAB_CLI`, `HT_ISAAC_CLI`, `HT_OSMO_CLI`, `HT_DOCKER_GPU`) so the
+catalog can set `launch_here` without importing adapters.
 
 ---
 
@@ -190,9 +210,11 @@ datasets, runs, SSE, artifacts.
 | Data | LeRobot keep/drop → `data.keep_episodes` | Model code |
 | Runs | Video + English status | Kubernetes |
 
-The job spec editor is **Advanced**, not the home screen. Home is
-`availability: cpu` recipes, then GPU skip. Copy for blocked runs,
+The job spec editor is **Advanced**, not the home screen. Home groups
+`launch_here` recipes first, then GPU skip. Copy for blocked runs,
 empty runs, and Data-room record hints is generated from the catalog.
+Runs projects `facts.engine` / `facts.device` / `facts.runner` as a
+backend badge (`playground · gpu`).
 
 ---
 
@@ -200,7 +222,7 @@ empty runs, and Data-room record hints is generated from the catalog.
 
 Canonical demos: LeRobot v2 layout on disk (`meta/info.json` + episode
 JSONL). Canvas drag, WASD, and gamepad sticks all write that same
-table-frame trajectory schema. Hugging Face Hub import is closed until we wrap their API.
+table-frame trajectory schema. A second Save **appends** takes. Hugging Face Hub import is closed until we wrap their API.
 `keep_episodes` is a spec field. Empty keep is refused. Failure-only
 keep must miss mustard-in-bowl.
 
@@ -214,15 +236,22 @@ src/humanoid_training/
   spec.py                  # schema
   recipes.py               # expand + public_catalog
   artifacts.py             # run file inventory
+  hardware.py              # GPU / engine CLI probes
   adapters/                # compile / launch
+    process.py             # shared subprocess + mp4 harvest
+    playground.py
+    mjlab.py
+    isaaclab.py
     mujoco_adapter.py      # hold + imitation launches
     mujoco_runtime.py      # simulate / render
     mujoco_control.py      # poses / IK
   runner.py                # in-process job
   docker_runner.py         # Phase 1 CPU `ht train --docker`
+  gold.py                  # gold/eval.mp4 record + coarse compare
   server.py                # studio API
 spec/                      # schema + examples
 recipes/<id>/recipe.yaml   # defaults + studio contract
+recipes/<id>/gold/         # eval.mp4 + notes.md (CPU recipes)
 robots/catalog.yaml
 ```
 

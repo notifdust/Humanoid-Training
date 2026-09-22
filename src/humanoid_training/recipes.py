@@ -40,6 +40,13 @@ class Recipe:
         start_here = studio.get("start_here")
         if start_here is None:
             start_here = availability == "cpu"
+        launch_here = _launch_here(self, availability)
+        if launch_here:
+            promise = str(studio.get("ready_promise") or studio.get("promise") or self.summary)
+            train_hint = str(studio.get("ready_hint") or studio.get("train_hint") or "")
+        else:
+            promise = str(studio.get("promise") or self.summary)
+            train_hint = str(studio.get("train_hint") or "")
         return {
             "id": self.id,
             "title": self.title,
@@ -49,12 +56,14 @@ class Recipe:
             "robot": self.data.get("robot"),
             "runnable": runnable,
             "availability": availability,
+            "launch_here": launch_here,
             "start_here": bool(start_here),
-            "promise": str(studio.get("promise") or self.summary),
-            "train_hint": str(studio.get("train_hint") or ""),
+            "promise": promise,
+            "train_hint": train_hint,
             "blocked_hint": str(studio.get("blocked_hint") or ""),
             "scene_hint": str(studio.get("scene_hint") or ""),
             "record_hint": str(studio.get("record_hint") or ""),
+            "has_gold": (self.path / "gold" / "eval.mp4").is_file(),
             "has_scene": bool(self.data.get("scene")),
             "scene_preview": bool(
                 ((self.data.get("adapters") or {}).get("mujoco") or {}).get("scene_preview")
@@ -93,11 +102,39 @@ def _validate_studio(recipe_id: str, data: dict[str, Any]) -> None:
         raise RecipeError(f"{recipe_id}: studio.availability must be cpu or gpu")
 
 
+def _gpu_engine_configured(data: dict[str, Any], name: str) -> bool:
+    adapters = data.get("adapters") or {}
+    cfg = adapters.get(name) or {}
+    if not isinstance(cfg, dict) or cfg.get("unsupported"):
+        return False
+    if name == "playground":
+        return bool(cfg.get("env_name") or cfg.get("train_command"))
+    if name in {"mjlab", "isaaclab"}:
+        return bool(cfg.get("task"))
+    return False
+
+
+def _launch_here(recipe: Recipe, availability: str) -> bool:
+    """True when Train on this machine will launch, not merely compile-and-block.
+
+    CPU recipes always launch. GPU recipes launch when any configured engine
+    (playground / mjlab / isaaclab) is launch-ready on this host.
+    """
+    if availability == "cpu":
+        return True
+    from humanoid_training.hardware import adapter_launch_ready
+
+    for name in ("playground", "mjlab", "isaaclab"):
+        if _gpu_engine_configured(recipe.data, name) and adapter_launch_ready(name):
+            return True
+    return False
+
+
 def public_catalog() -> dict[str, Any]:
     """Grouped recipe list. The studio projects this; it must not invent groups."""
     recipes = [r.as_public_dict() for r in list_recipes()]
-    ready = [r for r in recipes if r["availability"] == "cpu"]
-    later = [r for r in recipes if r["availability"] != "cpu"]
+    ready = [r for r in recipes if r["launch_here"]]
+    later = [r for r in recipes if not r["launch_here"]]
     return {
         "recipes": recipes,
         "ready": [r["id"] for r in ready],

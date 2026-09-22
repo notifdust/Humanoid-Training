@@ -1,9 +1,9 @@
 id: g1-reach
-version: 0.1.0
+version: 0.2.0
 phase: 1
 runnable: false
 title: G1 reach
-summary: Reach a target with a G1 arm. Compiles mjlab / Isaac Lab payloads; live train needs a GPU (blocked on CPU studio).
+summary: There is no Unitree G1 reach environment in Playground, mjlab, or Isaac Lab yet. Compiles nothing; Train blocks with the next honest step.
 language: Reach the target with the right hand.
 robot: unitree-g1-29dof
 success:
@@ -18,26 +18,26 @@ eval:
   episodes: 10
   record_video: true
 backend:
-  prefer: [playground, mjlab, isaaclab]
+  prefer: [mjlab, isaaclab]
   compute: local-docker
 adapters:
   playground:
-    env_name: G1JoystickFlatTerrain
-    unsupported: "A dedicated G1 reach env is not in Playground yet. This recipe compiles locomotion as a placeholder until a reach env is pinned."
+    unsupported: "Playground has no G1 reach env. G1JoystickFlatTerrain is walking, not reaching. Use pick-and-place on the CPU studio."
   mjlab:
-    task: G1Reach-v0
+    unsupported: "mjlab has no G1 reach task. Registered G1 envs are velocity/tracking (Mjlab-Velocity-Flat-Unitree-G1). Cube lift is YAM, not G1. Use pick-and-place here."
   isaaclab:
-    task: Isaac-Reach-G1-v0
+    unsupported: "Isaac Lab has no G1 reach task. Reach is Franka/UR10/OpenArm. G1 tasks are velocity (Isaac-Velocity-Flat-G1-v0) and PickPlace. Use pick-and-place on the CPU studio."
   gymnasium:
     unsupported: "G1 reach is not a Gymnasium environment."
   mujoco:
-    unsupported: "CPU hold-pose cannot express a reach task. Use a GPU engine."
+    unsupported: "CPU hold-pose cannot express a reach task. Use pick-and-place to see an arm move here."
 gold:
   notes: |
-    Compile-only until a real reach environment id is verified on a GPU box.
+    Do not launch a fake reach env. Confirm a real G1 reach id on a GPU box
+    before claiming this recipe trains. Pick-and-place is the CPU arm preview.
 studio:
   availability: gpu
   start_here: false
-  promise: Reach training needs a GPU.
-  train_hint: Reach training needs a GPU. Clicking Train writes job files and stops. Use Pick and place to see an arm move here.
-  blocked_hint: Needs mjlab on a GPU box. Not a silent reach success.
+  promise: Reach training needs a G1 reach env that does not exist upstream yet.
+  train_hint: There is no G1 reach task in mjlab or Isaac Lab. Clicking Train stops. Use Pick and place to see an arm move here.
+  blocked_hint: No G1 reach env to launch. Not a silent reach success. Use Pick and place.

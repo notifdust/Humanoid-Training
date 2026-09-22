@@ -46,7 +46,10 @@ still scores success; it will not write `eval.mp4`.
 2. **G1 stand → Train.** Humanoid holds a pose and waves. Not walking.
 3. **Pick and place → Train.** Mustard goes in the bowl; the arm follows. Not finger grasping.
 
-Skip **G1 walk** and **G1 reach** on a laptop — they need a GPU and will stop on purpose.
+Skip **G1 reach** — there is no G1 reach environment upstream.
+**G1 walk** stops on a laptop (needs an NVIDIA GPU and Playground,
+mjlab, or Isaac Lab). On a GPU box it launches for real — not a
+stand clip.
 
 Rooms: Robots · Tasks · Data · Runs. Job spec is under **Advanced**.
 
@@ -58,17 +61,34 @@ python -m humanoid_training.cli train spec/examples/cartpole-balance.json
 python -m humanoid_training.cli fetch-assets unitree_g1
 python -m humanoid_training.cli train spec/examples/g1-stand.json
 python -m humanoid_training.cli train spec/examples/g1-walk.json --compile-only
+python -m humanoid_training.cli train spec/examples/g1-walk.json
 python -m humanoid_training.cli train spec/examples/cartpole-balance.json --docker
 ```
 
 `--docker` is the Phase 1 container runner (CPU image in `Dockerfile`).
-If Docker is missing it stops with a next step; in-process Train still works.
+GPU recipes are refused there. If Docker is missing it stops with a next
+step; in-process Train still works.
+
+On a machine with an NVIDIA GPU:
+
+```bash
+pip install playground
+python -m humanoid_training.cli train spec/examples/g1-walk.json
+# or mjlab / Isaac Lab, via backend.prefer
+```
+
+Playground runs `train-jax-ppo --env_name G1JoystickFlatTerrain`.
+mjlab runs `python -m mjlab.scripts.train Mjlab-Velocity-Flat-Unitree-G1 --video True`.
+Isaac Lab runs `isaaclab.sh` for `Isaac-Velocity-Flat-G1-v0` (or GPU
+Docker / `osmo workflow submit` without remote harvest).
+The engine clip becomes `eval.mp4` with `facts.engine` set.
+Without a GPU the same command compiles payloads and exits 12.
 
 Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
 
 ## Read this first
 
-- **[Roadmap](docs/ROADMAP.md)** — phases, exit tests, what is live now
+- **[Roadmap](docs/ROADMAP.md)** — what is live, what this round verified, what comes next
 - **[Product vision](docs/VISION.md)** — landscape and why we compile instead of replacing engines
 - **[Architecture](docs/ARCHITECTURE.md)** — job spec, adapters, runners
 
@@ -76,11 +96,11 @@ Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
 
 | Recipe | What happens |
 |---|---|
-| `cartpole-balance` | Gymnasium RL on CPU, eval video |
-| `g1-stand` | MuJoCo G1 from Menagerie, stand + both-arm wave, eval video |
-| `g1-walk` | Compile to Playground / mjlab / Isaac Lab (GPU to launch) |
-| `g1-reach` | Compile to mjlab / Isaac Lab |
-| `pick-and-place` | Demos → linear BC steers mustard; G1 arm plays pick/lift/place. Not finger grasping, not ACT. |
+| `cartpole-balance` | Gymnasium RL on CPU, eval video, gold clip |
+| `g1-stand` | MuJoCo G1 from Menagerie, stand + both-arm wave, eval video, gold clip |
+| `g1-walk` | Compile to Playground / mjlab / Isaac Lab. **Launches** the first ready GPU engine. |
+| `g1-reach` | Blocked. No G1 reach env in Playground, mjlab, or Isaac Lab. |
+| `pick-and-place` | Demos → linear BC steers mustard; G1 arm plays pick/lift/place. Gold clip. Not finger grasping, not ACT. |
 
 ## Non-goals (for now)
 
@@ -93,6 +113,8 @@ Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
 
 ```bash
 pytest
+# Retrain CPU recipes and compare eval.mp4 to gold clips (needs ffmpeg + a display or xvfb):
+# HT_GOLD=1 xvfb-run -a pytest -m gold
 ```
 
 ## License

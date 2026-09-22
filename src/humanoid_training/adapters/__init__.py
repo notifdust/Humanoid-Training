@@ -28,12 +28,16 @@ def registry() -> dict[str, Adapter]:
 
 
 def select_adapter(spec: dict) -> Adapter:
+    """First launch-ready preferred engine, else first compile-ok (block later)."""
+    from humanoid_training.hardware import adapter_launch_ready
+
     preferred = list((spec.get("backend") or {}).get("prefer") or [])
     adapters = registry()
     if not preferred:
         preferred = list(adapters.keys())
 
     failures: list[str] = []
+    compile_ok: list[Adapter] = []
     for name in preferred:
         adapter = adapters.get(name)
         if adapter is None:
@@ -44,9 +48,15 @@ def select_adapter(spec: dict) -> Adapter:
             failures.append(f"{name}: {cfg['unsupported']}")
             continue
         support = adapter.support(spec)
-        if support.ok:
+        if not support.ok:
+            failures.append(f"{name}: {support.reason}")
+            continue
+        if adapter_launch_ready(name):
             return adapter
-        failures.append(f"{name}: {support.reason}")
+        compile_ok.append(adapter)
+        failures.append(f"{name}: compiles here but is not launch-ready")
+    if compile_ok:
+        return compile_ok[0]
     raise NoAdapter(
         "No adapter could run this spec. Tried:\n"
         + "\n".join(f"  - {line}" for line in failures)

@@ -40,6 +40,9 @@ humanoid_training = ["py.typed"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+  "gold: train CPU recipes with a display and compare eval.mp4 to checked-in gold clips",
+]
 filterwarnings = [
   "ignore::DeprecationWarning",
 ]

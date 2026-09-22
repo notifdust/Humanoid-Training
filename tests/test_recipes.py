@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from humanoid_training.recipes import expand_spec, list_recipes
 from humanoid_training.spec import load_spec
 
@@ -77,6 +79,60 @@ def test_recipe_catalog_is_the_studio_contract() -> None:
     assert set(catalog["ready"]) == {"cartpole-balance", "g1-stand", "pick-and-place"}
     assert set(catalog["later"]) == {"g1-walk", "g1-reach"}
     assert set(catalog["start_here"]) == {"cartpole-balance", "g1-stand", "pick-and-place"}
+    assert by_id["cartpole-balance"]["has_gold"] is True
+    assert by_id["g1-stand"]["has_gold"] is True
+    assert by_id["pick-and-place"]["has_gold"] is True
+    assert by_id["g1-walk"]["has_gold"] is False
+    assert by_id["g1-walk"]["launch_here"] is False
+    assert by_id["g1-reach"]["launch_here"] is False
+    assert by_id["cartpole-balance"]["launch_here"] is True
+
+
+def test_launch_here_walk_when_playground_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+    from humanoid_training.recipes import public_catalog
+
+    monkeypatch.setattr("humanoid_training.hardware.playground_ready", lambda: True)
+    catalog = public_catalog()
+    by_id = {r["id"]: r for r in catalog["recipes"]}
+    assert by_id["g1-walk"]["launch_here"] is True
+    assert by_id["g1-reach"]["launch_here"] is False
+    assert "g1-walk" in catalog["ready"]
+    assert "g1-reach" in catalog["later"]
+    assert "Playground" in by_id["g1-walk"]["promise"] or "walking" in by_id["g1-walk"]["promise"].lower()
+    assert "stand clip" in by_id["g1-walk"]["train_hint"]
+
+
+def test_launch_here_walk_when_mjlab_or_isaac_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+    from humanoid_training.recipes import public_catalog
+
+    monkeypatch.setattr("humanoid_training.hardware.playground_ready", lambda: False)
+    monkeypatch.setattr("humanoid_training.hardware.mjlab_ready", lambda: True)
+    monkeypatch.setattr("humanoid_training.hardware.isaac_launch_ready", lambda: False)
+    catalog = public_catalog()
+    by_id = {r["id"]: r for r in catalog["recipes"]}
+    assert by_id["g1-walk"]["launch_here"] is True
+    assert by_id["g1-reach"]["launch_here"] is False
+    assert "g1-walk" in catalog["ready"]
+    assert "g1-reach" in catalog["later"]
+
+
+def test_recipes_pin_real_upstream_task_ids() -> None:
+    import yaml
+
+    root = Path(__file__).resolve().parents[1]
+    walk = yaml.safe_load((root / "recipes" / "g1-walk" / "recipe.yaml").read_text(encoding="utf-8"))
+    reach = yaml.safe_load((root / "recipes" / "g1-reach" / "recipe.yaml").read_text(encoding="utf-8"))
+    walk_ad = walk.get("adapters") or {}
+    reach_ad = reach.get("adapters") or {}
+    assert (walk_ad.get("mjlab") or {}).get("task") == "Mjlab-Velocity-Flat-Unitree-G1"
+    assert (walk_ad.get("isaaclab") or {}).get("task") == "Isaac-Velocity-Flat-G1-v0"
+    assert (walk_ad.get("playground") or {}).get("env_name") == "G1JoystickFlatTerrain"
+    assert not (reach_ad.get("playground") or {}).get("env_name")
+    assert (reach_ad.get("playground") or {}).get("unsupported")
+    assert (reach_ad.get("mjlab") or {}).get("unsupported")
+    assert (reach_ad.get("isaaclab") or {}).get("unsupported")
+    assert not (reach_ad.get("mjlab") or {}).get("task")
+    assert not (reach_ad.get("isaaclab") or {}).get("task")
 
 
 def test_recipes_module_does_not_hardcode_start_here_ids() -> None:
