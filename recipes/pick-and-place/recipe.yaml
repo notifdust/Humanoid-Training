@@ -3,7 +3,7 @@ version: 0.5.0
 phase: 2
 runnable: true
 title: Pick and place
-summary: Record or script LeRobot demos of mustard→bowl. Linear BC steers the mocap mustard; the G1 arm plays pick/lift/place poses to follow. Not finger grasping, not ACT.
+summary: Record or script LeRobot demos of mustard→bowl. GPU + LeRobot runs ACT on those demos; CPU falls back to linear-BC (mocap mustard + arm poses). Not finger grasping.
 language: Pick up the object and put it in the container.
 robot: unitree-g1-29dof
 scene:
@@ -36,7 +36,7 @@ eval:
   episodes: 1
   record_video: true
 backend:
-  prefer: [mujoco, lerobot, mjlab, isaaclab]
+  prefer: [lerobot, mujoco, mjlab, isaaclab]
   compute: local
 adapters:
   mujoco:
@@ -56,19 +56,17 @@ adapters:
     unsupported: "mjlab pick-and-place launch is Phase 3."
   lerobot:
     policy: act
-    unsupported: "Full ACT needs the lerobot package and a GPU. CPU linear-BC runs on the mujoco adapter from the same LeRobot dataset."
 gold:
   clip: eval.mp4
   notes: |
-    Demos (scripted or canvas) fit linear BC. Eval: G1 reaches with a pick
-    pose, then BC moves the mocap mustard toward the bowl while the arm
-    blends lift→place poses from progress. Pelvis pinned. Not finger
-    grasping and not ACT. Bad demos make mustard_bowl_dist fail.
+    CPU gold is linear-BC: G1 reaches with a pick pose, then BC moves the
+    mocap mustard toward the bowl while the arm blends lift→place poses.
+    Pelvis pinned. Same demos feed ACT when LeRobot + GPU are present
+    (facts.policy=act). Not finger grasping. Bad demos fail mustard_bowl_dist.
 studio:
   availability: cpu
   start_here: true
   promise: Mustard slides into the bowl. The arm follows. Not finger grasping.
-  train_hint: You will see the mustard move into the bowl and the G1 arm follow. That is a demo-following preview, not a grasping policy.
+  train_hint: On CPU you see mustard move into the bowl with linear-BC. On a GPU box with LeRobot, Train launches ACT on the same demos. Neither is finger grasping.
   scene_hint: Top-down kitchen counter. Drag mustard if you want. Train still works if you do not.
-  record_hint: Show the robot the task. Drag mustard, or steer with WASD / a gamepad, uncheck the bad takes, then Train. This is demonstration following, not finger grasping.
-
+  record_hint: Show the robot the task. Drag mustard, or steer with WASD / a gamepad, uncheck the bad takes, then Train. Same demos feed linear-BC or ACT.

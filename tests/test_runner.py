@@ -162,6 +162,8 @@ def test_pick_and_place_imitation_puts_mustard_in_bowl(tmp_path: Path) -> None:
     assert "mustard_bowl_dist" in notes
     facts = manifest.get("facts") or {}
     assert facts.get("kind") == "imitation"
+    assert facts.get("policy") == "linear-bc"
+    assert facts.get("engine") == "mujoco"
     assert facts.get("arm_mode")
     assert facts.get("object") == "mustard"
     assert facts.get("container") == "bowl"

@@ -106,7 +106,7 @@ pass. ACT is **not** that exit test.
 |---|---|
 | LeRobot adapter (dataset I/O + ACT) | write/inspect local v2 layout; `train_lerobot.sh` compiled; ACT launch blocked |
 | Episode review (keep / drop) | `keep_episodes` filters BC frames; empty keep is refused |
-| `pick-and-place` recipe | scripted or canvas/WASD/gamepad demos → linear-BC mustard + G1 pick/lift/place poses |
+| `pick-and-place` recipe | scripted or canvas demos → ACT when LeRobot+GPU; else linear-BC mustard + G1 arm poses |
 | Teleop into the studio | canvas, WASD, gamepad stick; Save **appends**; Space does not immediately record a second take |
 | Hugging Face Hub import | fail-closed (`hf:` / huggingface.co URLs tell you to download locally) |
 
@@ -118,7 +118,7 @@ pass. ACT is **not** that exit test.
 |---|---|---|---|
 | `cartpole-balance` | yes (CPU) | gymnasium | Pole stays up. Gold `eval.mp4` in-tree. |
 | `g1-stand` | yes (CPU) | mujoco + Menagerie G1 | Stand + both-arm wave, pelvis pinned. Gold clip. |
-| `pick-and-place` | yes (CPU) | mujoco + LeRobot demos | Mustard into bowl via linear-BC. Gold clip. |
+| `pick-and-place` | yes (CPU linear-BC; ACT on GPU+LeRobot) | lerobot / mujoco | Same demos. `facts.policy=act` or `linear-bc`. Gold clip is CPU linear-BC. |
 | `g1-walk` | yes on GPU + Playground, mjlab, or Isaac Lab; blocked on CPU | playground / mjlab / isaaclab | Walking eval from the engine that launched. No gold clip. |
 | `g1-reach` | no | — | Blocked. No G1 reach env in Playground, mjlab, or Isaac Lab. Do not map locomotion or Franka Reach as G1 reach. |
 | Unitree H1 | catalog only | — | No recipe. Do not add one until G1 walk trains for real. |
@@ -339,6 +339,17 @@ Poll knobs: `HT_OSMO_POLL_SECONDS`, `HT_OSMO_TIMEOUT_SECONDS`.
 **Exit test.** GPU + LeRobot runs ACT (or another policy) on the same
 local dataset; `facts.policy=act` vs `linear-bc`. CPU linear-BC stays.
 Finger grasping stays out of scope.
+
+| Deliverable | Status |
+|---|---|
+| Prefer `lerobot` before `mujoco` on pick-and-place | done |
+| `lerobot_ready` probe (`HT_LEROBOT_CLI` + GPU) | done |
+| Launch `lerobot-train --policy.type=act` on local demos | done (harness) |
+| `facts.policy=act` vs `linear-bc` on mujoco fallback | done |
+| Fail closed on missing video / nonzero exit (no mustard sub) | done |
+| Live ACT train on a GPU box | **not done** (needs `pip install 'lerobot[training]'` + NVIDIA GPU) |
+
+Fake CLI for CI: `HT_LEROBOT_CLI=/path/to/fake` with `HT_GPU=1`.
 
 ### Phase 3f — Honest G1 manipulation recipe
 
