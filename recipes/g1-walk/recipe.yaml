@@ -41,13 +41,14 @@ gold:
     Needs an NVIDIA GPU. Phase 3a launches Playground
     `train-jax-ppo --env_name G1JoystickFlatTerrain`. Phase 3b launches
     mjlab `Mjlab-Velocity-Flat-Unitree-G1` or Isaac Lab
-    `Isaac-Velocity-Flat-G1-v0` (isaaclab.sh, GPU Docker, or OSMO submit).
-    Do not check in gold/eval.mp4 — a stand clip is not a walk.
+    `Isaac-Velocity-Flat-G1-v0` (isaaclab.sh, GPU Docker, or OSMO
+    submit→poll→rsync harvest). Do not check in gold/eval.mp4 —
+    a stand clip is not a walk.
 studio:
   availability: gpu
   start_here: false
   promise: Walking is not available on this computer.
   ready_promise: GPU walk on this machine. The eval video should show the G1 walking, not standing still.
   train_hint: Walking is not available on this computer. Clicking Train writes GPU job files and stops. Use G1 stand to see the humanoid move here.
-  ready_hint: This computer can launch a G1 walk engine (Playground, mjlab, or Isaac Lab). Train should write a walking eval.mp4 — not a stand clip.
-  blocked_hint: Needs Playground, mjlab, or Isaac Lab on a GPU box. Not a frozen walk clip.
+  ready_hint: This computer can launch a G1 walk engine (Playground, mjlab, Isaac Lab, or OSMO harvest). Train should write a walking eval.mp4 — not a stand clip.
+  blocked_hint: Needs Playground, mjlab, Isaac Lab, or OSMO on a GPU/cloud box. Not a frozen walk clip.

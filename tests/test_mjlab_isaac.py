@@ -64,9 +64,48 @@ raise SystemExit(0)
 """
 
 FAKE_OSMO = """#!/usr/bin/env python3
+import json
 import sys
-print("osmo workflow submit", " ".join(sys.argv[1:]), flush=True)
-raise SystemExit(0)
+from pathlib import Path
+
+args = sys.argv[1:]
+print("osmo", " ".join(args), flush=True)
+
+def die(code=1):
+    raise SystemExit(code)
+
+if len(args) >= 2 and args[0] == "workflow" and args[1] == "submit":
+    # stdout looks like real CLI text; also support --format-type json
+    if "--format-type" in args and "json" in args:
+        print(json.dumps({"workflow_id": "ht-walk-osmo-1"}), flush=True)
+    else:
+        print("Workflow submit successful.", flush=True)
+        print("Workflow ID        - ht-walk-osmo-1", flush=True)
+    raise SystemExit(0)
+
+if len(args) >= 3 and args[0] == "workflow" and args[1] == "query":
+    wid = args[-1]
+    if "--format-type" in args and "json" in args:
+        print(json.dumps({"workflow_id": wid, "status": "COMPLETED"}), flush=True)
+    else:
+        print(f"Workflow ID : {wid}", flush=True)
+        print("Status      : COMPLETED", flush=True)
+    raise SystemExit(0)
+
+if len(args) >= 3 and args[0] == "workflow" and args[1] == "rsync" and args[2] == "download":
+    # ... download <id> [task] <remote>:<local>
+    mapping = args[-1]
+    if ":" not in mapping:
+        die(2)
+    remote, local = mapping.split(":", 1)
+    dest = Path(local)
+    dest.mkdir(parents=True, exist_ok=True)
+    out = dest / "rollout0.mp4"
+    out.write_bytes(b"fake-osmo-harvest-mp4")
+    print(f"downloaded {out}", flush=True)
+    raise SystemExit(0)
+
+die(2)
 """
 
 FAKE_DOCKER = """#!/usr/bin/env python3
@@ -230,22 +269,78 @@ def test_g1_walk_isaac_docker_harvests_video(
     assert facts.get("launch") == "docker"
 
 
-def test_g1_walk_osmo_submit_does_not_harvest(
+def test_g1_walk_osmo_harvests_video(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     osmo = _write_cli(tmp_path, "osmo", FAKE_OSMO)
     monkeypatch.setenv("HT_OSMO_CLI", str(osmo))
+    monkeypatch.setenv("HT_OSMO_POLL_SECONDS", "0.01")
+    monkeypatch.setenv("HT_OSMO_TIMEOUT_SECONDS", "2")
+    # CI runners often have `docker` on PATH; OSMO must still win when
+    # HT_DOCKER_GPU is off.
+    monkeypatch.setenv("HT_DOCKER_GPU", "0")
+    monkeypatch.setenv("HT_GPU", "0")
     spec = _walk_spec(backend={"prefer": ["isaaclab"], "compute": "osmo"})
     manifest = run_job(spec, runs_dir=tmp_path / "runs")
-    assert manifest["status"] == "blocked"
-    err = (manifest.get("error") or "").lower()
-    assert "osmo" in err
-    assert "harvest" in err or "remote" in err
-    assert not (Path(manifest["run_dir"]) / "eval.mp4").is_file()
-    job = (Path(manifest["run_dir"]) / "job.json").read_text(encoding="utf-8")
-    assert "osmo" in job
-    log = (Path(manifest["run_dir"]) / "run.log").read_text(encoding="utf-8")
+    assert manifest["status"] == "passed", manifest.get("error") or manifest.get("notes")
+    run_dir = Path(manifest["run_dir"])
+    assert (run_dir / "eval.mp4").read_bytes() == b"fake-osmo-harvest-mp4"
+    facts = manifest.get("facts") or {}
+    assert facts.get("engine") == "isaaclab"
+    assert facts.get("launch") == "osmo"
+    assert facts.get("device") == "remote"
+    assert facts.get("workflow_id") == "ht-walk-osmo-1"
+    assert (run_dir / "osmo_workflow.yaml").is_file()
+    yaml_text = (run_dir / "osmo_workflow.yaml").read_text(encoding="utf-8")
+    assert "ht_eval" in yaml_text
+    log = (run_dir / "run.log").read_text(encoding="utf-8")
     assert "workflow submit" in log
+    assert "osmo status=COMPLETED" in log or "COMPLETED" in log
+
+
+def test_osmo_not_stolen_by_docker_on_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression: CI has docker but no GPU Docker opt-in; OSMO must harvest."""
+    osmo = _write_cli(tmp_path, "osmo", FAKE_OSMO)
+    fake_docker = _write_cli(
+        tmp_path,
+        "docker",
+        "#!/usr/bin/env python3\nimport sys\nprint('should-not-run')\nsys.exit(125)\n",
+    )
+    monkeypatch.setenv("HT_OSMO_CLI", str(osmo))
+    monkeypatch.setenv("HT_OSMO_POLL_SECONDS", "0.01")
+    monkeypatch.setenv("HT_OSMO_TIMEOUT_SECONDS", "2")
+    monkeypatch.setenv("HT_DOCKER_GPU", "0")
+    monkeypatch.setenv("HT_GPU", "1")  # would have triggered old buggy branch
+    monkeypatch.setattr("humanoid_training.hardware.docker_bin", lambda: str(fake_docker))
+    spec = _walk_spec(backend={"prefer": ["isaaclab"], "compute": "osmo"})
+    manifest = run_job(spec, runs_dir=tmp_path / "runs")
+    assert manifest["status"] == "passed", manifest.get("error")
+    assert (manifest.get("facts") or {}).get("launch") == "osmo"
+    assert (Path(manifest["run_dir"]) / "eval.mp4").is_file()
+
+
+def test_osmo_ready_makes_walk_launch_here(monkeypatch: pytest.MonkeyPatch) -> None:
+    from humanoid_training.recipes import public_catalog
+
+    monkeypatch.setattr("humanoid_training.hardware.playground_ready", lambda: False)
+    monkeypatch.setattr("humanoid_training.hardware.mjlab_ready", lambda: False)
+    monkeypatch.setattr("humanoid_training.hardware.osmo_ready", lambda: True)
+    monkeypatch.setattr("humanoid_training.hardware.isaac_launch_ready", lambda: True)
+    catalog = public_catalog()
+    by_id = {r["id"]: r for r in catalog["recipes"]}
+    assert by_id["g1-walk"]["launch_here"] is True
+    assert by_id["g1-reach"]["launch_here"] is False
+
+
+def test_parse_workflow_id_and_status() -> None:
+    from humanoid_training.adapters.osmo_remote import parse_workflow_id, parse_workflow_status
+
+    assert parse_workflow_id("Workflow ID        - abc-123\n") == "abc-123"
+    assert parse_workflow_id('{"workflow_id": "w1"}') == "w1"
+    assert parse_workflow_status("Status      : COMPLETED\n") == "COMPLETED"
+    assert parse_workflow_status('{"status": "FAILED"}') == "FAILED"
 
 
 def test_g1_reach_stays_blocked_when_mjlab_ready(

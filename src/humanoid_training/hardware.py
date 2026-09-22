@@ -141,6 +141,13 @@ def osmo_cli() -> str | None:
     return shutil.which("osmo")
 
 
+def osmo_ready() -> bool:
+    """Phase 3d: OSMO CLI present so we can submit + poll + harvest."""
+    if _env_bool("HT_OSMO_HARVEST") is False:
+        return False
+    return osmo_cli() is not None
+
+
 def docker_bin() -> str | None:
     return shutil.which("docker")
 
@@ -150,15 +157,12 @@ def docker_gpu_requested() -> bool:
 
 
 def isaac_launch_ready() -> bool:
-    """Local Isaac launch: GPU plus isaaclab.sh or a GPU Docker opt-in.
-
-    OSMO submit is not launch-ready: this phase does not harvest a remote clip.
-    """
-    if not gpu_available():
-        return False
-    if isaac_cli():
+    """Isaac can launch here: local GPU CLI/Docker, or OSMO remote harvest."""
+    if isaac_cli() and gpu_available():
         return True
-    return docker_bin() is not None and docker_gpu_requested()
+    if docker_bin() is not None and docker_gpu_requested() and gpu_available():
+        return True
+    return osmo_ready()
 
 
 def adapter_launch_ready(name: str) -> bool:
@@ -186,5 +190,6 @@ def engine_status() -> dict[str, Any]:
         "mjlab_ready": bool(mj) and gpu_available(),
         "isaac_cli": isa,
         "osmo_cli": osmo,
+        "osmo_ready": osmo_ready(),
         "isaac_launch_ready": isaac_launch_ready(),
     }

@@ -80,7 +80,8 @@ python -m humanoid_training.cli train spec/examples/g1-walk.json
 
 `ht proof walk` is the Phase 3c exit command: short train, require
 `eval.mp4`, stamp `facts.engine`. Without a GPU it exits 12 with the
-next step.
+next step. With the OSMO CLI logged in (no local GPU), Train can still
+harvest a remote Isaac walk clip (Phase 3d).
 
 Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
 
@@ -96,7 +97,7 @@ Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
 |---|---|
 | `cartpole-balance` | Gymnasium RL on CPU, eval video, gold clip |
 | `g1-stand` | MuJoCo G1 from Menagerie, stand + both-arm wave, eval video, gold clip |
-| `g1-walk` | Compile to Playground / mjlab / Isaac Lab. **Launches** the first ready GPU engine. |
+| `g1-walk` | Compile to Playground / mjlab / Isaac Lab. **Launches** the first ready engine (local GPU or OSMO harvest). |
 | `g1-reach` | Blocked. No G1 reach env in Playground, mjlab, or Isaac Lab. |
 | `pick-and-place` | Demos → linear BC steers mustard; G1 arm plays pick/lift/place. Gold clip. Not finger grasping, not ACT. |
 
