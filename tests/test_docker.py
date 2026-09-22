@@ -103,7 +103,7 @@ def test_docker_success_stamps_runner_and_does_not_recurse(
     assert "host_spec_hash" in manifest["facts"]
     assert "--docker" not in captured["cmd"]
     assert "HT_IN_CONTAINER=1" in captured["cmd"]
-    assert (tmp_path / "dock-1.spec.json").is_file()
+    assert not (tmp_path / "dock-1.spec.json").is_file()
 
 
 def test_docker_preserves_blocked_manifest(
@@ -128,9 +128,54 @@ def test_docker_preserves_blocked_manifest(
         return SimpleNamespace(returncode=12, stdout="", stderr="blocked")
 
     monkeypatch.setattr("humanoid_training.docker_runner.subprocess.run", fake_run)
-    manifest = run_job_via_docker(_walk(), runs_dir=tmp_path, run_id="walk-dock")
+    manifest = run_job_via_docker(_cartpole(), runs_dir=tmp_path, run_id="walk-dock")
     assert manifest["status"] == "blocked"
     assert "Playground" in (manifest.get("error") or "")
+    assert manifest["facts"]["runner"] == "docker"
+
+
+def test_docker_refuses_gpu_recipe_on_cpu_image(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    called = {"n": 0}
+
+    def boom(*_a, **_k):
+        called["n"] += 1
+        raise AssertionError("GPU recipes must not invoke docker on the CPU image")
+
+    monkeypatch.setattr("humanoid_training.docker_runner.docker_bin", lambda: "/usr/bin/docker")
+    monkeypatch.setattr("humanoid_training.docker_runner.ensure_image", boom)
+    monkeypatch.setattr("humanoid_training.docker_runner.subprocess.run", boom)
+    with pytest.raises(AdapterUnavailable, match="CPU Docker"):
+        run_job_via_docker(_walk(), runs_dir=tmp_path, run_id="walk-dock")
+    assert called["n"] == 0
+
+
+def test_docker_gpu_flag_allows_mocked_walk_container(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("HT_DOCKER_GPU", "1")
+    monkeypatch.setattr("humanoid_training.docker_runner.docker_bin", lambda: "/usr/bin/docker")
+    monkeypatch.setattr("humanoid_training.docker_runner.ensure_image", lambda *a, **k: None)
+
+    def fake_run(cmd, check=False, capture_output=True, text=True):
+        run_id = next(item.split("=", 1)[1] for item in cmd if str(item).startswith("HT_RUN_ID="))
+        run_dir = tmp_path / run_id
+        run_dir.mkdir(parents=True, exist_ok=True)
+        write_manifest(
+            run_dir,
+            {
+                "run_id": run_id,
+                "status": "blocked",
+                "error": "Playground is not installed. Use g1-stand on the CPU studio.",
+                "facts": {"kind": "compile"},
+            },
+        )
+        return SimpleNamespace(returncode=12, stdout="", stderr="blocked")
+
+    monkeypatch.setattr("humanoid_training.docker_runner.subprocess.run", fake_run)
+    manifest = run_job_via_docker(_walk(), runs_dir=tmp_path, run_id="walk-gpu-dock")
+    assert manifest["status"] == "blocked"
     assert manifest["facts"]["runner"] == "docker"
 
 

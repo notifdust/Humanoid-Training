@@ -1,0 +1,268 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from humanoid_training.adapters import select_adapter
+from humanoid_training.recipes import expand_spec
+from humanoid_training.runner import run_job
+from humanoid_training.spec import load_spec
+
+
+FAKE_MJLAB = """#!/usr/bin/env python3
+import os
+import sys
+from pathlib import Path
+
+args = sys.argv[1:]
+task = args[0] if args else "unknown"
+log_root = "logs"
+video = False
+i = 0
+while i < len(args):
+    if args[i] == "--log-root" and i + 1 < len(args):
+        log_root = args[i + 1]
+        i += 2
+        continue
+    if args[i] == "--video" and i + 1 < len(args) and args[i + 1] == "True":
+        video = True
+        i += 2
+        continue
+    i += 1
+print(f"mjlab task={task} log_root={log_root} video={video}", flush=True)
+code = int(os.environ.get("HT_FAKE_MJLAB_EXIT", "0"))
+if code != 0:
+    print("fake mjlab failing", flush=True)
+    raise SystemExit(code)
+if os.environ.get("HT_FAKE_MJLAB_NO_VIDEO") == "1" or not video:
+    raise SystemExit(0)
+dest = Path(log_root) / "videos" / "train" / "rl-video-step-0.mp4"
+dest.parent.mkdir(parents=True, exist_ok=True)
+dest.write_bytes(b"fake-mjlab-mp4")
+raise SystemExit(0)
+"""
+
+FAKE_ISAAC = """#!/usr/bin/env python3
+import os
+import sys
+from pathlib import Path
+
+joined = " ".join(sys.argv)
+print(f"isaaclab {joined}", flush=True)
+code = int(os.environ.get("HT_FAKE_ISAAC_EXIT", "0"))
+if code != 0:
+    print("fake isaac failing", flush=True)
+    raise SystemExit(code)
+want_video = "--video" in sys.argv
+if os.environ.get("HT_FAKE_ISAAC_NO_VIDEO") == "1" or not want_video:
+    raise SystemExit(0)
+dest = Path("logs") / "rsl_rl" / "g1_flat" / "videos" / "play" / "rl-video.mp4"
+dest.parent.mkdir(parents=True, exist_ok=True)
+dest.write_bytes(b"fake-isaac-mp4")
+raise SystemExit(0)
+"""
+
+FAKE_OSMO = """#!/usr/bin/env python3
+import sys
+print("osmo workflow submit", " ".join(sys.argv[1:]), flush=True)
+raise SystemExit(0)
+"""
+
+FAKE_DOCKER = """#!/usr/bin/env python3
+import sys
+from pathlib import Path
+
+args = sys.argv[1:]
+host = None
+for i, item in enumerate(args):
+    if item == "-v" and i + 1 < len(args) and "/ht_run" in args[i + 1]:
+        host = args[i + 1].split(":", 1)[0]
+        break
+print("docker", " ".join(args), flush=True)
+if not host:
+    raise SystemExit(2)
+dest = Path(host) / "isaac_logs" / "play.mp4"
+dest.parent.mkdir(parents=True, exist_ok=True)
+dest.write_bytes(b"fake-docker-isaac-mp4")
+raise SystemExit(0)
+"""
+
+
+def _walk_spec(**overlay):
+    spec = load_spec(Path(__file__).resolve().parents[1] / "spec" / "examples" / "g1-walk.json")
+    spec["train"] = {"method": "rl", "steps": 8, "seed": 1, **(overlay.get("train") or {})}
+    if "eval" in overlay:
+        spec["eval"] = overlay["eval"]
+    if "backend" in overlay:
+        spec["backend"] = overlay["backend"]
+    return spec
+
+
+def _write_cli(tmp_path: Path, name: str, body: str) -> Path:
+    path = tmp_path / name
+    path.write_text(body, encoding="utf-8")
+    path.chmod(0o755)
+    return path
+
+
+def test_walk_selects_mjlab_when_playground_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cli = _write_cli(tmp_path, "mjlab-train", FAKE_MJLAB)
+    monkeypatch.setenv("HT_MJLAB_CLI", str(cli))
+    monkeypatch.setenv("HT_GPU", "1")
+    spec = expand_spec(_walk_spec())
+    assert select_adapter(spec).name == "mjlab"
+
+
+def test_walk_prefer_isaaclab_selects_isaac(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cli = _write_cli(tmp_path, "isaaclab.sh", FAKE_ISAAC)
+    monkeypatch.setenv("HT_ISAAC_CLI", str(cli))
+    monkeypatch.setenv("HT_GPU", "1")
+    spec = expand_spec(_walk_spec(backend={"prefer": ["isaaclab"], "compute": "local-docker"}))
+    assert select_adapter(spec).name == "isaaclab"
+
+
+def test_g1_walk_mjlab_harvests_video(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cli = _write_cli(tmp_path, "mjlab-train", FAKE_MJLAB)
+    monkeypatch.setenv("HT_MJLAB_CLI", str(cli))
+    monkeypatch.setenv("HT_GPU", "1")
+    spec = _walk_spec(backend={"prefer": ["mjlab"], "compute": "local-docker"})
+    manifest = run_job(spec, runs_dir=tmp_path / "runs")
+    assert manifest["status"] == "passed", manifest.get("error") or manifest.get("notes")
+    run_dir = Path(manifest["run_dir"])
+    assert (run_dir / "eval.mp4").read_bytes() == b"fake-mjlab-mp4"
+    facts = manifest.get("facts") or {}
+    assert facts.get("kind") == "rl"
+    assert facts.get("engine") == "mjlab"
+    assert facts.get("device") == "gpu"
+    assert facts.get("env") == "Mjlab-Velocity-Flat-Unitree-G1"
+    log = (run_dir / "run.log").read_text(encoding="utf-8")
+    assert "Mjlab-Velocity-Flat-Unitree-G1" in log
+
+
+def test_g1_walk_mjlab_exit0_without_video_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cli = _write_cli(tmp_path, "mjlab-train", FAKE_MJLAB)
+    monkeypatch.setenv("HT_MJLAB_CLI", str(cli))
+    monkeypatch.setenv("HT_GPU", "1")
+    monkeypatch.setenv("HT_FAKE_MJLAB_NO_VIDEO", "1")
+    spec = _walk_spec(backend={"prefer": ["mjlab"], "compute": "local-docker"})
+    manifest = run_job(spec, runs_dir=tmp_path / "runs")
+    assert manifest["status"] == "blocked"
+    err = (manifest.get("error") or "").lower()
+    assert "mp4" in err or "video" in err
+    assert "stand" in err
+    assert not (Path(manifest["run_dir"]) / "eval.mp4").is_file()
+
+
+def test_g1_walk_mjlab_nonzero_exit_is_not_a_walk_clip(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cli = _write_cli(tmp_path, "mjlab-train", FAKE_MJLAB)
+    monkeypatch.setenv("HT_MJLAB_CLI", str(cli))
+    monkeypatch.setenv("HT_GPU", "1")
+    monkeypatch.setenv("HT_FAKE_MJLAB_EXIT", "1")
+    spec = _walk_spec(backend={"prefer": ["mjlab"], "compute": "local-docker"})
+    manifest = run_job(spec, runs_dir=tmp_path / "runs")
+    assert manifest["status"] == "completed"
+    assert manifest.get("metrics", {}).get("passed") is False
+    assert (manifest.get("facts") or {}).get("engine") == "mjlab"
+    assert not (Path(manifest["run_dir"]) / "eval.mp4").is_file()
+
+
+def test_g1_walk_isaac_harvests_video(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cli = _write_cli(tmp_path, "isaaclab.sh", FAKE_ISAAC)
+    monkeypatch.setenv("HT_ISAAC_CLI", str(cli))
+    monkeypatch.setenv("HT_GPU", "1")
+    spec = _walk_spec(backend={"prefer": ["isaaclab"], "compute": "osmo"})
+    manifest = run_job(spec, runs_dir=tmp_path / "runs")
+    assert manifest["status"] == "passed", manifest.get("error") or manifest.get("notes")
+    run_dir = Path(manifest["run_dir"])
+    assert (run_dir / "eval.mp4").read_bytes() == b"fake-isaac-mp4"
+    facts = manifest.get("facts") or {}
+    assert facts.get("kind") == "rl"
+    assert facts.get("engine") == "isaaclab"
+    assert facts.get("device") == "gpu"
+    assert facts.get("env") == "Isaac-Velocity-Flat-G1-v0"
+    assert facts.get("launch") == "isaaclab.sh"
+    log = (run_dir / "run.log").read_text(encoding="utf-8")
+    assert "Isaac-Velocity-Flat-G1-v0" in log
+    assert (run_dir / "osmo_workflow.yaml").is_file()
+
+
+def test_g1_walk_isaac_blocked_without_cli(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HT_GPU", "1")
+    spec = _walk_spec(backend={"prefer": ["isaaclab"], "compute": "osmo"})
+    manifest = run_job(spec, runs_dir=tmp_path / "runs")
+    assert manifest["status"] == "blocked"
+    err = manifest.get("error") or ""
+    assert "Isaac" in err
+    assert "g1-stand" in err or "pick-and-place" in err
+    assert not (Path(manifest["run_dir"]) / "eval.mp4").is_file()
+    assert (Path(manifest["run_dir"]) / "osmo_workflow.yaml").is_file()
+
+
+def test_g1_walk_isaac_docker_harvests_video(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    docker = _write_cli(tmp_path, "docker", FAKE_DOCKER)
+    monkeypatch.setenv("HT_GPU", "1")
+    monkeypatch.setenv("HT_DOCKER_GPU", "1")
+    monkeypatch.setattr("humanoid_training.hardware.docker_bin", lambda: str(docker))
+    spec = _walk_spec(backend={"prefer": ["isaaclab"], "compute": "local-docker"})
+    manifest = run_job(spec, runs_dir=tmp_path / "runs")
+    assert manifest["status"] == "passed", manifest.get("error") or manifest.get("notes")
+    run_dir = Path(manifest["run_dir"])
+    assert (run_dir / "eval.mp4").read_bytes() == b"fake-docker-isaac-mp4"
+    facts = manifest.get("facts") or {}
+    assert facts.get("engine") == "isaaclab"
+    assert facts.get("launch") == "docker"
+
+
+def test_g1_walk_osmo_submit_does_not_harvest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    osmo = _write_cli(tmp_path, "osmo", FAKE_OSMO)
+    monkeypatch.setenv("HT_OSMO_CLI", str(osmo))
+    spec = _walk_spec(backend={"prefer": ["isaaclab"], "compute": "osmo"})
+    manifest = run_job(spec, runs_dir=tmp_path / "runs")
+    assert manifest["status"] == "blocked"
+    err = (manifest.get("error") or "").lower()
+    assert "osmo" in err
+    assert "harvest" in err or "remote" in err
+    assert not (Path(manifest["run_dir"]) / "eval.mp4").is_file()
+    job = (Path(manifest["run_dir"]) / "job.json").read_text(encoding="utf-8")
+    assert "osmo" in job
+    log = (Path(manifest["run_dir"]) / "run.log").read_text(encoding="utf-8")
+    assert "workflow submit" in log
+
+
+def test_g1_reach_stays_blocked_when_mjlab_ready(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cli = _write_cli(tmp_path, "mjlab-train", FAKE_MJLAB)
+    monkeypatch.setenv("HT_MJLAB_CLI", str(cli))
+    monkeypatch.setenv("HT_GPU", "1")
+    spec = load_spec(Path(__file__).resolve().parents[1] / "spec" / "examples" / "g1-reach.json")
+    manifest = run_job(spec, runs_dir=tmp_path / "runs")
+    assert manifest["status"] == "blocked"
+    err = manifest.get("error") or ""
+    assert "reach" in err.lower()
+    assert "G1Reach-v0" not in err
+    assert not (Path(manifest["run_dir"]) / "eval.mp4").is_file()
+    from humanoid_training.recipes import public_catalog
+
+    by_id = {r["id"]: r for r in public_catalog()["recipes"]}
+    assert by_id["g1-reach"]["launch_here"] is False
+    assert by_id["g1-walk"]["launch_here"] is True

@@ -182,3 +182,27 @@ def test_record_empty_trajectories_raises(tmp_path: Path) -> None:
     spec = _pick_spec()
     with pytest.raises(RecipeError, match="No canvas trajectories"):
         record_object_trajectories(spec, tmp_path / "none", [])
+
+
+def test_second_canvas_save_appends_instead_of_overwrite(tmp_path: Path) -> None:
+    spec = _pick_spec()
+    mustard = spec["scene"]["objects"][0]
+    bowl = spec["scene"]["objects"][1]
+    dest = tmp_path / "canvas"
+    hit = [
+        {
+            "x": mustard["x"] + (t / 11) * (bowl["x"] - mustard["x"]),
+            "y": mustard["y"] + (t / 11) * (bowl["y"] - mustard["y"]),
+        }
+        for t in range(12)
+    ]
+    miss = [{"x": mustard["x"], "y": mustard["y"]}, {"x": mustard["x"] - 0.2, "y": mustard["y"] + 0.2}]
+    first = record_object_trajectories(spec, dest, [hit])
+    assert first["total_episodes"] == 1
+    assert first["episodes"][0]["success"] is True
+    second = record_object_trajectories(spec, dest, [miss])
+    assert second["total_episodes"] == 2
+    assert second["episodes"][0]["success"] is True
+    assert second["episodes"][1]["success"] is False
+    obs, _act = load_lerobot_arrays(dest)
+    assert len(obs) > 0

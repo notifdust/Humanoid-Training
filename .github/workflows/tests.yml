@@ -23,3 +23,24 @@ jobs:
           SDL_AUDIODRIVER: dummy
           SDL_VIDEODRIVER: dummy
         run: pytest
+
+  gold:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ffmpeg and xvfb
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg xvfb libgl1 libglib2.0-0 libx11-6 libxext6
+      - name: Install package
+        run: pip install -e ".[dev]"
+      - name: Fetch Unitree G1 assets
+        run: python -m humanoid_training.cli fetch-assets unitree_g1
+      - name: Retrain CPU recipes and compare eval.mp4 to gold
+        env:
+          HT_GOLD: "1"
+          SDL_AUDIODRIVER: dummy
+          SDL_VIDEODRIVER: dummy
+          MUJOCO_GL: glfw
+        run: xvfb-run -a pytest -m gold

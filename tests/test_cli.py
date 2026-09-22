@@ -15,6 +15,7 @@ def test_cli_help_lists_fetch_assets_and_record(capsys: pytest.CaptureFixture[st
     assert "fetch-assets" in out
     assert "record" in out
     assert "serve" in out
+    assert "gold" in out
 
 
 def test_cli_train_help_lists_docker(capsys: pytest.CaptureFixture[str]) -> None:
@@ -23,6 +24,16 @@ def test_cli_train_help_lists_docker(capsys: pytest.CaptureFixture[str]) -> None
     assert err.value.code == 0
     out = capsys.readouterr().out
     assert "--docker" in out
+
+
+def test_cli_docker_refuses_gpu_walk(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    spec = Path(__file__).resolve().parents[1] / "spec" / "examples" / "g1-walk.json"
+    assert main(["train", str(spec), "--docker", "--out", str(tmp_path)]) == 12
+    err = capsys.readouterr().err
+    assert "CPU Docker" in err
+    assert "g1-walk.json" in err
 
 
 def test_cli_docker_without_daemon_is_blocked(
@@ -48,6 +59,18 @@ def test_cli_fetch_assets(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsy
     assert main(["fetch-assets", "unitree_g1"]) == 0
     printed = capsys.readouterr().out
     assert str(dest) in printed
+
+
+def test_cli_gold_blocked_when_no_render(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("HT_NO_RENDER", "1")
+    from humanoid_training.gold import cpu_recipes
+
+    recipe = cpu_recipes()[0]
+    assert main(["gold", recipe.id, "--out", str(tmp_path)]) == 12
+    err = capsys.readouterr().err
+    assert "HT_NO_RENDER" in err
 
 
 def test_cli_serve_prints_open_url(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:

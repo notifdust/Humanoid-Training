@@ -45,6 +45,9 @@ def test_g1_walk_is_blocked_without_playground(tmp_path: Path) -> None:
     assert (run_dir / "train.sh").is_file()
     assert (run_dir / "engine_payload.json").is_file()
     assert (run_dir / "engines" / "isaaclab" / "osmo_workflow.yaml").is_file()
+    mjlab_sh = (run_dir / "engines" / "mjlab" / "train_mjlab.sh").read_text(encoding="utf-8")
+    assert "Mjlab-Velocity-Flat-Unitree-G1" in mjlab_sh
+    assert "Velocity-G1-Flat-v0" not in mjlab_sh
 
 
 def test_g1_reach_is_blocked_with_cpu_next_step(tmp_path: Path) -> None:
@@ -52,9 +55,13 @@ def test_g1_reach_is_blocked_with_cpu_next_step(tmp_path: Path) -> None:
     manifest = run_job(spec, runs_dir=tmp_path)
     assert manifest["status"] == "blocked"
     err = manifest["error"] or ""
-    assert "mjlab" in err.lower() or "reach" in err.lower()
-    assert "CPU studio" in err or "g1-stand" in err or "pick-and-place" in err
-    assert (Path(manifest["run_dir"]) / "train_mjlab.sh").is_file()
+    assert "reach" in err.lower()
+    assert "pick-and-place" in err.lower()
+    assert "G1Reach-v0" not in err
+    assert "Isaac-Reach-G1-v0" not in err
+    run_dir = Path(manifest["run_dir"])
+    assert not (run_dir / "train_mjlab.sh").is_file()
+    assert not (run_dir / "eval.mp4").is_file()
 
 
 def test_g1_walk_compile_only(tmp_path: Path) -> None:
