@@ -14,7 +14,7 @@
     "seed": 1
   },
   "backend": {
-    "prefer": ["playground", "isaaclab"],
+    "prefer": ["playground", "mjlab", "isaaclab"],
     "compute": "local-docker"
   }
 }

@@ -10,7 +10,7 @@ Phase 1  studio shell (pick recipe → video) ← done (rooms + G1 stand + CPU D
 Phase 2  demonstration data (LeRobot)       ← done with substitutions (linear-BC, not ACT)
 Phase 2.5 recipe gold + CI videos           ← done
 Phase 3a first real G1 walk (Playground)    ← launch path done (needs a GPU box for the walking clip)
-Phase 3b mjlab reach, then Isaac / OSMO
+Phase 3b mjlab / Isaac G1 walk + OSMO       ← launch path done (no G1 reach env upstream)
 Phase 4  real G1/H1 deploy with safety gates
 ```
 
@@ -28,11 +28,12 @@ A beginner on a laptop can:
 1. Open the studio (`./run-studio.sh` → http://127.0.0.1:8000).
 2. Train **Cartpole**, **G1 stand**, or **Pick and place** and play `eval.mp4`.
 3. Click **G1 walk** and get a blocked next step plus compiled
-   payloads — unless this machine has an NVIDIA GPU and
-   `train-jax-ppo` on PATH, in which case Train launches Playground PPO
-   and plays the engine's `rollout0.mp4` as `eval.mp4`.
-4. Click **G1 reach** and still get a blocked next step (mjlab / Isaac,
-   not Playground locomotion).
+   payloads — unless this machine has an NVIDIA GPU and a walk
+   engine (Playground `train-jax-ppo`, mjlab, or Isaac Lab
+   `isaaclab.sh` / GPU Docker), in which case Train launches that
+   engine and plays its eval clip.
+4. Click **G1 reach** and still get a blocked next step: there is
+   no G1 reach environment in Playground, mjlab, or Isaac Lab.
 
 The compiler contract holds: job spec → recipe expansion → adapter
 compile/launch → `manifest.json` with `facts` → studio projects those
@@ -44,12 +45,12 @@ the original names):
 
 | Vision asked for | What ships | What it is not |
 |---|---|---|
-| G1 walk train | Playground `train-jax-ppo` on a GPU box; blocked next step on CPU | Not a gold walk clip; not mjlab/Isaac yet |
+| G1 walk train | Playground / mjlab / Isaac Lab on a GPU box; blocked next step on CPU | Not a gold walk clip |
 | ACT / diffusion | Linear-BC on LeRobot v2 JSONL; G1 arm pose playback | Not finger grasping, not ACT |
 | Gamepad teleop | Canvas drag, WASD, and a gamepad stick write the same table-frame takes | Not a Unitree XR / leader-arm stack |
 | Balance / locomotion RL | G1 stand holds a pinned pelvis and waves | Not walking, not a balance policy |
-| Isaac / OSMO job | `osmo_workflow.yaml` + `train_mjlab.sh` on disk | Not submitted, not evaluated |
-| Hosted GPU | CPU Docker image + in-process studio | No cloud queue, no GPU image |
+| Isaac / OSMO job | Local `isaaclab.sh` or GPU Docker harvests `eval.mp4`; `osmo workflow submit` has no remote harvest | Not a silent Isaac success on CPU |
+| Hosted GPU | CPU Docker image + in-process studio; OSMO submit is fail-closed | No eval-video harvest from the cloud |
 
 ---
 
@@ -65,7 +66,8 @@ the original names):
 | Adapter protocol: compile / launch / eval, fail closed | done |
 | `gymnasium` adapter: CartPole RL + eval video on CPU | done |
 | `playground` adapter: compile G1 walk to `G1JoystickFlatTerrain` | done (Phase 3a launches `train-jax-ppo` when GPU + CLI are present) |
-| `isaaclab` adapter: compile G1 walk to `Isaac-Velocity-Flat-G1-v0` | done (payload only) |
+| `isaaclab` adapter: compile G1 walk to `Isaac-Velocity-Flat-G1-v0` | done (Phase 3b launches isaaclab.sh / GPU Docker) |
+| `mjlab` adapter: compile G1 walk to `Mjlab-Velocity-Flat-Unitree-G1` | done (Phase 3b launches `python -m mjlab.scripts.train`) |
 | Local in-process runner + CLI `ht` | done |
 | Run manifest (spec hash, adapter, seed, metrics, `facts`) | done |
 
@@ -112,8 +114,8 @@ pass. ACT is **not** that exit test.
 | `cartpole-balance` | yes (CPU) | gymnasium | Pole stays up. Gold `eval.mp4` in-tree. |
 | `g1-stand` | yes (CPU) | mujoco + Menagerie G1 | Stand + both-arm wave, pelvis pinned. Gold clip. |
 | `pick-and-place` | yes (CPU) | mujoco + LeRobot demos | Mustard into bowl via linear-BC. Gold clip. |
-| `g1-walk` | yes on GPU + Playground; blocked on CPU | playground / mjlab / isaaclab | Walking eval from Playground rollout. No gold clip. |
-| `g1-reach` | compile only | mjlab / isaaclab | Blocked. Playground mapping is a **locomotion placeholder** — do not call that a reach env. |
+| `g1-walk` | yes on GPU + Playground, mjlab, or Isaac Lab; blocked on CPU | playground / mjlab / isaaclab | Walking eval from the engine that launched. No gold clip. |
+| `g1-reach` | no | — | Blocked. No G1 reach env in Playground, mjlab, or Isaac Lab. Do not map locomotion or Franka Reach as G1 reach. |
 | Unitree H1 | catalog only | — | No recipe. Do not add one until G1 walk trains for real. |
 
 Gold notes live in each `recipe.yaml`. CPU recipes also ship
@@ -210,29 +212,64 @@ ht train spec/examples/g1-walk.json
 ht train spec/examples/g1-walk.json --docker   # refused (Phase 1 CPU image)
 ```
 
-Host probes (no recipe ids): `HT_PLAYGROUND_GPU`, `HT_PLAYGROUND_CLI`.
+Host probes (no recipe ids): `HT_GPU` / `HT_PLAYGROUND_GPU`,
+`HT_PLAYGROUND_CLI`, `HT_MJLAB_CLI`, `HT_ISAAC_CLI`, `HT_OSMO_CLI`,
+`HT_DOCKER_GPU`.
 
 ---
 
-## Next — Phase 3b: mjlab reach, then Isaac / OSMO
+## Phase 3b — mjlab / Isaac G1 walk + OSMO (launch path done)
 
-**Exit test.** `backend.prefer: [isaaclab]` (or mjlab) submits a job
-and the studio shows the same eval-video UI as Cartpole, with a backend
-badge.
+**Exit test.** `backend.prefer: [mjlab]` or `[isaaclab]` on a GPU
+box launches the real G1 *walk* task and the studio shows the same
+eval-video UI as Cartpole, with a backend badge
+(`mjlab · gpu` / `isaaclab · gpu`). Without that engine, behavior
+stays the blocked next step.
 
-1. **Pin reach.** `g1-reach`’s Playground `G1JoystickFlatTerrain` map is
-   a placeholder. Delete it or replace it with a verified reach env id
-   *before* claiming reach trains. mjlab `G1Reach-v0` / Isaac
-   `Isaac-Reach-G1-v0` must be confirmed on a GPU box, then launched
-   from the generated `train_mjlab.sh`.
-2. **Submit `osmo_workflow.yaml`.** The file is already an artifact.
-   Phase 3 is the submitter (OSMO, a GPU Docker image, or a ssh-less
-   local `docker run` of `nvcr.io/nvidia/isaac-lab:2.2.0`) plus log/video
-   harvest. The studio still does not hold cloud credentials in the
-   browser.
-3. **Hosted GPU queue** is how non-experts skip CUDA install (vision
-   requirement #3). That is a product behind the same spec, not a new
-   orchestrator — emit OSMO / HF Jobs / plain Docker.
+**Reach is pinned, not launched.** There is no G1 reach environment
+upstream:
+
+- mjlab G1: `Mjlab-Velocity-Flat-Unitree-G1`, Rough, Tracking. Cube
+  lift is YAM (`Mjlab-Lift-Cube-Yam`), not G1.
+- Isaac Lab G1: `Isaac-Velocity-Flat-G1-v0` / Rough. Reach is
+  Franka / UR10 / OpenArm. G1 manipulation is PickPlace, not Reach.
+- Playground `G1JoystickFlatTerrain` is walking. It is not a reach env.
+
+`g1-reach` marks every adapter `unsupported`. Train blocks. Do not
+invent `G1Reach-v0` or `Isaac-Reach-G1-v0`.
+
+| Deliverable | Status |
+|---|---|
+| Pin `g1-walk` mjlab to `Mjlab-Velocity-Flat-Unitree-G1` | done |
+| Pin `g1-walk` Isaac to `Isaac-Velocity-Flat-G1-v0` | done |
+| Delete Playground walk placeholder from `g1-reach` | done |
+| `MJLabAdapter.launch` runs `python -m mjlab.scripts.train TASK --video True` | done |
+| Harvest mjlab `*.mp4` under `--log-root`; fail closed if exit 0 and no clip | done |
+| `IsaacLabAdapter.launch` via `isaaclab.sh` train+play, or GPU Docker | done |
+| Harvest Isaac `*.mp4`; fail closed if exit 0 and no clip | done |
+| `osmo workflow submit osmo_workflow.yaml` then block (no remote harvest) | done |
+| Catalog `launch_here` for playground **or** mjlab **or** isaac ready | done |
+| `select_adapter` first launch-ready GPU engine, else first compile-ok | done |
+| `g1-reach` stays `launch_here=false` even if mjlab is ready | done |
+| No fake walk/reach gold / stand-clip substitute | done |
+
+```bash
+# GPU box — mjlab
+# pip/uv install mjlab
+ht train spec/examples/g1-walk.json   # or overlay backend.prefer: [mjlab]
+# GPU box — Isaac Lab
+# HT_ISAAC_CLI=/path/to/isaaclab.sh
+ht train spec/examples/g1-walk.json   # overlay backend.prefer: [isaaclab]
+# GPU Docker (not the Phase 1 CPU image)
+HT_DOCKER_GPU=1 ht train spec/examples/g1-walk.json  # prefer isaaclab
+# CPU laptop — still exit 12
+ht train spec/examples/g1-walk.json
+ht train spec/examples/g1-reach.json
+```
+
+This repo's CI and the CPU studio **do not** have a GPU. Launch is
+tested with fake `HT_MJLAB_CLI` / `HT_ISAAC_CLI` scripts that write
+an mp4. A live walking video is still the GPU-box proof.
 
 ---
 
@@ -261,8 +298,9 @@ reduced speed; a NaN or pose-limit kills the policy; no silent
 checkpoint fallback. Policies stay `sim-only` until a hardware eval
 profile passes.
 
-Do not start this before Phase 3a produces a real walk video. Clamps,
-watchdog, e-stop are the product here — not a "deploy" checkbox.
+Do not start this before Phase 3 produces a real walk video on a GPU
+box. Clamps, watchdog, e-stop are the product here — not a "deploy"
+checkbox.
 
 ---
 

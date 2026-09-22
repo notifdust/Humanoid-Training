@@ -102,27 +102,32 @@ def _validate_studio(recipe_id: str, data: dict[str, Any]) -> None:
         raise RecipeError(f"{recipe_id}: studio.availability must be cpu or gpu")
 
 
-def _playground_launch_configured(data: dict[str, Any]) -> bool:
+def _gpu_engine_configured(data: dict[str, Any], name: str) -> bool:
     adapters = data.get("adapters") or {}
-    pg = adapters.get("playground") or {}
-    if not isinstance(pg, dict) or pg.get("unsupported"):
+    cfg = adapters.get(name) or {}
+    if not isinstance(cfg, dict) or cfg.get("unsupported"):
         return False
-    return bool(pg.get("env_name") or pg.get("train_command"))
+    if name == "playground":
+        return bool(cfg.get("env_name") or cfg.get("train_command"))
+    if name in {"mjlab", "isaaclab"}:
+        return bool(cfg.get("task"))
+    return False
 
 
 def _launch_here(recipe: Recipe, availability: str) -> bool:
     """True when Train on this machine will launch, not merely compile-and-block.
 
-    CPU recipes always launch. GPU recipes launch only when Playground is
-    configured (not `unsupported`) and `hardware.playground_ready()`.
+    CPU recipes always launch. GPU recipes launch when any configured engine
+    (playground / mjlab / isaaclab) is launch-ready on this host.
     """
     if availability == "cpu":
         return True
-    if not _playground_launch_configured(recipe.data):
-        return False
-    from humanoid_training.hardware import playground_ready
+    from humanoid_training.hardware import adapter_launch_ready
 
-    return playground_ready()
+    for name in ("playground", "mjlab", "isaaclab"):
+        if _gpu_engine_configured(recipe.data, name) and adapter_launch_ready(name):
+            return True
+    return False
 
 
 def public_catalog() -> dict[str, Any]:

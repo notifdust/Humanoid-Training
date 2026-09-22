@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import json
-import os
 import shutil
-import subprocess
 from pathlib import Path
 from typing import Any
 
 from humanoid_training import hardware
 from humanoid_training.adapters.base import EnginePayload, EvalResult, LogFn, Support
 from humanoid_training.adapters.common import ignored_scene_fields, recipe_adapter_config
+from humanoid_training.adapters.process import stream_process, write_job
 from humanoid_training.errors import AdapterUnavailable
 
 
@@ -84,40 +83,6 @@ def playground_train_command(
     argv = apply_flag(argv, "--num_videos", str(num_videos))
     argv = apply_flag(argv, "--logdir", str(logdir))
     return argv
-
-
-def _write_job(run_dir: Path, payload: dict[str, Any]) -> None:
-    path = run_dir / "job.json"
-    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-
-
-def _stream_process(command: list[str], run_dir: Path, log: LogFn) -> int:
-    env = os.environ.copy()
-    env.setdefault("PYTHONUNBUFFERED", "1")
-    try:
-        proc = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            cwd=str(run_dir),
-            env=env,
-            text=True,
-            bufsize=1,
-        )
-    except OSError as err:
-        raise AdapterUnavailable(
-            f"Could not start train-jax-ppo ({err}). "
-            "Install MuJoCo Playground: pip install playground. "
-            f"Compiled payloads are in {run_dir}"
-        ) from err
-    _write_job(
-        run_dir,
-        {"command": command, "pid": proc.pid, "cwd": str(run_dir), "status": "running"},
-    )
-    assert proc.stdout is not None
-    for line in proc.stdout:
-        log(line.rstrip("\n"))
-    return int(proc.wait())
 
 
 def _blocked_no_cli(run_dir: Path) -> AdapterUnavailable:
@@ -225,7 +190,7 @@ class PlaygroundAdapter:
         )
         env_name, steps, seed, num_videos = _train_hparams(spec, payload)
         log(" ".join(command))
-        _write_job(
+        write_job(
             run_dir,
             {
                 "command": command,
@@ -234,8 +199,13 @@ class PlaygroundAdapter:
                 "status": "starting",
             },
         )
-        rc = _stream_process(command, run_dir, log)
-        _write_job(
+        rc = stream_process(
+            command,
+            run_dir,
+            log,
+            missing="Could not start train-jax-ppo. Install MuJoCo Playground: pip install playground",
+        )
+        write_job(
             run_dir,
             {
                 "command": command,

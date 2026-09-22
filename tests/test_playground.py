@@ -95,6 +95,7 @@ def test_g1_walk_launch_harvests_rollout(
     cli = _fake_cli(tmp_path)
     monkeypatch.setenv("HT_PLAYGROUND_CLI", str(cli))
     monkeypatch.setenv("HT_PLAYGROUND_GPU", "1")
+    monkeypatch.setenv("HT_GPU", "1")
     manifest = run_job(_walk_spec(), runs_dir=tmp_path / "runs")
     assert manifest["status"] == "passed", manifest.get("error") or manifest.get("notes")
     run_dir = Path(manifest["run_dir"])
@@ -120,6 +121,7 @@ def test_g1_walk_exit0_without_video_fails_closed(
     cli = _fake_cli(tmp_path)
     monkeypatch.setenv("HT_PLAYGROUND_CLI", str(cli))
     monkeypatch.setenv("HT_PLAYGROUND_GPU", "1")
+    monkeypatch.setenv("HT_GPU", "1")
     monkeypatch.setenv("HT_FAKE_PPO_NO_VIDEO", "1")
     manifest = run_job(_walk_spec(), runs_dir=tmp_path / "runs")
     assert manifest["status"] == "blocked"
@@ -141,6 +143,7 @@ def test_g1_walk_nonzero_exit_is_not_a_walk_clip(
     cli = _fake_cli(tmp_path)
     monkeypatch.setenv("HT_PLAYGROUND_CLI", str(cli))
     monkeypatch.setenv("HT_PLAYGROUND_GPU", "1")
+    monkeypatch.setenv("HT_GPU", "1")
     monkeypatch.setenv("HT_FAKE_PPO_EXIT", "1")
     manifest = run_job(_walk_spec(), runs_dir=tmp_path / "runs")
     assert manifest["status"] == "completed"
@@ -159,6 +162,7 @@ def test_g1_walk_record_video_false_skips_harvest(
     cli = _fake_cli(tmp_path)
     monkeypatch.setenv("HT_PLAYGROUND_CLI", str(cli))
     monkeypatch.setenv("HT_PLAYGROUND_GPU", "1")
+    monkeypatch.setenv("HT_GPU", "1")
     spec = _walk_spec()
     spec["eval"] = {"episodes": 1, "record_video": False}
     manifest = run_job(spec, runs_dir=tmp_path / "runs")
@@ -173,6 +177,7 @@ def test_g1_reach_does_not_launch_playground_walk(
     cli = _fake_cli(tmp_path)
     monkeypatch.setenv("HT_PLAYGROUND_CLI", str(cli))
     monkeypatch.setenv("HT_PLAYGROUND_GPU", "1")
+    monkeypatch.setenv("HT_GPU", "1")
     spec = load_spec(Path(__file__).resolve().parents[1] / "spec" / "examples" / "g1-reach.json")
     manifest = run_job(spec, runs_dir=tmp_path / "runs")
     assert manifest["status"] == "blocked"
@@ -184,15 +189,21 @@ def test_g1_reach_does_not_launch_playground_walk(
 def test_hardware_env_overrides(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     from humanoid_training.hardware import gpu_available, playground_cli, playground_ready
 
+    monkeypatch.delenv("HT_GPU", raising=False)
     monkeypatch.setenv("HT_PLAYGROUND_GPU", "1")
     monkeypatch.setenv("HT_PLAYGROUND_CLI", "0")
     assert gpu_available() is True
     assert playground_cli() is None
     assert playground_ready() is False
 
+    monkeypatch.setenv("HT_GPU", "0")
+    monkeypatch.setenv("HT_PLAYGROUND_GPU", "1")
+    assert gpu_available() is False
+
     cli = _fake_cli(tmp_path)
     monkeypatch.setenv("HT_PLAYGROUND_CLI", str(cli))
     monkeypatch.setenv("HT_PLAYGROUND_GPU", "0")
+    monkeypatch.setenv("HT_GPU", "0")
     assert gpu_available() is False
     assert playground_cli() == str(cli.resolve())
     assert playground_ready() is False

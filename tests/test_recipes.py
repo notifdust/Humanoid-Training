@@ -102,6 +102,33 @@ def test_launch_here_walk_when_playground_ready(monkeypatch: pytest.MonkeyPatch)
     assert "stand clip" in by_id["g1-walk"]["train_hint"]
 
 
+def test_launch_here_walk_when_mjlab_or_isaac_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+    from humanoid_training.recipes import public_catalog
+
+    monkeypatch.setattr("humanoid_training.hardware.playground_ready", lambda: False)
+    monkeypatch.setattr("humanoid_training.hardware.mjlab_ready", lambda: True)
+    monkeypatch.setattr("humanoid_training.hardware.isaac_launch_ready", lambda: False)
+    catalog = public_catalog()
+    by_id = {r["id"]: r for r in catalog["recipes"]}
+    assert by_id["g1-walk"]["launch_here"] is True
+    assert by_id["g1-reach"]["launch_here"] is False
+    assert "g1-walk" in catalog["ready"]
+    assert "g1-reach" in catalog["later"]
+
+
+def test_recipes_pin_real_upstream_task_ids() -> None:
+    root = Path(__file__).resolve().parents[1]
+    walk = (root / "recipes" / "g1-walk" / "recipe.yaml").read_text(encoding="utf-8")
+    reach = (root / "recipes" / "g1-reach" / "recipe.yaml").read_text(encoding="utf-8")
+    assert "Mjlab-Velocity-Flat-Unitree-G1" in walk
+    assert "Isaac-Velocity-Flat-G1-v0" in walk
+    assert "Velocity-G1-Flat-v0" not in walk
+    assert "G1Reach-v0" not in reach
+    assert "Isaac-Reach-G1-v0" not in reach
+    assert "G1JoystickFlatTerrain" not in reach
+    assert "unsupported" in reach
+
+
 def test_recipes_module_does_not_hardcode_start_here_ids() -> None:
     from humanoid_training import recipes as recipes_mod
 

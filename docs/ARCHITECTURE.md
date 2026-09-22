@@ -79,9 +79,9 @@ studio:
 }
 ```
 
-On a GPU box with `train-jax-ppo`, `g1-walk` moves from `later` to `ready`
-because `launch_here` is true. `g1-reach` stays later (Playground mapping
-is an unsupported locomotion placeholder).
+On a GPU box with Playground, mjlab, or Isaac Lab ready, `g1-walk`
+moves from `later` to `ready` because `launch_here` is true.
+`g1-reach` stays later: there is no G1 reach env to launch.
 
 The browser **projects** `availability`, `launch_here`, `promise`, `train_hint`,
 `blocked_hint`, `scene_hint`, and `record_hint`. It must not hardcode
@@ -113,19 +113,20 @@ launch(spec, payload, run_dir) -> EvalResult   # boolean + optional video
 ```
 
 `poll` / `eval` as separate RPCs are not built. Launch is in-process and
-returns the eval. CPU recipes train inside that call. Phase 3a Playground
-walk still returns from `launch`, but the adapter **subprocesses**
-`train-jax-ppo`, streams stdout into `run.log` (studio SSE tails it),
-then harvests `rollout*.mp4` → `eval.mp4`. Missing CLI / GPU / video
-fails closed. Do not substitute the G1 stand clip.
+returns the eval. CPU recipes train inside that call. Phase 3 GPU walk still returns from `launch`, but the adapter
+**subprocesses** the engine CLI (`train-jax-ppo`, `python -m mjlab.scripts.train`,
+or `isaaclab.sh`), streams stdout into `run.log` (studio SSE tails it),
+then harvests `*.mp4` → `eval.mp4`. Missing CLI / GPU / video
+fails closed. Do not substitute the G1 stand clip. OSMO submit does
+not harvest a remote clip.
 
 | Adapter | Role today |
 |---|---|
 | `gymnasium` | Cartpole RL + eval video |
 | `mujoco` | G1 stand hold; pick-and-place linear-BC + arm poses |
 | `playground` | Compile + launch G1 walk via `train-jax-ppo` when GPU + CLI are present; otherwise compile and block |
-| `mjlab` | Compile reach/walk; launch blocked on CPU |
-| `isaaclab` | Compile OSMO YAML; launch not wired |
+| `mjlab` | Compile + launch G1 walk `Mjlab-Velocity-Flat-Unitree-G1` when mjlab + GPU are present; otherwise compile and block |
+| `isaaclab` | Compile OSMO YAML; launch via `isaaclab.sh` or GPU Docker; OSMO submit without harvest |
 | `lerobot` | Compile future ACT script; CPU imitation stays on mujoco |
 
 The MuJoCo adapter is three modules, not one god file:
@@ -134,7 +135,8 @@ The MuJoCo adapter is three modules, not one god file:
 - `mujoco_runtime.py` — simulate, renderer, pin, body ids
 - `mujoco_control.py` — open-loop poses, qpos drive, Jacobian IK
 
-Selection: `backend.prefer` order, skip `unsupported`, first `support.ok`.
+Selection: `backend.prefer` order, skip `unsupported`, first
+**launch-ready** engine, else first `support.ok` (compile-and-block).
 The runner also compiles **other** supporting adapters into
 `engines/<name>/` so a researcher can take the payload to a GPU box.
 
@@ -190,9 +192,9 @@ HF Jobs / OSMO are later Phase 3. The studio-server stays in-process: it
 does not SSH and does not put cloud credentials in the browser.
 
 `src/humanoid_training/hardware.py` probes GPU (`nvidia-smi` /
-`HT_PLAYGROUND_GPU`) and the Playground CLI (`train-jax-ppo` /
-`HT_PLAYGROUND_CLI`) so the catalog can set `launch_here` without
-importing adapters.
+`HT_GPU` / `HT_PLAYGROUND_GPU`) and engine CLIs (`HT_PLAYGROUND_CLI`,
+`HT_MJLAB_CLI`, `HT_ISAAC_CLI`, `HT_OSMO_CLI`, `HT_DOCKER_GPU`) so the
+catalog can set `launch_here` without importing adapters.
 
 ---
 
@@ -234,8 +236,12 @@ src/humanoid_training/
   spec.py                  # schema
   recipes.py               # expand + public_catalog
   artifacts.py             # run file inventory
-  hardware.py              # GPU / Playground CLI probes
+  hardware.py              # GPU / engine CLI probes
   adapters/                # compile / launch
+    process.py             # shared subprocess + mp4 harvest
+    playground.py
+    mjlab.py
+    isaaclab.py
     mujoco_adapter.py      # hold + imitation launches
     mujoco_runtime.py      # simulate / render
     mujoco_control.py      # poses / IK

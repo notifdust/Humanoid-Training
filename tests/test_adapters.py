@@ -36,6 +36,21 @@ def test_g1_walk_compiles_playground() -> None:
     assert "Phase 1/3" not in payload.files["train.sh"]
 
 
+def test_g1_walk_compiles_mjlab_real_task() -> None:
+    spec = load_spec(Path(__file__).resolve().parents[1] / "spec" / "examples" / "g1-walk.json")
+    spec["backend"] = {"prefer": ["mjlab"], "compute": "local-docker"}
+    expanded = expand_spec(spec)
+    adapter = select_adapter(expanded)
+    assert adapter.name == "mjlab"
+    payload = adapter.compile(expanded)
+    assert payload.env_name == "Mjlab-Velocity-Flat-Unitree-G1"
+    assert "python -m mjlab.scripts.train" in payload.files["train_mjlab.sh"]
+    assert "Mjlab-Velocity-Flat-Unitree-G1" in payload.files["train_mjlab.sh"]
+    assert "--video True" in payload.files["train_mjlab.sh"]
+    assert "G1Reach-v0" not in payload.files["train_mjlab.sh"]
+    assert "Velocity-G1-Flat-v0" not in payload.files["train_mjlab.sh"]
+
+
 def test_g1_walk_compiles_isaac_when_preferred() -> None:
     spec = load_spec(Path(__file__).resolve().parents[1] / "spec" / "examples" / "g1-walk.json")
     spec["backend"] = {"prefer": ["isaaclab"], "compute": "osmo"}
@@ -45,6 +60,8 @@ def test_g1_walk_compiles_isaac_when_preferred() -> None:
     payload = adapter.compile(expanded)
     assert payload.env_name == "Isaac-Velocity-Flat-G1-v0"
     assert "Isaac-Velocity-Flat-G1-v0" in payload.files["osmo_workflow.yaml"]
+    assert "Isaac-Reach-G1-v0" not in payload.files["osmo_workflow.yaml"]
+    assert "--video" in payload.files["train_isaac.sh"]
 
 
 def test_g1_walk_rejects_gymnasium() -> None:
@@ -63,13 +80,10 @@ def test_g1_stand_selects_mujoco() -> None:
     assert "unitree_g1" in payload.env_name
 
 
-def test_g1_reach_compiles_mjlab() -> None:
+def test_g1_reach_has_no_engine_to_compile() -> None:
     spec = _expand("g1-reach.json")
-    adapter = select_adapter(spec)
-    assert adapter.name == "mjlab"
-    payload = adapter.compile(spec)
-    assert payload.env_name == "G1Reach-v0"
-    assert "train_mjlab.sh" in payload.files
+    with pytest.raises(NoAdapter, match="no G1 reach"):
+        select_adapter(spec)
 
 
 def test_pick_and_place_selects_mujoco_preview() -> None:
