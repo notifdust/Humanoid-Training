@@ -104,7 +104,7 @@ pass. ACT is **not** that exit test.
 
 | Deliverable | Status |
 |---|---|
-| LeRobot adapter (dataset I/O + ACT) | write/inspect local v2 layout; `train_lerobot.sh` compiled; ACT launch blocked |
+| LeRobot adapter (dataset I/O + ACT) | write/inspect local v2 layout; ACT launches when LeRobot + GPU (Phase 3e) |
 | Episode review (keep / drop) | `keep_episodes` filters BC frames; empty keep is refused |
 | `pick-and-place` recipe | scripted or canvas demos → ACT when LeRobot+GPU; else linear-BC mustard + G1 arm poses |
 | Teleop into the studio | canvas, WASD, gamepad stick; Save **appends**; Space does not immediately record a second take |
