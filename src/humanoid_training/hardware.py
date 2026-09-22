@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -25,12 +26,28 @@ def _env_bool(name: str) -> bool | None:
     return True
 
 
-def gpu_available() -> bool:
-    """NVIDIA GPU present, or `HT_PLAYGROUND_GPU` override.
+def _cli_from_env(name: str) -> str | None:
+    raw = os.environ.get(name)
+    if raw is None:
+        return None
+    stripped = raw.strip()
+    if stripped.lower() in _FALSE or stripped == "":
+        return None
+    path = Path(stripped).expanduser()
+    if path.is_file():
+        return str(path.resolve())
+    return shutil.which(stripped)
 
-    `HT_PLAYGROUND_GPU=0` forces no. Any other non-empty value forces yes
-    (tests, or a box where nvidia-smi is hidden). Unset → probe nvidia-smi.
+
+def gpu_available() -> bool:
+    """NVIDIA GPU present, or `HT_GPU` / `HT_PLAYGROUND_GPU` override.
+
+    `=0` forces no. Any other non-empty value forces yes. Unset → nvidia-smi.
+    `HT_GPU` wins over the Playground-era alias.
     """
+    override = _env_bool("HT_GPU")
+    if override is not None:
+        return override
     override = _env_bool("HT_PLAYGROUND_GPU")
     if override is not None:
         return override
@@ -56,15 +73,9 @@ def playground_cli() -> str | None:
     `HT_PLAYGROUND_CLI` overrides PATH: a filesystem path, a command name,
     or `0`/`false` to pretend the CLI is missing.
     """
-    raw = os.environ.get("HT_PLAYGROUND_CLI")
-    if raw is not None:
-        stripped = raw.strip()
-        if stripped.lower() in _FALSE or stripped == "":
-            return None
-        path = Path(stripped).expanduser()
-        if path.is_file():
-            return str(path.resolve())
-        return shutil.which(stripped)
+    override = _cli_from_env("HT_PLAYGROUND_CLI")
+    if os.environ.get("HT_PLAYGROUND_CLI") is not None:
+        return override
     return shutil.which("train-jax-ppo")
 
 
@@ -83,11 +94,97 @@ def playground_ready() -> bool:
     return playground_cli() is not None and gpu_available()
 
 
+def mjlab_cli() -> str | None:
+    """Entry for `python -m mjlab.scripts.train`, or a `HT_MJLAB_CLI` override."""
+    override = _cli_from_env("HT_MJLAB_CLI")
+    if os.environ.get("HT_MJLAB_CLI") is not None:
+        return override
+    try:
+        import mjlab  # noqa: F401
+    except ImportError:
+        return None
+    return sys.executable
+
+
+def mjlab_train_argv(task: str, extra: list[str] | None = None) -> list[str]:
+    cli = mjlab_cli()
+    if not cli:
+        return ["python", "-m", "mjlab.scripts.train", task, *(extra or [])]
+    path = Path(cli)
+    if path.is_file() and path.name != Path(sys.executable).name:
+        return [cli, task, *(extra or [])]
+    return [cli, "-m", "mjlab.scripts.train", task, *(extra or [])]
+
+
+def mjlab_ready() -> bool:
+    return mjlab_cli() is not None and gpu_available()
+
+
+def isaac_cli() -> str | None:
+    """`isaaclab.sh` (or a fake) via `HT_ISAAC_CLI` or PATH."""
+    override = _cli_from_env("HT_ISAAC_CLI")
+    if os.environ.get("HT_ISAAC_CLI") is not None:
+        return override
+    found = shutil.which("isaaclab.sh")
+    if found:
+        return found
+    home = Path.home() / "IsaacLab" / "isaaclab.sh"
+    if home.is_file():
+        return str(home)
+    return None
+
+
+def osmo_cli() -> str | None:
+    override = _cli_from_env("HT_OSMO_CLI")
+    if os.environ.get("HT_OSMO_CLI") is not None:
+        return override
+    return shutil.which("osmo")
+
+
+def docker_bin() -> str | None:
+    return shutil.which("docker")
+
+
+def docker_gpu_requested() -> bool:
+    return _env_bool("HT_DOCKER_GPU") is True
+
+
+def isaac_launch_ready() -> bool:
+    """Local Isaac launch: GPU plus isaaclab.sh or a GPU Docker opt-in.
+
+    OSMO submit is not launch-ready: this phase does not harvest a remote clip.
+    """
+    if not gpu_available():
+        return False
+    if isaac_cli():
+        return True
+    return docker_bin() is not None and docker_gpu_requested()
+
+
+def adapter_launch_ready(name: str) -> bool:
+    """True when this adapter can launch here, not merely compile-and-block."""
+    if name == "playground":
+        return playground_ready()
+    if name == "mjlab":
+        return mjlab_ready()
+    if name == "isaaclab":
+        return isaac_launch_ready()
+    return True
+
+
 def engine_status() -> dict[str, Any]:
-    cli = playground_cli()
+    pg = playground_cli()
+    mj = mjlab_cli()
+    isa = isaac_cli()
+    osmo = osmo_cli()
     return {
         "gpu": gpu_available(),
         "playground": playground_installed(),
-        "playground_cli": cli,
-        "playground_ready": bool(cli) and gpu_available(),
+        "playground_cli": pg,
+        "playground_ready": bool(pg) and gpu_available(),
+        "mjlab_cli": mj,
+        "mjlab_ready": bool(mj) and gpu_available(),
+        "isaac_cli": isa,
+        "osmo_cli": osmo,
+        "isaac_launch_ready": isaac_launch_ready(),
     }

@@ -46,9 +46,10 @@ still scores success; it will not write `eval.mp4`.
 2. **G1 stand → Train.** Humanoid holds a pose and waves. Not walking.
 3. **Pick and place → Train.** Mustard goes in the bowl; the arm follows. Not finger grasping.
 
-Skip **G1 reach** on a laptop. **G1 walk** also stops on a laptop (needs
-an NVIDIA GPU and `pip install playground`). On a GPU box it launches
-for real — not a stand clip.
+Skip **G1 reach** — there is no G1 reach environment upstream.
+**G1 walk** stops on a laptop (needs an NVIDIA GPU and Playground,
+mjlab, or Isaac Lab). On a GPU box it launches for real — not a
+stand clip.
 
 Rooms: Robots · Tasks · Data · Runs. Job spec is under **Advanced**.
 
@@ -73,10 +74,14 @@ On a machine with an NVIDIA GPU:
 ```bash
 pip install playground
 python -m humanoid_training.cli train spec/examples/g1-walk.json
+# or mjlab / Isaac Lab, via backend.prefer
 ```
 
-That runs `train-jax-ppo --env_name G1JoystickFlatTerrain`, copies
-`rollout0.mp4` to `eval.mp4`, and stamps `facts.engine=playground`.
+Playground runs `train-jax-ppo --env_name G1JoystickFlatTerrain`.
+mjlab runs `python -m mjlab.scripts.train Mjlab-Velocity-Flat-Unitree-G1 --video True`.
+Isaac Lab runs `isaaclab.sh` for `Isaac-Velocity-Flat-G1-v0` (or GPU
+Docker / `osmo workflow submit` without remote harvest).
+The engine clip becomes `eval.mp4` with `facts.engine` set.
 Without a GPU the same command compiles payloads and exits 12.
 
 Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
@@ -93,8 +98,8 @@ Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
 |---|---|
 | `cartpole-balance` | Gymnasium RL on CPU, eval video, gold clip |
 | `g1-stand` | MuJoCo G1 from Menagerie, stand + both-arm wave, eval video, gold clip |
-| `g1-walk` | Compile to Playground / mjlab / Isaac Lab. **Launches** Playground PPO when a GPU and `train-jax-ppo` are present. |
-| `g1-reach` | Compile to mjlab / Isaac Lab |
+| `g1-walk` | Compile to Playground / mjlab / Isaac Lab. **Launches** the first ready GPU engine. |
+| `g1-reach` | Blocked. No G1 reach env in Playground, mjlab, or Isaac Lab. |
 | `pick-and-place` | Demos → linear BC steers mustard; G1 arm plays pick/lift/place. Gold clip. Not finger grasping, not ACT. |
 
 ## Non-goals (for now)

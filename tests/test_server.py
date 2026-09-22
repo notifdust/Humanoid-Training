@@ -29,6 +29,8 @@ def test_health_and_recipes() -> None:
     assert by_id["cartpole-balance"]["launch_here"] is True
     assert health.get("engines")
     assert "playground_ready" in health["engines"]
+    assert "mjlab_ready" in health["engines"]
+    assert "isaac_launch_ready" in health["engines"]
     gold = client.get("/api/recipes/cartpole-balance/gold/eval.mp4")
     assert gold.status_code == 200
     assert gold.headers["content-type"].startswith("video/")
