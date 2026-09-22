@@ -272,11 +272,94 @@ pre,
 .run-row {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 12px;
   padding: 12px 14px;
   background: var(--bg-2);
   border: 1px solid var(--line);
   cursor: pointer;
+}
+
+.run-row .run-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.run-check {
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.run-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.runs-compare-bar {
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+.compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.compare-col {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  padding: 14px;
+  min-width: 0;
+}
+
+.compare-col h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.compare-col h3 {
+  margin: 14px 0 8px;
+  font-size: 13px;
+  font-family: var(--mono);
+  color: var(--muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.facts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fact-row {
+  display: grid;
+  grid-template-columns: minmax(88px, 36%) 1fr;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.fact-key {
+  color: var(--muted);
+}
+
+.fact-val {
+  color: var(--ink);
+  word-break: break-word;
+}
+
+@media (max-width: 800px) {
+  .compare-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 video {

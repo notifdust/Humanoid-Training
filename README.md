@@ -51,7 +51,7 @@ Skip **G1 reach** — there is no G1 reach environment upstream.
 mjlab, or Isaac Lab). On a GPU box it launches for real — not a
 stand clip.
 
-Rooms: Robots · Tasks · Data · Runs. Job spec is under **Advanced**.
+Rooms: Robots · Tasks · Data · Runs (compare two runs of the same task here). Job spec is under **Advanced**.
 
 ### Same jobs from the CLI
 

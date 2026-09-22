@@ -248,9 +248,17 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "r.launch_here" in js
     assert "function backendBadge" in js
     assert "facts.engine" in js
-    assert "id=\"backend-badge\"" in js
+    assert "backend-badge" in js
     assert "This recipe has no movable objects" in js
     assert "state.selected?.launch_here" in js
+    assert "function compareSelection" in js
+    assert "function toggleCompareId" in js
+    assert "function renderCompare" in js
+    assert "function factsListHTML" in js
+    assert "id=\"compare-runs\"" in js
+    assert "compare-grid" in js
+    assert "Pick two runs of the same task." in js
+    assert 'data-view="evaluate"' not in js
 
 
 def test_studio_js_bc_freshness_contract() -> None:
@@ -274,3 +282,18 @@ def test_studio_css_disabled_cursor() -> None:
     )
     assert "cursor: not-allowed" in css
     assert "button.busy:disabled" in css
+    assert ".compare-grid" in css
+    assert ".facts-list" in css
+    assert ".run-check" in css
+
+
+def test_studio_has_four_rooms_not_five() -> None:
+    html = (Path(__file__).resolve().parents[1] / "studio" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    assert 'data-view="robots"' in html
+    assert 'data-view="tasks"' in html
+    assert 'data-view="data"' in html
+    assert 'data-view="runs"' in html
+    assert 'data-view="evaluate"' not in html
+    assert html.count("data-view=") == 4
