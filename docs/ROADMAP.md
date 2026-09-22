@@ -15,7 +15,7 @@ Phase 3c  GPU-box walk proof                 ← next (`ht proof walk`; live cli
 Phase 3d  remote harvest (OSMO / GPU queue)  ← launch path done (needs OSMO pool for live proof)
 Phase 3e  ACT on the same demos                 ← launch path done (needs GPU for live ACT)
 Phase 3f  honest G1 manipulation recipe     ← done (deleted dishonest g1-reach)
-Phase 3g  compare two runs in Runs
+Phase 3g  compare two runs in Runs           ← done (side-by-side in Runs room)
 Phase 4   real G1/H1 deploy with safety gates
 ```
 
@@ -371,8 +371,17 @@ confirming a real Isaac/mjlab task string on a GPU box.
 
 ### Phase 3g — Compare two runs (Evaluate in Runs)
 
-**Exit test.** Side-by-side videos/facts for two run ids of the same
+**Exit test (met).** Side-by-side videos/facts for two run ids of the same
 recipe. No fifth studio room.
+
+| Deliverable | Status |
+|---|---|
+| Checkbox select two runs in the Runs list | done |
+| Compare enabled only when both share `run.recipe` | done |
+| Side-by-side videos + `facts` under the Runs room | done |
+| No fifth rail button / Evaluate room | done |
+
+Pick two runs of the same task → **Compare**. Still four rooms.
 
 ### Phase 4 — Real robot (after 3c)
 
@@ -389,7 +398,7 @@ passes.
 - A new cluster orchestrator (emit OSMO / HF Jobs / Docker)
 - Competing with LeLab on SO-ARM101
 - Fleet operations (Foxglove / Formant)
-- A fifth studio room before Phase 3g
+- A fifth studio room before Phase 4 (Evaluate stays in Runs)
 - Fake walk / ACT / Isaac / OSMO success on a CPU laptop
 - Finger grasping before ACT ships
 - Hardware deploy before a live walk clip exists

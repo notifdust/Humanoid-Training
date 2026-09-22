@@ -8,6 +8,7 @@ const state = {
   expanded: null,
   runs: [],
   run: null,
+  compareIds: [],
   poll: null,
   stream: null,
   dataset: null,
@@ -1157,7 +1158,122 @@ function runDemoHint(run) {
   return bits.length ? ` · ${bits.join(" · ")}` : "";
 }
 
+function toggleCompareId(runId) {
+  const id = String(runId || "");
+  if (!id) return;
+  const cur = state.compareIds || [];
+  if (cur.includes(id)) {
+    state.compareIds = cur.filter((x) => x !== id);
+    return;
+  }
+  if (cur.length >= 2) {
+    state.compareIds = [cur[1], id];
+    return;
+  }
+  state.compareIds = [...cur, id];
+}
+
+function compareSelection() {
+  const ids = state.compareIds || [];
+  const byId = Object.fromEntries((state.runs || []).map((r) => [r.run_id, r]));
+  const runs = ids.map((id) => byId[id]).filter(Boolean);
+  if (ids.length !== 2 || runs.length !== 2) {
+    return { ok: false, reason: "Pick two runs to compare.", runs: [] };
+  }
+  if (runs[0].recipe !== runs[1].recipe) {
+    return {
+      ok: false,
+      reason: "Pick two runs of the same task.",
+      runs,
+    };
+  }
+  return { ok: true, reason: "", runs, recipe: runs[0].recipe };
+}
+
+function factsListHTML(facts) {
+  const entries = Object.entries(facts || {}).filter(
+    ([, v]) => v !== undefined && v !== null && v !== ""
+  );
+  if (!entries.length) return `<p class="meta">No facts on this run.</p>`;
+  const rows = entries
+    .map(
+      ([k, v]) =>
+        `<div class="fact-row"><span class="fact-key">${escapeHtml(k)}</span><span class="fact-val">${escapeHtml(
+          typeof v === "object" ? JSON.stringify(v) : String(v)
+        )}</span></div>`
+    )
+    .join("");
+  return `<div class="facts-list">${rows}</div>`;
+}
+
+function paintCompareColumn(run) {
+  const facts = runFacts(run);
+  const statusClass =
+    run.status === "passed" || (run.metrics && run.metrics.passed === true)
+      ? "passed"
+      : run.status === "completed"
+        ? "completed"
+        : run.status || "";
+  const video =
+    run.artifacts && run.artifacts["eval.mp4"]
+      ? `<video controls muted src="/api/runs/${run.run_id}/artifacts/eval.mp4"></video>`
+      : `<p class="lede">No eval video.</p>`;
+  const metrics =
+    run.metrics && run.metrics.eval_episodes != null
+      ? `<p class="meta">score ${fmt(run.metrics.success_rate)} · passed=${run.metrics.passed ?? "—"}</p>`
+      : "";
+  return `
+    <section class="compare-col" data-compare-run="${escapeHtml(run.run_id)}">
+      <h2>${escapeHtml(prettyRecipe(run.recipe))}</h2>
+      <p class="meta">${escapeHtml(run.run_id)}</p>
+      <p class="status ${statusClass}">${escapeHtml(englishRunStatus(run))}</p>
+      ${metrics}
+      ${backendBadge(facts)}
+      ${video}
+      <h3>Facts</h3>
+      ${factsListHTML(facts)}
+    </section>`;
+}
+
+async function renderCompare() {
+  const sel = compareSelection();
+  if (!sel.ok) {
+    renderRuns();
+    return;
+  }
+  state.view = "compare";
+  setActive("runs");
+  const [left, right] = await Promise.all(
+    sel.runs.map((r) => api(`/api/runs/${r.run_id}`))
+  );
+  main.innerHTML = `
+    <h1>Compare</h1>
+    <p class="lede">Same task side by side — videos and facts. Not a fifth room.</p>
+    <div class="actions recipe-bar">
+      <button class="ghost" id="back-runs">Back to runs</button>
+      <button class="ghost" id="clear-compare">Clear selection</button>
+    </div>
+    <div class="compare-grid">
+      ${paintCompareColumn(left)}
+      ${paintCompareColumn(right)}
+    </div>
+  `;
+  document.getElementById("back-runs")?.addEventListener("click", () => switchView("runs"));
+  document.getElementById("clear-compare")?.addEventListener("click", () => {
+    state.compareIds = [];
+    switchView("runs");
+  });
+}
+
 function renderRuns() {
+  const sel = compareSelection();
+  const compareHint = (() => {
+    const n = (state.compareIds || []).length;
+    if (n === 0) return "Check two runs of the same task, then Compare.";
+    if (n === 1) return "Pick one more run of the same task.";
+    if (!sel.ok) return sel.reason;
+    return `Ready: ${prettyRecipe(sel.recipe)}.`;
+  })();
   const rows = state.runs
     .map((run) => {
       const passed = run.metrics && run.metrics.passed === true;
@@ -1175,10 +1291,14 @@ function renderRuns() {
         run.metrics.passed === false
           ? " · failed metrics"
           : "";
+      const checked = (state.compareIds || []).includes(run.run_id) ? "checked" : "";
       return `
       <li>
         <div class="run-row" data-run="${run.run_id}">
-          <div>
+          <label class="run-check" data-compare-toggle="${run.run_id}">
+            <input type="checkbox" ${checked} aria-label="Select for compare" />
+          </label>
+          <div class="run-main">
             <strong>${escapeHtml(prettyRecipe(run.recipe))}</strong>
             <div class="meta">${run.run_id}${run.artifacts && run.artifacts["eval.mp4"] ? " · eval.mp4" : ""}${hint}${failedHint}</div>
           </div>
@@ -1189,11 +1309,30 @@ function renderRuns() {
     .join("");
   main.innerHTML = `
     <h1>Runs</h1>
-    <p class="lede">Click a run to watch the video. Green means the task succeeded. Orange means it finished but failed, or it cannot train on this computer.</p>
+    <p class="lede">Click a run to watch the video. Check two of the same task to compare side by side. Green means the task succeeded. Orange means it finished but failed, or it cannot train on this computer.</p>
+    <div class="actions recipe-bar runs-compare-bar">
+      <button class="primary" id="compare-runs" ${sel.ok ? "" : "disabled"}>Compare</button>
+      <span class="meta" id="compare-hint">${escapeHtml(compareHint)}</span>
+    </div>
     <ul class="runs">${rows || `<li class='lede'>No runs yet. Open ${escapeHtml(firstReadyRecipe()?.title || "a task")} from Tasks and click Train.</li>`}</ul>
   `;
   main.querySelectorAll("[data-run]").forEach((el) => {
-    el.addEventListener("click", () => showRun(el.dataset.run));
+    el.addEventListener("click", (ev) => {
+      if (ev.target.closest("[data-compare-toggle]")) return;
+      showRun(el.dataset.run);
+    });
+  });
+  main.querySelectorAll("[data-compare-toggle]").forEach((el) => {
+    el.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      toggleCompareId(el.dataset.compareToggle);
+      renderRuns();
+    });
+  });
+  document.getElementById("compare-runs")?.addEventListener("click", () => {
+    if (!compareSelection().ok) return;
+    renderCompare();
   });
 }
 
@@ -1213,7 +1352,7 @@ function backendBadge(facts) {
   if (facts.device) parts.push(facts.device);
   if (facts.runner === "docker") parts.push("Docker");
   if (!parts.length) return "";
-  return `<p class="meta" id="backend-badge">${escapeHtml(parts.join(" · "))}</p>`;
+  return `<p class="meta backend-badge">${escapeHtml(parts.join(" · "))}</p>`;
 }
 
 function paintRun(run, logText) {
