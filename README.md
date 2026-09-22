@@ -88,7 +88,7 @@ Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
 
 ## Read this first
 
-- **[Roadmap](docs/ROADMAP.md)** — what is live, what this round verified, what comes next
+- **[Roadmap](docs/ROADMAP.md)** — what is live, what this round verified, continuation order (3c → 4)
 - **[Product vision](docs/VISION.md)** — landscape and why we compile instead of replacing engines
 - **[Architecture](docs/ARCHITECTURE.md)** — job spec, adapters, runners
 
