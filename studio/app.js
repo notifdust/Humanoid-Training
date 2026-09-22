@@ -280,12 +280,15 @@ function trailPolylines(extra) {
 
 function sceneHTML(spec) {
   const objects = spec?.scene?.objects;
-  if (!objects || !objects.length) {
-    return `
+    if (!objects || !objects.length) {
+      const extra = state.selected?.launch_here
+        ? " Train still writes eval video."
+        : "";
+      return `
       <h2>Scene</h2>
-      <p class="lede">This recipe has no movable objects. Train still writes eval video.</p>
+      <p class="lede">This recipe has no movable objects.${extra}</p>
     `;
-  }
+    }
   const tokens = objects
     .map((obj) => {
       const target = recordTargetId();

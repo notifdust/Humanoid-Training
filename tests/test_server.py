@@ -249,6 +249,8 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "function backendBadge" in js
     assert "facts.engine" in js
     assert "id=\"backend-badge\"" in js
+    assert "This recipe has no movable objects" in js
+    assert "state.selected?.launch_here" in js
 
 
 def test_studio_js_bc_freshness_contract() -> None:
