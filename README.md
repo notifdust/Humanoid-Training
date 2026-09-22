@@ -80,7 +80,8 @@ python -m humanoid_training.cli train spec/examples/g1-walk.json
 
 `ht proof walk` is the Phase 3c exit command: short train, require
 `eval.mp4`, stamp `facts.engine`. Without a GPU it exits 12 with the
-next step.
+next step. With the OSMO CLI logged in (no local GPU), Train can still
+harvest a remote Isaac walk clip (Phase 3d).
 
 Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
 
