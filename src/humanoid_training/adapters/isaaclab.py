@@ -137,7 +137,14 @@ workflow:
         if cli and hardware.gpu_available():
             return self._launch_local(spec, run_dir, log, task, cli, logdir, want_video)
 
-        if hardware.isaac_launch_ready() and hardware.docker_bin():
+        # GPU Docker only when explicitly opted in — do not steal the OSMO path
+        # just because `docker` is on PATH (CI runners) and osmo_ready made
+        # isaac_launch_ready true.
+        if (
+            hardware.gpu_available()
+            and hardware.docker_gpu_requested()
+            and hardware.docker_bin()
+        ):
             return self._launch_docker(spec, run_dir, log, task, image, logdir, want_video)
 
         osmo = hardware.osmo_cli()

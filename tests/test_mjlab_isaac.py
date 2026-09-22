@@ -276,6 +276,10 @@ def test_g1_walk_osmo_harvests_video(
     monkeypatch.setenv("HT_OSMO_CLI", str(osmo))
     monkeypatch.setenv("HT_OSMO_POLL_SECONDS", "0.01")
     monkeypatch.setenv("HT_OSMO_TIMEOUT_SECONDS", "2")
+    # CI runners often have `docker` on PATH; OSMO must still win when
+    # HT_DOCKER_GPU is off.
+    monkeypatch.setenv("HT_DOCKER_GPU", "0")
+    monkeypatch.setenv("HT_GPU", "0")
     spec = _walk_spec(backend={"prefer": ["isaaclab"], "compute": "osmo"})
     manifest = run_job(spec, runs_dir=tmp_path / "runs")
     assert manifest["status"] == "passed", manifest.get("error") or manifest.get("notes")
@@ -292,6 +296,29 @@ def test_g1_walk_osmo_harvests_video(
     log = (run_dir / "run.log").read_text(encoding="utf-8")
     assert "workflow submit" in log
     assert "osmo status=COMPLETED" in log or "COMPLETED" in log
+
+
+def test_osmo_not_stolen_by_docker_on_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression: CI has docker but no GPU Docker opt-in; OSMO must harvest."""
+    osmo = _write_cli(tmp_path, "osmo", FAKE_OSMO)
+    fake_docker = _write_cli(
+        tmp_path,
+        "docker",
+        "#!/usr/bin/env python3\nimport sys\nprint('should-not-run')\nsys.exit(125)\n",
+    )
+    monkeypatch.setenv("HT_OSMO_CLI", str(osmo))
+    monkeypatch.setenv("HT_OSMO_POLL_SECONDS", "0.01")
+    monkeypatch.setenv("HT_OSMO_TIMEOUT_SECONDS", "2")
+    monkeypatch.setenv("HT_DOCKER_GPU", "0")
+    monkeypatch.setenv("HT_GPU", "1")  # would have triggered old buggy branch
+    monkeypatch.setattr("humanoid_training.hardware.docker_bin", lambda: str(fake_docker))
+    spec = _walk_spec(backend={"prefer": ["isaaclab"], "compute": "osmo"})
+    manifest = run_job(spec, runs_dir=tmp_path / "runs")
+    assert manifest["status"] == "passed", manifest.get("error")
+    assert (manifest.get("facts") or {}).get("launch") == "osmo"
+    assert (Path(manifest["run_dir"]) / "eval.mp4").is_file()
 
 
 def test_osmo_ready_makes_walk_launch_here(monkeypatch: pytest.MonkeyPatch) -> None:
