@@ -126,7 +126,7 @@ not harvest a remote clip.
 | `mujoco` | G1 stand hold; pick-and-place linear-BC + arm poses |
 | `playground` | Compile + launch G1 walk via `train-jax-ppo` when GPU + CLI are present; otherwise compile and block |
 | `mjlab` | Compile + launch G1 walk `Mjlab-Velocity-Flat-Unitree-G1` when mjlab + GPU are present; otherwise compile and block |
-| `isaaclab` | Compile OSMO YAML; launch via `isaaclab.sh` or GPU Docker; OSMO submit without harvest |
+| `isaaclab` | Compile OSMO YAML; launch via `isaaclab.sh`, GPU Docker, or OSMO submit→poll→rsync harvest |
 | `lerobot` | Compile future ACT script; CPU imitation stays on mujoco |
 
 The MuJoCo adapter is three modules, not one god file:

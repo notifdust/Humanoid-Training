@@ -12,7 +12,7 @@ Phase 2.5 recipe gold + CI videos            ← done
 Phase 3a  first real G1 walk (Playground)    ← launch path done
 Phase 3b  mjlab / Isaac G1 walk + OSMO       ← launch path done (no G1 reach env upstream)
 Phase 3c  GPU-box walk proof                 ← next (`ht proof walk`; live clip still needs a GPU)
-Phase 3d  remote harvest (OSMO / GPU queue)
+Phase 3d  remote harvest (OSMO / GPU queue)  ← launch path done (needs OSMO pool for live proof)
 Phase 3e  ACT on the same demos
 Phase 3f  honest G1 manipulation recipe
 Phase 3g  compare two runs in Runs
@@ -54,8 +54,8 @@ the original names):
 | ACT / diffusion | Linear-BC on LeRobot v2 JSONL; G1 arm pose playback | Not finger grasping, not ACT |
 | Gamepad teleop | Canvas drag, WASD, and a gamepad stick write the same table-frame takes | Not a Unitree XR / leader-arm stack |
 | Balance / locomotion RL | G1 stand holds a pinned pelvis and waves | Not walking, not a balance policy |
-| Isaac / OSMO job | Local `isaaclab.sh` or GPU Docker harvests `eval.mp4`; `osmo workflow submit` has no remote harvest | Not a silent Isaac success on CPU |
-| Hosted GPU | CPU Docker image + in-process studio; OSMO submit is fail-closed | No eval-video harvest from the cloud |
+| Isaac / OSMO job | Local isaaclab.sh / GPU Docker, or OSMO submit→poll→rsync harvest | Not a silent Isaac success without a clip |
+| Hosted GPU | OSMO harvest path when `osmo` CLI is present; CPU Docker still Phase 1 | Live OSMO pool proof still needed |
 
 ---
 
@@ -252,7 +252,7 @@ invent `G1Reach-v0` or `Isaac-Reach-G1-v0`.
 | Harvest mjlab `*.mp4` under `--log-root`; fail closed if exit 0 and no clip | done |
 | `IsaacLabAdapter.launch` via `isaaclab.sh` train+play, or GPU Docker | done |
 | Harvest Isaac `*.mp4`; fail closed if exit 0 and no clip | done |
-| `osmo workflow submit osmo_workflow.yaml` then block (no remote harvest) | done |
+| `osmo workflow submit` → poll → rsync harvest `ht_eval/*.mp4` | done (Phase 3d harness) |
 | Catalog `launch_here` for playground **or** mjlab **or** isaac ready | done |
 | `select_adapter` first launch-ready GPU engine, else first compile-ok | done |
 | `g1-reach` stays `launch_here=false` even if mjlab is ready | done |
@@ -311,9 +311,28 @@ Do **not** check in a stand clip as walk gold.
 
 ### Phase 3d — Remote harvest (OSMO / hosted GPU)
 
-**Exit test.** From a laptop without CUDA, Train on `g1-walk` submits
-a job, harvests the remote `eval.mp4`, and the studio Plays it.
-Browser holds no cloud credentials. Emit OSMO / HF Jobs / Docker only.
+**Exit test.** From a laptop without CUDA, with the OSMO CLI logged in:
+
+```bash
+ht train spec/examples/g1-walk.json
+# backend.prefer includes isaaclab (default after playground/mjlab miss)
+```
+
+That submits `osmo_workflow.yaml`, polls until `COMPLETED`, rsyncs
+`/osmo/run/workspace/ht_eval/*.mp4` into the run dir as `eval.mp4`, and
+the studio Plays it with `facts.launch=osmo` / `facts.device=remote`.
+Browser holds no cloud credentials.
+
+| Deliverable | Status |
+|---|---|
+| OSMO submit → poll → rsync harvest | done (harness) |
+| Workflow copies clips to `ht_eval` for a stable download path | done |
+| Catalog `launch_here` when `osmo_ready` (no local GPU required) | done |
+| Live OSMO cluster proof | **not done** (needs OSMO credentials + pool) |
+| HF Jobs path | not started (same harvest contract later) |
+
+Opt out of harvest attempts: `HT_OSMO_HARVEST=0`.
+Poll knobs: `HT_OSMO_POLL_SECONDS`, `HT_OSMO_TIMEOUT_SECONDS`.
 
 ### Phase 3e — ACT on the same demos
 
