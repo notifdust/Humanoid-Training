@@ -120,6 +120,38 @@ def mjlab_ready() -> bool:
     return mjlab_cli() is not None and gpu_available()
 
 
+def lerobot_cli() -> str | None:
+    """`lerobot-train` / fake CLI via `HT_LEROBOT_CLI`, else import probe."""
+    override = _cli_from_env("HT_LEROBOT_CLI")
+    if os.environ.get("HT_LEROBOT_CLI") is not None:
+        return override
+    found = shutil.which("lerobot-train")
+    if found:
+        return found
+    try:
+        import lerobot  # noqa: F401
+    except ImportError:
+        return None
+    # Prefer the console script when import works but PATH is thin.
+    return shutil.which("lerobot-train") or sys.executable
+
+
+def lerobot_train_argv(extra: list[str] | None = None) -> list[str]:
+    cli = lerobot_cli()
+    extra = list(extra or [])
+    if not cli:
+        return ["lerobot-train", *extra]
+    path = Path(cli)
+    if path.is_file() and path.name not in {Path(sys.executable).name, "python", "python3"}:
+        return [cli, *extra]
+    # Fall back to module form for older installs.
+    return [cli, "-m", "lerobot.scripts.train", *extra]
+
+
+def lerobot_ready() -> bool:
+    return lerobot_cli() is not None and gpu_available()
+
+
 def isaac_cli() -> str | None:
     """`isaaclab.sh` (or a fake) via `HT_ISAAC_CLI` or PATH."""
     override = _cli_from_env("HT_ISAAC_CLI")
@@ -173,6 +205,8 @@ def adapter_launch_ready(name: str) -> bool:
         return mjlab_ready()
     if name == "isaaclab":
         return isaac_launch_ready()
+    if name == "lerobot":
+        return lerobot_ready()
     return True
 
 
@@ -181,6 +215,7 @@ def engine_status() -> dict[str, Any]:
     mj = mjlab_cli()
     isa = isaac_cli()
     osmo = osmo_cli()
+    lr = lerobot_cli()
     return {
         "gpu": gpu_available(),
         "playground": playground_installed(),
@@ -192,4 +227,6 @@ def engine_status() -> dict[str, Any]:
         "osmo_cli": osmo,
         "osmo_ready": osmo_ready(),
         "isaac_launch_ready": isaac_launch_ready(),
+        "lerobot_cli": lr,
+        "lerobot_ready": bool(lr) and gpu_available(),
     }
