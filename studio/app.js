@@ -1151,7 +1151,7 @@ function runDemoHint(run) {
   if (facts.engine) bits.push(facts.engine);
   if (facts.device) bits.push(facts.device);
   if (facts.runner === "docker") bits.push("Docker");
-  if (facts.sim_only === true) bits.push("sim-only");
+  if (isSimOnly(facts)) bits.push("sim-only");
   if (run.status === "blocked") {
     if (rec && rec.availability === "gpu") {
       bits.push(rec.blocked_hint || "needs a GPU");
@@ -1225,7 +1225,7 @@ function paintCompareColumn(run) {
       ? `<p class="meta">score ${fmt(run.metrics.success_rate)} · passed=${run.metrics.passed ?? "—"}</p>`
       : "";
   const simOnly =
-    facts.sim_only === true
+    isSimOnly(facts)
       ? `<p class="meta">sim-only — not cleared for hardware</p>`
       : "";
   return `
@@ -1353,12 +1353,17 @@ function englishRunStatus(run) {
   return run.status || "";
 }
 
+function isSimOnly(facts) {
+  // Cleared only by a live hardware eval (facts.sim_only=false). Missing = still gated.
+  return !(facts && facts.sim_only === false);
+}
+
 function backendBadge(facts) {
   const parts = [];
   if (facts.engine) parts.push(facts.engine);
   if (facts.device) parts.push(facts.device);
   if (facts.runner === "docker") parts.push("Docker");
-  if (facts.sim_only === true) parts.push("sim-only");
+  if (isSimOnly(facts)) parts.push("sim-only");
   if (facts.policy) parts.push(`policy=${facts.policy}`);
   if (!parts.length) return "";
   return `<p class="meta backend-badge">${escapeHtml(parts.join(" · "))}</p>`;
@@ -1406,7 +1411,7 @@ function paintRun(run, logText) {
         ? "completed"
         : run.status || "";
   const simOnly =
-    facts.sim_only === true
+    isSimOnly(facts)
       ? `<p class="meta" id="sim-only-badge">sim-only — not cleared for hardware</p>`
       : "";
   const headline = englishRunStatus(run);
