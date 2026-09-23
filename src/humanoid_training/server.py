@@ -18,8 +18,9 @@ from humanoid_training.demos import (
     record_object_trajectories,
     record_scripted_pick_place,
 )
-from humanoid_training.errors import RecipeError, SpecError, repo_root
+from humanoid_training.errors import AdapterUnavailable, RecipeError, SpecError, repo_root
 from humanoid_training.artifacts import SERVED_ARTIFACTS
+from humanoid_training.deploy import assess_deploy, deploy_run
 from humanoid_training.recipes import default_user_spec, expand_spec, load_recipe, public_catalog
 from humanoid_training.runner import default_runs_dir, load_manifest, new_run_id, run_job, write_manifest
 from humanoid_training.spec import validate_spec
@@ -278,6 +279,24 @@ def start_run(body: SpecBody) -> dict[str, Any]:
 
     threading.Thread(target=_work, daemon=True).start()
     return queued
+
+
+@app.post("/api/runs/{run_id}/deploy")
+def deploy_run_api(run_id: str) -> dict[str, Any]:
+    """Phase 4 gate: assess + fail closed. Never starts robot torque."""
+    path = _find_run(run_id)
+    manifest = load_manifest(path)
+    report = assess_deploy(manifest)
+    try:
+        deploy_run(run_id, runs_dir=_runs_root())
+    except AdapterUnavailable as err:
+        return {
+            **report,
+            "ok": False,
+            "deployed": False,
+            "error": str(err),
+        }
+    return {**report, "deployed": True, "error": None}
 
 
 studio_dir = repo_root() / "studio"

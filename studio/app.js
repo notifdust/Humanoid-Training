@@ -1382,6 +1382,10 @@ function paintRun(run, logText) {
       : run.status === "completed"
         ? "completed"
         : run.status || "";
+  const simOnly =
+    facts.sim_only === true
+      ? `<p class="meta" id="sim-only-badge">sim-only — not cleared for hardware</p>`
+      : "";
   const headline = englishRunStatus(run);
   const readyTitles = readyRecipes(state.recipes).map((r) => r.title);
   const laterTitles = laterRecipes(state.recipes).map((r) => r.title);
@@ -1396,12 +1400,15 @@ function paintRun(run, logText) {
     <h1>${escapeHtml(prettyRecipe(run.recipe))}</h1>
     <p class="status ${statusClass}">${escapeHtml(headline)}</p>
     ${metrics}
+    ${simOnly}
     ${run.error ? `<p class="error">${escapeHtml(plainError(run.error))}</p>` : ""}
     ${blockedHelp}
     <div class="actions recipe-bar">
       <button class="primary" id="train-again">Train again</button>
+      <button class="ghost" id="deploy-run">Deploy to robot</button>
       <button class="ghost" id="back-tasks">Back to tasks</button>
     </div>
+    <p class="error" id="deploy-status" hidden></p>
     <div class="detail">
       <section>
         <h2>Did it work?</h2>
@@ -1420,6 +1427,29 @@ function paintRun(run, logText) {
   `;
   document.getElementById("train-again")?.addEventListener("click", trainCurrent);
   document.getElementById("back-tasks")?.addEventListener("click", () => switchView("tasks"));
+  document.getElementById("deploy-run")?.addEventListener("click", () => attemptDeploy(run.run_id));
+}
+
+async function attemptDeploy(runId) {
+  const status = document.getElementById("deploy-status");
+  const btn = document.getElementById("deploy-run");
+  if (status) {
+    status.hidden = false;
+    status.textContent = "Checking deploy gate…";
+  }
+  if (btn) btn.disabled = true;
+  try {
+    const report = await api(`/api/runs/${encodeURIComponent(runId)}/deploy`, {
+      method: "POST",
+      body: "{}",
+    });
+    const msg = report.error || "Deploy blocked — stay sim-only.";
+    if (status) status.textContent = msg;
+  } catch (error) {
+    if (status) status.textContent = error.message || String(error);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function prettyRecipe(id) {
