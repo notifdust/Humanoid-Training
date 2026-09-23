@@ -16,7 +16,7 @@ Phase 3d  remote harvest (OSMO / GPU queue)  ← launch path done (needs OSMO po
 Phase 3e  ACT on the same demos                 ← launch path done (needs GPU for live ACT)
 Phase 3f  honest G1 manipulation recipe     ← done (deleted dishonest g1-reach)
 Phase 3g  compare two runs in Runs           ← done (side-by-side in Runs room)
-Phase 4   real G1/H1 deploy with safety gates
+Phase 4   real G1/H1 deploy with safety gates ← gate done (live torque **not** wired)
 ```
 
 This file is the **continuation plan from what is actually running**, not
@@ -389,6 +389,24 @@ Pick two runs of the same task → **Compare**. Still four rooms.
 speed; NaN or pose-limit kills the policy; no silent checkpoint
 fallback. Policies stay `sim-only` until a hardware eval profile
 passes.
+
+| Deliverable | Status |
+|---|---|
+| Stamp `facts.sim_only=true` on every in-process run | done |
+| `ht deploy <run_id>` fail-closed gate (cartpole / stand / mustard refused) | done |
+| Require passed `g1-walk` + `eval.mp4` + `HT_HARDWARE_PROFILE` | done (harness) |
+| Runs UI shows `sim-only` (and `policy=` when present) | done |
+| Unitree reduced-speed driver + NaN / pose-limit kills | **not done** |
+| Live hardware eval that clears `sim_only` | **not done** (needs robot + live walk proof) |
+
+```bash
+ht deploy <run_id>          # exit 12 until a hardware profile + driver exist
+# Optional operator file once a real hardware eval passes:
+# HT_HARDWARE_PROFILE=/path/to/hw.json  # {"passed": true, "kind": "hardware"}
+```
+
+Do not treat a green `assess_deploy` checklist as live torque. The driver
+is still unwired on purpose.
 
 ---
 

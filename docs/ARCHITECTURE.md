@@ -237,6 +237,8 @@ src/humanoid_training/
   recipes.py               # expand + public_catalog
   artifacts.py             # run file inventory
   hardware.py              # GPU / engine CLI probes
+  proof.py                 # Phase 3c GPU walk proof
+  deploy.py                # Phase 4 fail-closed hardware deploy gate
   adapters/                # compile / launch
     process.py             # shared subprocess + mp4 harvest
     playground.py
