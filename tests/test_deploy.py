@@ -111,6 +111,81 @@ def test_runner_stamps_sim_only(tmp_path: Path) -> None:
     assert (manifest.get("facts") or {}).get("runner") == "inprocess"
 
 
+def test_assess_deploy_blocks_stand_and_mustard() -> None:
+    for recipe in ("g1-stand", "pick-and-place"):
+        report = assess_deploy(
+            {
+                "run_id": "r1",
+                "recipe": recipe,
+                "status": "passed",
+                "metrics": {"passed": True},
+                "artifacts": {"eval.mp4": "x"},
+                "facts": {"kind": "hold" if recipe == "g1-stand" else "imitation"},
+            }
+        )
+        assert report["ok"] is False
+        assert any("g1-walk" in r for r in report["reasons"])
+        assert len(report["reasons"]) == 1
+
+
+def test_assess_deploy_blocks_queued_and_failed_metrics() -> None:
+    queued = assess_deploy(_walk_manifest(status="queued"))
+    assert queued["ok"] is False
+    assert any("queued" in r for r in queued["reasons"])
+
+    failed = assess_deploy(
+        _walk_manifest(status="completed", metrics={"passed": False, "success_rate": 0.0})
+    )
+    assert failed["ok"] is False
+    assert any("metrics.passed" in r for r in failed["reasons"])
+
+
+def test_assess_deploy_blocks_missing_eval_mp4(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    profile = tmp_path / "hw.json"
+    profile.write_text(json.dumps({"passed": True, "kind": "hardware"}), encoding="utf-8")
+    monkeypatch.setenv("HT_HARDWARE_PROFILE", str(profile))
+    report = assess_deploy(_walk_manifest(artifacts={}))
+    assert report["ok"] is False
+    assert any("eval.mp4" in r for r in report["reasons"])
+
+
+def test_api_deploy_unknown_run_is_404(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HT_RUNS_DIR", str(tmp_path))
+    from fastapi.testclient import TestClient
+    from humanoid_training.server import app
+
+    client = TestClient(app)
+    resp = client.post("/api/runs/does-not-exist/deploy")
+    assert resp.status_code == 404
+
+
+def test_api_deploy_walk_with_profile_still_not_wired(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HT_RUNS_DIR", str(tmp_path))
+    profile = tmp_path / "hw.json"
+    profile.write_text(json.dumps({"passed": True, "kind": "hardware"}), encoding="utf-8")
+    monkeypatch.setenv("HT_HARDWARE_PROFILE", str(profile))
+    run_dir = tmp_path / "walk-1"
+    run_dir.mkdir()
+    (run_dir / "manifest.json").write_text(
+        json.dumps(_walk_manifest(artifacts={"eval.mp4": str(run_dir / "eval.mp4")})),
+        encoding="utf-8",
+    )
+    (run_dir / "eval.mp4").write_bytes(b"fake")
+    from fastapi.testclient import TestClient
+    from humanoid_training.server import app
+
+    client = TestClient(app)
+    resp = client.post("/api/runs/walk-1/deploy")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body.get("deployed") is False
+    assert "not wired" in (body.get("error") or "").lower()
+
+
 def test_cli_deploy_exit_12(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     from humanoid_training.cli import main
 
