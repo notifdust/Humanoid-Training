@@ -83,6 +83,10 @@ python -m humanoid_training.cli train spec/examples/g1-walk.json
 next step. With the OSMO CLI logged in (no local GPU), Train can still
 harvest a remote Isaac walk clip (Phase 3d).
 
+`ht deploy <run_id>` is the Phase 4 gate: it always fails closed until a
+passed hardware eval profile exists and a Unitree driver ships. Every
+run stays `facts.sim_only=true`.
+
 Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
 
 ## Read this first

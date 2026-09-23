@@ -1147,9 +1147,11 @@ function runDemoHint(run) {
   ) {
     bits.push("stale? re-train for BC");
   }
+  if (facts.policy) bits.push(`policy=${facts.policy}`);
   if (facts.engine) bits.push(facts.engine);
   if (facts.device) bits.push(facts.device);
   if (facts.runner === "docker") bits.push("Docker");
+  if (facts.sim_only === true) bits.push("sim-only");
   if (run.status === "blocked") {
     if (rec && rec.availability === "gpu") {
       bits.push(rec.blocked_hint || "needs a GPU");

@@ -262,6 +262,8 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "compare-grid" in js
     assert "Pick two runs of the same task." in js
     assert 'data-view="evaluate"' not in js
+    assert "sim-only" in js
+    assert "facts.policy" in js or "facts.sim_only" in js
 
 
 def test_studio_js_bc_freshness_contract() -> None:

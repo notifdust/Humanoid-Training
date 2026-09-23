@@ -187,6 +187,7 @@ def run_job_via_docker(
     facts = dict(manifest.get("facts") or {})
     facts["runner"] = "docker"
     facts["host_spec_hash"] = spec_hash(public)
+    facts.setdefault("sim_only", True)
     manifest["facts"] = facts
     write_manifest(run_dir, manifest)
     return manifest
