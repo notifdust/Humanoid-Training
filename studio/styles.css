@@ -356,10 +356,15 @@ pre,
   word-break: break-word;
 }
 
-@media (max-width: 800px) {
-  .compare-grid {
-    grid-template-columns: 1fr;
-  }
+.deploy-reasons {
+  margin: 6px 0 0;
+  padding-left: 1.2em;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.deploy-reasons li {
+  margin: 2px 0;
 }
 
 video {
@@ -557,7 +562,8 @@ details.advanced summary {
 
 @media (max-width: 860px) {
   .shell,
-  .detail {
+  .detail,
+  .compare-grid {
     grid-template-columns: 1fr;
   }
   .rail {

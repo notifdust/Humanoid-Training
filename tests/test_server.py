@@ -276,11 +276,15 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "id=\"deploy-run\"" in js
     assert "function attemptDeploy" in js
     assert "function deployButtonState" in js
+    assert "function loadDeployPreflight" in js
+    assert "id=\"deploy-preflight\"" in js
+    assert "id=\"back-runs\"" in js
     assert "/deploy" in js
     assert "id=\"sim-only-badge\"" in js
     assert "escapeHtml(hint)" in js
     assert "escapeHtml(englishRunStatus(run))" in js
     assert "sim-only — not cleared for hardware" in js
+    assert "Why this stays sim-only" in js
 
 
 def test_studio_js_bc_freshness_contract() -> None:

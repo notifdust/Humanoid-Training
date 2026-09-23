@@ -281,6 +281,14 @@ def start_run(body: SpecBody) -> dict[str, Any]:
     return queued
 
 
+@app.get("/api/runs/{run_id}/deploy")
+def assess_deploy_api(run_id: str) -> dict[str, Any]:
+    """Phase 4 preflight: assess only. Does not attempt deploy."""
+    path = _find_run(run_id)
+    report = assess_deploy(load_manifest(path))
+    return {**report, "deployed": False}
+
+
 @app.post("/api/runs/{run_id}/deploy")
 def deploy_run_api(run_id: str) -> dict[str, Any]:
     """Phase 4 gate: assess + fail closed. Never starts robot torque."""

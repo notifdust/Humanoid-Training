@@ -151,6 +151,25 @@ def test_assess_deploy_blocks_missing_eval_mp4(
     assert any("eval.mp4" in r for r in report["reasons"])
 
 
+def test_api_deploy_get_is_preflight_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HT_RUNS_DIR", str(tmp_path))
+    from fastapi.testclient import TestClient
+    from humanoid_training.server import app
+
+    run_dir = tmp_path / "walk-1"
+    run_dir.mkdir()
+    (run_dir / "manifest.json").write_text(json.dumps(_walk_manifest()), encoding="utf-8")
+    client = TestClient(app)
+    resp = client.get("/api/runs/walk-1/deploy")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body.get("ok") is False
+    assert body.get("deployed") is False
+    assert body.get("reasons")
+    # GET must not attempt the unwired driver path.
+    assert "not wired" not in (body.get("error") or "").lower()
+
+
 def test_api_deploy_unknown_run_is_404(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HT_RUNS_DIR", str(tmp_path))
     from fastapi.testclient import TestClient

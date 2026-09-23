@@ -33,6 +33,7 @@ def test_cartpole_train_writes_video(tmp_path: Path) -> None:
     assert "checkpoint.npz" in manifest["artifacts"]
     assert "train_returns.json" in manifest["artifacts"]
     assert manifest.get("facts", {}).get("kind") == "rl"
+    assert manifest.get("facts", {}).get("engine") == "gymnasium"
     assert "greedy_train_eval" in (manifest.get("facts") or {})
 
 
@@ -94,6 +95,7 @@ def test_g1_stand_hold_mini_humanoid(tmp_path: Path) -> None:
     assert "no actuators" in notes or "arm actuators not mapped" in notes
     assert "raise and wave" not in notes
     assert (manifest.get("facts") or {}).get("kind") == "hold"
+    assert (manifest.get("facts") or {}).get("engine") == "mujoco"
     assert (manifest.get("facts") or {}).get("nu") == 0
 
 
