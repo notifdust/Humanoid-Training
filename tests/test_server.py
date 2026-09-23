@@ -199,6 +199,15 @@ def test_api_train_cartpole(tmp_path: Path, monkeypatch) -> None:
     video = client.get(f"/api/runs/{run_id}/artifacts/eval.mp4")
     assert video.status_code == 200
     assert video.headers["content-type"].startswith("video/")
+    assert (body.get("facts") or {}).get("sim_only") is True
+    deploy = client.post(f"/api/runs/{run_id}/deploy")
+    assert deploy.status_code == 200, deploy.text
+    report = deploy.json()
+    assert report.get("ok") is False
+    assert report.get("deployed") is False
+    assert "sim-only" in (report.get("error") or "").lower() or "Hardware deploy is blocked" in (
+        report.get("error") or ""
+    )
 
 
 def test_api_g1_walk_blocks_with_next_step(tmp_path: Path, monkeypatch) -> None:
@@ -264,6 +273,10 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert 'data-view="evaluate"' not in js
     assert "sim-only" in js
     assert "facts.policy" in js or "facts.sim_only" in js
+    assert "id=\"deploy-run\"" in js
+    assert "function attemptDeploy" in js
+    assert "/deploy" in js
+    assert "id=\"sim-only-badge\"" in js
 
 
 def test_studio_js_bc_freshness_contract() -> None:
