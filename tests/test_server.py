@@ -281,6 +281,7 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "id=\"back-runs\"" in js
     assert "/deploy" in js
     assert "id=\"sim-only-badge\"" in js
+    assert "function isSimOnly" in js
     assert "escapeHtml(hint)" in js
     assert "escapeHtml(englishRunStatus(run))" in js
     assert "sim-only — not cleared for hardware" in js
