@@ -1224,12 +1224,17 @@ function paintCompareColumn(run) {
     run.metrics && run.metrics.eval_episodes != null
       ? `<p class="meta">score ${fmt(run.metrics.success_rate)} · passed=${run.metrics.passed ?? "—"}</p>`
       : "";
+  const simOnly =
+    facts.sim_only === true
+      ? `<p class="meta">sim-only — not cleared for hardware</p>`
+      : "";
   return `
     <section class="compare-col" data-compare-run="${escapeHtml(run.run_id)}">
       <h2>${escapeHtml(prettyRecipe(run.recipe))}</h2>
       <p class="meta">${escapeHtml(run.run_id)}</p>
       <p class="status ${statusClass}">${escapeHtml(englishRunStatus(run))}</p>
       ${metrics}
+      ${simOnly}
       ${backendBadge(facts)}
       ${video}
       <h3>Facts</h3>
@@ -1302,9 +1307,9 @@ function renderRuns() {
           </label>
           <div class="run-main">
             <strong>${escapeHtml(prettyRecipe(run.recipe))}</strong>
-            <div class="meta">${escapeHtml(run.run_id)}${run.artifacts && run.artifacts["eval.mp4"] ? " · eval.mp4" : ""}${hint}${failedHint}</div>
+            <div class="meta">${escapeHtml(run.run_id)}${run.artifacts && run.artifacts["eval.mp4"] ? " · eval.mp4" : ""}${escapeHtml(hint)}${escapeHtml(failedHint)}</div>
           </div>
-          <div class="status ${statusClass}">${englishRunStatus(run)}</div>
+          <div class="status ${statusClass}">${escapeHtml(englishRunStatus(run))}</div>
         </div>
       </li>`;
     })
@@ -1353,8 +1358,26 @@ function backendBadge(facts) {
   if (facts.engine) parts.push(facts.engine);
   if (facts.device) parts.push(facts.device);
   if (facts.runner === "docker") parts.push("Docker");
+  if (facts.sim_only === true) parts.push("sim-only");
+  if (facts.policy) parts.push(`policy=${facts.policy}`);
   if (!parts.length) return "";
   return `<p class="meta backend-badge">${escapeHtml(parts.join(" · "))}</p>`;
+}
+
+function deployButtonState(run) {
+  if (["queued", "running"].includes(run.status)) {
+    return { disabled: true, title: "Wait until training finishes." };
+  }
+  if (run.status === "blocked") {
+    return { disabled: true, title: "This run never trained — nothing to deploy." };
+  }
+  if (run.recipe !== "g1-walk") {
+    return {
+      disabled: false,
+      title: "Only a passed g1-walk can clear the hardware gate. Click to see why this stays sim-only.",
+    };
+  }
+  return { disabled: false, title: "Phase 4 gate — fails closed until a hardware profile passes." };
 }
 
 function paintRun(run, logText) {
@@ -1395,6 +1418,7 @@ function paintRun(run, logText) {
           readyTitles.length ? ` Use ${escapeHtml(englishList(readyTitles))} on this computer.` : ""
         }${laterTitles.length ? ` ${escapeHtml(englishList(laterTitles))} need a GPU box.` : ""}</p>`
       : "";
+  const deployBtn = deployButtonState(run);
   main.innerHTML = `
     ${stepsHTML("video")}
     <h1>${escapeHtml(prettyRecipe(run.recipe))}</h1>
@@ -1405,7 +1429,7 @@ function paintRun(run, logText) {
     ${blockedHelp}
     <div class="actions recipe-bar">
       <button class="primary" id="train-again">Train again</button>
-      <button class="ghost" id="deploy-run">Deploy to robot</button>
+      <button class="ghost" id="deploy-run" ${deployBtn.disabled ? "disabled" : ""} title="${escapeHtml(deployBtn.title)}">Deploy to robot</button>
       <button class="ghost" id="back-tasks">Back to tasks</button>
     </div>
     <p class="error" id="deploy-status" hidden></p>
@@ -1443,12 +1467,20 @@ async function attemptDeploy(runId) {
       method: "POST",
       body: "{}",
     });
-    const msg = report.error || "Deploy blocked — stay sim-only.";
+    const reasons = Array.isArray(report.reasons) ? report.reasons.filter(Boolean) : [];
+    const msg =
+      report.error ||
+      (reasons.length ? reasons.join(" ") : "Deploy blocked — stay sim-only.");
     if (status) status.textContent = msg;
   } catch (error) {
     if (status) status.textContent = error.message || String(error);
   } finally {
-    if (btn) btn.disabled = false;
+    if (btn) {
+      const run = state.run || { run_id: runId };
+      const next = deployButtonState(run);
+      btn.disabled = next.disabled;
+      btn.title = next.title;
+    }
   }
 }
 
