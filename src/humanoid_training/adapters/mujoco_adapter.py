@@ -240,6 +240,7 @@ def _launch_hold(spec: dict[str, Any], run_dir: Path, log: LogFn, mujoco: Any) -
             "kind": "scene_preview"
             if preview and success_type == "object-in-container"
             else "hold",
+            "engine": "mujoco",
             "mean_pelvis_z": mean_z,
             "arm_driven": bool(arm_driven),
             "pinned": pin_base is not None,

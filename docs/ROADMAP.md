@@ -397,6 +397,8 @@ passes.
 | Require passed `g1-walk` + `eval.mp4` + `HT_HARDWARE_PROFILE` | done (harness) |
 | Runs UI shows `sim-only` (and `policy=` when present) | done |
 | Studio **Deploy to robot** + `POST /api/runs/{id}/deploy` fail closed | done |
+| `GET /api/runs/{id}/deploy` preflight + Runs “why sim-only” + Back to runs | done |
+| Stamp `facts.engine` on gymnasium / mujoco hold runs | done |
 | Unitree reduced-speed driver + NaN / pose-limit kills | **not done** |
 | Live hardware eval that clears `sim_only` | **not done** (needs robot + live walk proof) |
 

@@ -1430,8 +1430,10 @@ function paintRun(run, logText) {
     <div class="actions recipe-bar">
       <button class="primary" id="train-again">Train again</button>
       <button class="ghost" id="deploy-run" ${deployBtn.disabled ? "disabled" : ""} title="${escapeHtml(deployBtn.title)}">Deploy to robot</button>
+      <button class="ghost" id="back-runs">Back to runs</button>
       <button class="ghost" id="back-tasks">Back to tasks</button>
     </div>
+    <div class="lede" id="deploy-preflight">Checking hardware gate…</div>
     <p class="error" id="deploy-status" hidden></p>
     <div class="detail">
       <section>
@@ -1450,8 +1452,41 @@ function paintRun(run, logText) {
     </div>
   `;
   document.getElementById("train-again")?.addEventListener("click", trainCurrent);
+  document.getElementById("back-runs")?.addEventListener("click", () => switchView("runs"));
   document.getElementById("back-tasks")?.addEventListener("click", () => switchView("tasks"));
   document.getElementById("deploy-run")?.addEventListener("click", () => attemptDeploy(run.run_id));
+  loadDeployPreflight(run);
+}
+
+async function loadDeployPreflight(run) {
+  const el = document.getElementById("deploy-preflight");
+  if (!el) return;
+  if (["queued", "running"].includes(run.status)) {
+    el.textContent = "Hardware gate waits until training finishes.";
+    return;
+  }
+  if (run.status === "blocked") {
+    el.textContent = "No deploy — this run never trained.";
+    return;
+  }
+  try {
+    const report = await api(`/api/runs/${encodeURIComponent(run.run_id)}/deploy`);
+    const reasons = Array.isArray(report.reasons) ? report.reasons.filter(Boolean) : [];
+    if (report.ok) {
+      el.textContent =
+        "Checklist passed, but the Unitree driver is still unwired — stays sim-only.";
+      return;
+    }
+    if (reasons.length) {
+      el.innerHTML = `<strong>Why this stays sim-only</strong><ul class="deploy-reasons">${reasons
+        .map((r) => `<li>${escapeHtml(r)}</li>`)
+        .join("")}</ul>`;
+      return;
+    }
+    el.textContent = report.error || "Deploy blocked — stay sim-only.";
+  } catch (error) {
+    el.textContent = error.message || String(error);
+  }
 }
 
 async function attemptDeploy(runId) {
