@@ -17,7 +17,7 @@ Phase 3e  ACT on the same demos                 ← launch path done (needs GPU 
 Phase 3f  honest G1 manipulation recipe     ← done (deleted dishonest g1-reach)
 Phase 3g  compare two runs in Runs           ← done (side-by-side in Runs room)
 Phase 4   real G1/H1 deploy with safety gates ← gate done (live torque **not** wired)
-Phase 4b  proof/deploy honesty + Runs projects gate ← this branch
+Phase 4b  proof/deploy honesty + Runs projects gate ← done
 ```
 
 This file is the **continuation plan from what is actually running**, not
