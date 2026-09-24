@@ -307,9 +307,16 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "id=\"deploy-run\"" in js
     assert "function attemptDeploy" in js
     assert "function deployButtonState" in js
+    assert "function applyDeployButton" in js
+    assert "function robotsLede" in js
+    assert "function sceneRobotMark" in js
+    assert "catalog_only" in js
+    assert "Checking hardware gate…" in js
+    assert "Start with the Unitree G1" not in js
+    assert '<span class="robot-mark">G1</span>' not in js
     assert "function loadDeployPreflight" in js
     assert 'run.recipe !== "g1-walk"' not in js
-    assert "Hardware gate — fails closed" in js
+    assert "Stays sim-only" in js or "why below" in js
     assert "id=\"deploy-preflight\"" in js
     assert "id=\"back-runs\"" in js
     assert "/deploy" in js

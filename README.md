@@ -9,32 +9,34 @@ new simulator.
 
 ## Run it on your computer
 
-From a **new terminal** (your home directory is fine):
+From a **new terminal**:
 
 ```bash
 git clone https://github.com/notifdust/Humanoid-Training.git
 cd Humanoid-Training
+chmod +x run-studio.sh
 ./run-studio.sh
 ```
 
 Then open **http://127.0.0.1:8000**. Click **Cartpole → Train**.
 Wait ~30s. Play the video. That is the loop.
 
-If `./run-studio.sh` is not executable: `chmod +x run-studio.sh` and run it again.
+`./run-studio.sh` reuses an existing Python install when `humanoid_training`
+is already importable; otherwise it creates `.venv` (and bootstraps pip if
+`ensurepip` is missing). Override host/port with `HT_HOST` / `HT_PORT`, or
+the interpreter with `HT_PYTHON`.
 
 Same steps by hand:
 
 ```bash
 cd Humanoid-Training          # the folder that contains pyproject.toml
-python3 -m venv .venv
-source .venv/bin/activate     # Windows: .venv\Scripts\activate
-pip install -e ".[dev]"
-python -m humanoid_training.cli serve --host 127.0.0.1 --port 8000
+python3 -m pip install -e ".[dev]"
+python3 -m humanoid_training.cli serve --host 127.0.0.1 --port 8000
 ```
 
 Do **not** `cd /path/to/Humanoid-Training` — that was a placeholder. Do **not**
 install the Ubuntu `ht` TeX package. After `pip install -e ".[dev]"` the
-command is `ht` **or** `python -m humanoid_training.cli`.
+command is `ht` **or** `python3 -m humanoid_training.cli`.
 
 You need a display for eval video (MuJoCo uses GLFW). Headless:
 `HT_NO_RENDER=1 python -m humanoid_training.cli train spec/examples/cartpole-balance.json`

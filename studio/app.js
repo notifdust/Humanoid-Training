@@ -102,34 +102,69 @@ function stepsHTML(active) {
 
 function recipesForRobot() {
   if (!state.robot) return state.recipes;
-  // Keep start_here smoke tests visible when a humanoid is selected.
+  // Catalog-only robots (e.g. H1) must not inherit G1/Cartpole start_here cards.
+  if (state.robot.catalog_only) {
+    return (state.recipes || []).filter((r) => r.robot === state.robot.id);
+  }
+  // Keep start_here smoke tests visible when a real train target is selected.
   return state.recipes.filter((r) => r.robot === state.robot.id || r.start_here);
+}
+
+function robotsLede() {
+  const robots = state.robots || [];
+  const g1 = robots.find((r) => String(r.id || "").includes("g1"));
+  const h1 = robots.find((r) => r.catalog_only || String(r.id || "").includes("h1"));
+  const primary = g1 ? g1.name : "Unitree G1";
+  let line = `Primary train target: ${primary}. CartPole proves Train → video on a laptop CPU.`;
+  if (h1) {
+    line += ` ${h1.name} is catalog-only until an H1 recipe ships.`;
+  }
+  return line;
+}
+
+function sceneRobotMark() {
+  const robot =
+    state.robot ||
+    (state.robots || []).find((r) => r.id === state.selected?.robot) ||
+    (state.robots || []).find((r) => String(r.id || "").includes("g1"));
+  if (!robot) return "HT";
+  const name = String(robot.name || robot.id || "HT");
+  if (/g1/i.test(name) || /g1/i.test(String(robot.id || ""))) return "G1";
+  if (/h1/i.test(name) || /h1/i.test(String(robot.id || ""))) return "H1";
+  if (/cartpole/i.test(name) || robot.id === "cartpole") return "CP";
+  return name.slice(0, 2).toUpperCase();
 }
 
 function renderRobots() {
   const cards = state.robots
     .map((robot) => {
       const selected = state.robot && state.robot.id === robot.id;
+      const catalogOnly = Boolean(robot.catalog_only);
+      const action = catalogOnly
+        ? `<button class="ghost" disabled title="No recipe for this robot yet.">Catalog only</button>`
+        : `<button class="primary" data-robot="${escapeHtml(robot.id)}">Use this robot</button>`;
       return `
       <article class="card robot-card ${selected ? "selected" : ""}">
         <h2>${escapeHtml(robot.name)}</h2>
-        <p class="meta">${escapeHtml(robot.kind)} · ${robot.dofs} joints</p>
+        <p class="meta">${escapeHtml(robot.kind)} · ${robot.dofs} joints${
+          catalogOnly ? " · catalog only" : ""
+        }</p>
         <p>${escapeHtml(robot.summary || "")}</p>
-        <div class="actions">
-          <button class="primary" data-robot="${escapeHtml(robot.id)}">Use this robot</button>
-        </div>
+        <div class="actions">${action}</div>
       </article>`;
     })
     .join("");
   main.innerHTML = `
     ${stepsHTML("task")}
     <h1>Robots</h1>
-    <p class="lede">Start with the Unitree G1. A non-humanoid smoke test is included so Train → video is real before humanoid engines.</p>
+    <p class="lede">${escapeHtml(robotsLede())}</p>
     <div class="grid">${cards}</div>
   `;
   main.querySelectorAll("[data-robot]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      state.robot = state.robots.find((r) => r.id === btn.dataset.robot) || null;
+      const robot = state.robots.find((r) => r.id === btn.dataset.robot) || null;
+      if (robot && robot.catalog_only) return;
+      state.robot = robot;
       switchView("tasks");
     });
   });
@@ -166,8 +201,14 @@ function renderRecipes() {
     )
     .join("");
   const filter = state.robot
-    ? `Showing tasks for ${escapeHtml(state.robot.name || state.robot.id)}, plus the laptop smoke tests.`
+    ? state.robot.catalog_only
+      ? ` ${escapeHtml(state.robot.name || state.robot.id)} is catalog-only — no train recipes yet. Pick G1 or CartPole.`
+      : ` Showing tasks for ${escapeHtml(state.robot.name || state.robot.id)}, plus the laptop smoke tests.`
     : "";
+  const emptyReady =
+    !readyCards && state.robot && state.robot.catalog_only
+      ? `<p class="lede">No recipes for ${escapeHtml(state.robot.name)}. Use Unitree G1 or CartPole.</p>`
+      : readyCards || `<p class="lede">No recipes for this robot yet.</p>`;
   const skipLine = later.length
     ? ` ${englishList(later.map((r) => r.title))} ${
         later.length === 1 ? "is" : "are"
@@ -182,7 +223,7 @@ function renderRecipes() {
       Start here: click a task, then Train. You should get a video. That is the whole product today.
       ${filter}${skipLine}
     </p>
-    <div class="grid">${readyCards || `<p class="lede">No recipes for this robot yet.</p>`}</div>
+    <div class="grid">${emptyReady}</div>
     ${
       laterCards
         ? `<h2 class="later-head">Needs a GPU (skip)</h2>
@@ -312,7 +353,7 @@ function sceneHTML(spec) {
     <div class="canvas-wrap${state.recording ? " recording" : ""}" id="scene-canvas" tabindex="0">
       <svg class="trail" id="scene-trail" viewBox="0 0 100 100" preserveAspectRatio="none">${trailPolylines()}</svg>
       <span class="canvas-label">${escapeHtml(spec.scene.template || "scene")}</span>
-      <span class="robot-mark">G1</span>
+      <span class="robot-mark">${escapeHtml(sceneRobotMark())}</span>
       ${tokens}
     </div>
   `;
@@ -1414,18 +1455,35 @@ function backendBadge(facts) {
   return `<p class="meta backend-badge">${escapeHtml(parts.join(" · "))}</p>`;
 }
 
-function deployButtonState(run) {
+function deployButtonState(run, preflight) {
   if (["queued", "running"].includes(run.status)) {
     return { disabled: true, title: "Wait until training finishes." };
   }
   if (run.status === "blocked") {
     return { disabled: true, title: "This run never trained — nothing to deploy." };
   }
-  // Eligibility comes from GET /api/runs/{id}/deploy (preflight), not recipe ids.
-  return {
-    disabled: false,
-    title: "Hardware gate — fails closed until a live walk + profile pass. See why below.",
-  };
+  if (!preflight) {
+    return { disabled: true, title: "Checking hardware gate…" };
+  }
+  if (preflight.ok === true) {
+    return {
+      disabled: false,
+      title: "Checklist passed, but the Unitree driver is still unwired — click to confirm fail-closed.",
+    };
+  }
+  const reason =
+    (Array.isArray(preflight.reasons) && preflight.reasons[0]) ||
+    preflight.error ||
+    "Stays sim-only — see why below.";
+  return { disabled: true, title: String(reason) };
+}
+
+function applyDeployButton(run, preflight) {
+  const btn = document.getElementById("deploy-run");
+  if (!btn) return;
+  const next = deployButtonState(run, preflight);
+  btn.disabled = Boolean(next.disabled);
+  btn.title = next.title || "";
 }
 
 function paintRun(run, logText) {
@@ -1437,7 +1495,7 @@ function paintRun(run, logText) {
           ? "No video — this task cannot train on this computer."
           : ["queued", "running"].includes(run.status)
             ? "Video appears when training finishes."
-            : "No eval video. On a machine without a display, Train still scores success but skips the clip."
+            : "No eval video. On a machine without a display, Train still scores success but skips the clip. Set HT_NO_RENDER=0 (and use a display or xvfb) for eval.mp4."
       }</p>`;
   const scene = run.artifacts && run.artifacts["composed_scene.xml"]
     ? `<p class="lede"><a href="${runArtifactUrl(run.run_id, "composed_scene.xml")}">Scene file</a> — open in MuJoCo if you want.</p>`
@@ -1466,7 +1524,7 @@ function paintRun(run, logText) {
           readyTitles.length ? ` Use ${escapeHtml(englishList(readyTitles))} on this computer.` : ""
         }${laterTitles.length ? ` ${escapeHtml(englishList(laterTitles))} need a GPU box.` : ""}</p>`
       : "";
-  const deployBtn = deployButtonState(run);
+  const deployBtn = deployButtonState(run, null);
   main.innerHTML = `
     ${stepsHTML("video")}
     <h1>${escapeHtml(prettyRecipe(run.recipe))}</h1>
@@ -1511,15 +1569,18 @@ async function loadDeployPreflight(run) {
   if (!el) return;
   if (["queued", "running"].includes(run.status)) {
     el.textContent = "Hardware gate waits until training finishes.";
+    applyDeployButton(run, { ok: false, reasons: ["training"] });
     return;
   }
   if (run.status === "blocked") {
     el.textContent = "No deploy — this run never trained.";
+    applyDeployButton(run, { ok: false, reasons: ["blocked"] });
     return;
   }
   try {
     const report = await api(`/api/runs/${encodeURIComponent(run.run_id)}/deploy`);
     const reasons = Array.isArray(report.reasons) ? report.reasons.filter(Boolean) : [];
+    applyDeployButton(run, report);
     if (report.ok) {
       el.textContent =
         "Checklist passed, but the Unitree driver is still unwired — stays sim-only.";
@@ -1534,6 +1595,7 @@ async function loadDeployPreflight(run) {
     el.textContent = report.error || "Deploy blocked — stay sim-only.";
   } catch (error) {
     el.textContent = error.message || String(error);
+    applyDeployButton(run, { ok: false, reasons: [error.message || String(error)] });
   }
 }
 
@@ -1559,10 +1621,13 @@ async function attemptDeploy(runId) {
     if (status) status.textContent = error.message || String(error);
   } finally {
     if (btn) {
-      const run = state.run || { run_id: runId };
-      const next = deployButtonState(run);
-      btn.disabled = next.disabled;
-      btn.title = next.title;
+      const run = state.run || { run_id: runId, status: "passed", recipe: state.run?.recipe };
+      try {
+        const report = await api(`/api/runs/${encodeURIComponent(runId)}/deploy`);
+        applyDeployButton(run, report);
+      } catch {
+        applyDeployButton(run, { ok: false, reasons: ["Deploy check failed."] });
+      }
     }
   }
 }
