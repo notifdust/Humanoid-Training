@@ -90,7 +90,8 @@ Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
 
 ## Read this first
 
-- **[Roadmap](docs/ROADMAP.md)** — what is live, what this round verified, what comes next
+- **[Roadmap](docs/ROADMAP.md)** — what is live, what this round verified, what comes next (GPU / hardware)
+- **[Betterment](docs/BETTERMENT.md)** — polish the CPU studio that already ships (B0–B5)
 - **[Product vision](docs/VISION.md)** — landscape and why we compile instead of replacing engines
 - **[Architecture](docs/ARCHITECTURE.md)** — job spec, adapters, runners
 
