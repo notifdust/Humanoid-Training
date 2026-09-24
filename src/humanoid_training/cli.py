@@ -92,6 +92,13 @@ def main(argv: list[str] | None = None) -> int:
     p_proof.add_argument("--steps", type=int, default=None, help="Override train steps (default: short proof)")
     p_proof.add_argument("--out", type=Path, default=None, help="Runs directory")
 
+    p_deploy = sub.add_parser(
+        "deploy",
+        help="Phase 4: attempt hardware deploy for a run (fails closed until a hardware profile passes)",
+    )
+    p_deploy.add_argument("run_id", help="Run id under the runs directory")
+    p_deploy.add_argument("--out", type=Path, default=None, help="Runs directory")
+
     args = parser.parse_args(argv)
     try:
         if args.cmd == "recipes":
@@ -114,6 +121,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_gold(args.recipe, args.out)
         if args.cmd == "proof":
             return _cmd_proof(args.what, args.prefer, args.steps, args.out)
+        if args.cmd == "deploy":
+            return _cmd_deploy(args.run_id, args.out)
     except (SpecError, RecipeError, AdapterError, FileNotFoundError) as err:
         print(err, file=sys.stderr)
         return 2
@@ -254,6 +263,23 @@ def _cmd_proof(
         return 12
     print(json.dumps(report, indent=2, default=str))
     return 0 if report.get("ok") else 1
+
+
+def _cmd_deploy(run_id: str, out: Path | None) -> int:
+    from humanoid_training.deploy import assess_deploy, deploy_run
+    from humanoid_training.runner import load_manifest
+
+    runs_dir = out or default_runs_dir()
+    run_dir = runs_dir / run_id
+    if run_dir.is_dir():
+        report = assess_deploy(load_manifest(run_dir))
+        print(json.dumps({k: v for k, v in report.items() if k != "error"}, indent=2, default=str))
+    try:
+        deploy_run(run_id, runs_dir=runs_dir)
+    except AdapterUnavailable as err:
+        print(err, file=sys.stderr)
+        return 12
+    return 0
 
 
 def _cmd_serve(host: str, port: int) -> int:

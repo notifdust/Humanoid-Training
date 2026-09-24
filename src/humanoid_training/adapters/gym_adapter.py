@@ -139,6 +139,7 @@ class GymnasiumAdapter:
             notes=notes,
             facts={
                 "kind": "rl",
+                "engine": "gymnasium",
                 "greedy_train_eval": float(greedy_eval),
                 "success_threshold": threshold,
             },

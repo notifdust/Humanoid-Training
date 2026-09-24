@@ -3,7 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pytest
 
+from humanoid_training.errors import RecipeError
 from humanoid_training.recipes import expand_spec
 from humanoid_training.runner import run_job
 from humanoid_training.spec import load_spec
@@ -31,6 +33,7 @@ def test_cartpole_train_writes_video(tmp_path: Path) -> None:
     assert "checkpoint.npz" in manifest["artifacts"]
     assert "train_returns.json" in manifest["artifacts"]
     assert manifest.get("facts", {}).get("kind") == "rl"
+    assert manifest.get("facts", {}).get("engine") == "gymnasium"
     assert "greedy_train_eval" in (manifest.get("facts") or {})
 
 
@@ -38,6 +41,7 @@ def test_g1_walk_is_blocked_without_playground(tmp_path: Path) -> None:
     spec = load_spec(Path(__file__).resolve().parents[1] / "spec" / "examples" / "g1-walk.json")
     manifest = run_job(spec, runs_dir=tmp_path)
     assert manifest["status"] == "blocked"
+    assert (manifest.get("facts") or {}).get("sim_only") is True
     err = manifest["error"] or ""
     assert "Playground" in err
     assert "blocked" in err.lower() or "CPU studio" in err or "g1-stand" in err
@@ -50,18 +54,17 @@ def test_g1_walk_is_blocked_without_playground(tmp_path: Path) -> None:
     assert "Velocity-G1-Flat-v0" not in mjlab_sh
 
 
-def test_g1_reach_is_blocked_with_cpu_next_step(tmp_path: Path) -> None:
-    spec = load_spec(Path(__file__).resolve().parents[1] / "spec" / "examples" / "g1-reach.json")
-    manifest = run_job(spec, runs_dir=tmp_path)
-    assert manifest["status"] == "blocked"
-    err = manifest["error"] or ""
-    assert "reach" in err.lower()
-    assert "pick-and-place" in err.lower()
-    assert "G1Reach-v0" not in err
-    assert "Isaac-Reach-G1-v0" not in err
-    run_dir = Path(manifest["run_dir"])
-    assert not (run_dir / "train_mjlab.sh").is_file()
-    assert not (run_dir / "eval.mp4").is_file()
+def test_unknown_recipe_blocks_without_invented_reach_ids(tmp_path: Path) -> None:
+    """Phase 3f: g1-reach is gone. Missing recipes fail closed; no fake reach ids."""
+    spec = {
+        "spec_version": "0.1.0",
+        "name": "missing-reach",
+        "robot": {"id": "unitree-g1-29dof", "source": "catalog"},
+        "task": {"recipe": "g1-reach"},
+        "train": {"method": "rl"},
+    }
+    with pytest.raises(RecipeError, match="g1-reach"):
+        run_job(spec, runs_dir=tmp_path)
 
 
 def test_g1_walk_compile_only(tmp_path: Path) -> None:
@@ -93,6 +96,7 @@ def test_g1_stand_hold_mini_humanoid(tmp_path: Path) -> None:
     assert "no actuators" in notes or "arm actuators not mapped" in notes
     assert "raise and wave" not in notes
     assert (manifest.get("facts") or {}).get("kind") == "hold"
+    assert (manifest.get("facts") or {}).get("engine") == "mujoco"
     assert (manifest.get("facts") or {}).get("nu") == 0
 
 
@@ -162,6 +166,8 @@ def test_pick_and_place_imitation_puts_mustard_in_bowl(tmp_path: Path) -> None:
     assert "mustard_bowl_dist" in notes
     facts = manifest.get("facts") or {}
     assert facts.get("kind") == "imitation"
+    assert facts.get("policy") == "linear-bc"
+    assert facts.get("engine") == "mujoco"
     assert facts.get("arm_mode")
     assert facts.get("object") == "mustard"
     assert facts.get("container") == "bowl"

@@ -13,16 +13,21 @@ Phase 3a  first real G1 walk (Playground)    ← launch path done
 Phase 3b  mjlab / Isaac G1 walk + OSMO       ← launch path done (no G1 reach env upstream)
 Phase 3c  GPU-box walk proof                 ← next (`ht proof walk`; live clip still needs a GPU)
 Phase 3d  remote harvest (OSMO / GPU queue)  ← launch path done (needs OSMO pool for live proof)
-Phase 3e  ACT on the same demos
-Phase 3f  honest G1 manipulation recipe
-Phase 3g  compare two runs in Runs
-Phase 4   real G1/H1 deploy with safety gates
+Phase 3e  ACT on the same demos                 ← launch path done (needs GPU for live ACT)
+Phase 3f  honest G1 manipulation recipe     ← done (deleted dishonest g1-reach)
+Phase 3g  compare two runs in Runs           ← done (side-by-side in Runs room)
+Phase 4   real G1/H1 deploy with safety gates ← gate done (live torque **not** wired)
+Phase 4b  proof/deploy honesty + Runs projects gate ← this branch
 ```
 
 This file is the **continuation plan from what is actually running**, not
 from the original vision’s wish list. Vision still says where the product
 is going ([VISION.md](./VISION.md)). Architecture still says how
 ([ARCHITECTURE.md](./ARCHITECTURE.md)).
+
+To **improve the CPU studio that already ships** (honesty, Train UX, copy,
+Deploy affordances) follow [BETTERMENT.md](./BETTERMENT.md) — tracks B0–B5.
+Do not mix those polish tracks with live GPU / hardware exit tests here.
 
 ---
 
@@ -37,8 +42,9 @@ A beginner on a laptop can:
    engine (Playground `train-jax-ppo`, mjlab, or Isaac Lab
    `isaaclab.sh` / GPU Docker), in which case Train launches that
    engine and plays its eval clip.
-4. Click **G1 reach** and still get a blocked next step: there is
-   no G1 reach environment in Playground, mjlab, or Isaac Lab.
+
+There is no **G1 reach** recipe. No upstream G1 reach env exists; the
+CPU arm preview is **Pick and place**.
 
 The compiler contract holds: job spec → recipe expansion → adapter
 compile/launch → `manifest.json` with `facts` → studio projects those
@@ -51,7 +57,7 @@ the original names):
 | Vision asked for | What ships | What it is not |
 |---|---|---|
 | G1 walk train | Playground / mjlab / Isaac Lab on a GPU box; blocked next step on CPU | Not a gold walk clip |
-| ACT / diffusion | Linear-BC on LeRobot v2 JSONL; G1 arm pose playback | Not finger grasping, not ACT |
+| ACT / diffusion | ACT on LeRobot demos when GPU + `lerobot` ready; else linear-BC on mujoco | Not finger grasping; not live ACT on a CPU laptop |
 | Gamepad teleop | Canvas drag, WASD, and a gamepad stick write the same table-frame takes | Not a Unitree XR / leader-arm stack |
 | Balance / locomotion RL | G1 stand holds a pinned pelvis and waves | Not walking, not a balance policy |
 | Isaac / OSMO job | Local isaaclab.sh / GPU Docker, or OSMO submit→poll→rsync harvest | Not a silent Isaac success without a clip |
@@ -104,9 +110,9 @@ pass. ACT is **not** that exit test.
 
 | Deliverable | Status |
 |---|---|
-| LeRobot adapter (dataset I/O + ACT) | write/inspect local v2 layout; `train_lerobot.sh` compiled; ACT launch blocked |
+| LeRobot adapter (dataset I/O + ACT) | write/inspect local v2 layout; ACT launches when LeRobot + GPU (Phase 3e) |
 | Episode review (keep / drop) | `keep_episodes` filters BC frames; empty keep is refused |
-| `pick-and-place` recipe | scripted or canvas/WASD/gamepad demos → linear-BC mustard + G1 pick/lift/place poses |
+| `pick-and-place` recipe | scripted or canvas demos → ACT when LeRobot+GPU; else linear-BC mustard + G1 arm poses |
 | Teleop into the studio | canvas, WASD, gamepad stick; Save **appends**; Space does not immediately record a second take |
 | Hugging Face Hub import | fail-closed (`hf:` / huggingface.co URLs tell you to download locally) |
 
@@ -118,10 +124,13 @@ pass. ACT is **not** that exit test.
 |---|---|---|---|
 | `cartpole-balance` | yes (CPU) | gymnasium | Pole stays up. Gold `eval.mp4` in-tree. |
 | `g1-stand` | yes (CPU) | mujoco + Menagerie G1 | Stand + both-arm wave, pelvis pinned. Gold clip. |
-| `pick-and-place` | yes (CPU) | mujoco + LeRobot demos | Mustard into bowl via linear-BC. Gold clip. |
+| `pick-and-place` | yes (CPU linear-BC; ACT on GPU+LeRobot) | lerobot / mujoco | Same demos. `facts.policy=act` or `linear-bc`. Gold clip is CPU linear-BC. |
 | `g1-walk` | yes on GPU + Playground, mjlab, or Isaac Lab; blocked on CPU | playground / mjlab / isaaclab | Walking eval from the engine that launched. No gold clip. |
-| `g1-reach` | no | — | Blocked. No G1 reach env in Playground, mjlab, or Isaac Lab. Do not map locomotion or Franka Reach as G1 reach. |
 | Unitree H1 | catalog only | — | No recipe. Do not add one until G1 walk trains for real. |
+
+`g1-reach` was deleted in Phase 3f. There is no upstream G1 reach env
+to pin; do not invent `G1Reach-v0` / `Isaac-Reach-G1-v0`. CPU arm motion
+is `pick-and-place`.
 
 Gold notes live in each `recipe.yaml`. CPU recipes also ship
 `gold/eval.mp4` + `gold/notes.md`. CI’s `gold` job retrains those recipes
@@ -135,7 +144,7 @@ recipes must not check in a success video.
 Live, not just “the tests used to pass”:
 
 - `pytest -q` — green.
-- CLI: `ht recipes` groups cpu/gpu; Cartpole compile; G1 walk/reach **exit 12**
+- CLI: `ht recipes` groups cpu/gpu; Cartpole compile; G1 walk **exit 12**
   with Playground / mjlab next steps; payloads include
   `engines/mjlab/train_mjlab.sh` and `engines/isaaclab/osmo_workflow.yaml`.
 - `ht train --docker` — **exit 12**, "Docker is not on PATH"; in-process
@@ -204,7 +213,7 @@ walk gold clip.
 | `facts.kind=rl`, `facts.engine=playground`, `facts.device=gpu` | done |
 | Catalog `launch_here`; studio Train vs Compile and backend badge | done |
 | CPU Docker refuses GPU recipes (`HT_DOCKER_GPU=1` escape hatch) | done |
-| `g1-reach` must not launch walk (Playground mapping stays `unsupported`) | done |
+| Walk recipe must not invent reach env ids (`G1Reach-v0`) | done |
 | No fake walk gold / stand-clip substitute | done |
 
 ```bash
@@ -231,23 +240,23 @@ eval-video UI as Cartpole, with a backend badge
 (`mjlab · gpu` / `isaaclab · gpu`). Without that engine, behavior
 stays the blocked next step.
 
-**Reach is pinned, not launched.** There is no G1 reach environment
-upstream:
+**No G1 reach recipe.** There is no G1 reach environment upstream:
 
 - mjlab G1: `Mjlab-Velocity-Flat-Unitree-G1`, Rough, Tracking. Cube
   lift is YAM (`Mjlab-Lift-Cube-Yam`), not G1.
 - Isaac Lab G1: `Isaac-Velocity-Flat-G1-v0` / Rough. Reach is
-  Franka / UR10 / OpenArm. G1 manipulation is PickPlace, not Reach.
+  Franka / UR10 / OpenArm. G1 manipulation is PickPlace, not Reach
+  (PickPlace is not pinned here until a real task id is confirmed).
 - Playground `G1JoystickFlatTerrain` is walking. It is not a reach env.
 
-`g1-reach` marks every adapter `unsupported`. Train blocks. Do not
-invent `G1Reach-v0` or `Isaac-Reach-G1-v0`.
+Do not invent `G1Reach-v0` or `Isaac-Reach-G1-v0`. Phase 3f deletes the
+blocked `g1-reach` stub rather than keep a fake catalog card.
 
 | Deliverable | Status |
 |---|---|
 | Pin `g1-walk` mjlab to `Mjlab-Velocity-Flat-Unitree-G1` | done |
 | Pin `g1-walk` Isaac to `Isaac-Velocity-Flat-G1-v0` | done |
-| Delete Playground walk placeholder from `g1-reach` | done |
+| Delete dishonest `g1-reach` recipe (Phase 3f) | done |
 | `MJLabAdapter.launch` runs `python -m mjlab.scripts.train TASK --video True` | done |
 | Harvest mjlab `*.mp4` under `--log-root`; fail closed if exit 0 and no clip | done |
 | `IsaacLabAdapter.launch` via `isaaclab.sh` train+play, or GPU Docker | done |
@@ -255,7 +264,6 @@ invent `G1Reach-v0` or `Isaac-Reach-G1-v0`.
 | `osmo workflow submit` → poll → rsync harvest `ht_eval/*.mp4` | done (Phase 3d harness) |
 | Catalog `launch_here` for playground **or** mjlab **or** isaac ready | done |
 | `select_adapter` first launch-ready GPU engine, else first compile-ok | done |
-| `g1-reach` stays `launch_here=false` even if mjlab is ready | done |
 | No fake walk/reach gold / stand-clip substitute | done |
 
 ```bash
@@ -269,7 +277,6 @@ ht train spec/examples/g1-walk.json   # overlay backend.prefer: [isaaclab]
 HT_DOCKER_GPU=1 ht train spec/examples/g1-walk.json  # prefer isaaclab
 # CPU laptop — still exit 12
 ht train spec/examples/g1-walk.json
-ht train spec/examples/g1-reach.json
 ```
 
 This repo's CI and the CPU studio **do not** have a GPU. Launch is
@@ -340,15 +347,46 @@ Poll knobs: `HT_OSMO_POLL_SECONDS`, `HT_OSMO_TIMEOUT_SECONDS`.
 local dataset; `facts.policy=act` vs `linear-bc`. CPU linear-BC stays.
 Finger grasping stays out of scope.
 
+| Deliverable | Status |
+|---|---|
+| Prefer `lerobot` before `mujoco` on pick-and-place | done |
+| `lerobot_ready` probe (`HT_LEROBOT_CLI` + GPU) | done |
+| Launch `lerobot-train --policy.type=act` on local demos | done (harness) |
+| `facts.policy=act` vs `linear-bc` on mujoco fallback | done |
+| Fail closed on missing video / nonzero exit (no mustard sub) | done |
+| Live ACT train on a GPU box | **not done** (needs `pip install 'lerobot[training]'` + NVIDIA GPU) |
+
+Fake CLI for CI: `HT_LEROBOT_CLI=/path/to/fake` with `HT_GPU=1`.
+
 ### Phase 3f — Honest G1 manipulation recipe
 
-**Exit test.** Delete `g1-reach`, or replace it with a real upstream
+**Exit test (met).** Delete `g1-reach`, or replace it with a real upstream
 task id under an honest name. No invented env ids.
+
+| Deliverable | Status |
+|---|---|
+| Delete `recipes/g1-reach` + `spec/examples/g1-reach.json` | done |
+| Catalog `later` is only `g1-walk` on CPU | done |
+| Unknown `g1-reach` recipe id fails closed (`RecipeError`) | done |
+| Do not invent `G1Reach-v0` / `Isaac-Reach-G1-v0` | done |
+| Pin Isaac G1 PickPlace under a new honest recipe | **not done** (no confirmed upstream task id in-repo) |
+
+CPU arm motion stays `pick-and-place`. Add a PickPlace recipe only after
+confirming a real Isaac/mjlab task string on a GPU box.
 
 ### Phase 3g — Compare two runs (Evaluate in Runs)
 
-**Exit test.** Side-by-side videos/facts for two run ids of the same
+**Exit test (met).** Side-by-side videos/facts for two run ids of the same
 recipe. No fifth studio room.
+
+| Deliverable | Status |
+|---|---|
+| Checkbox select two runs in the Runs list | done |
+| Compare enabled only when both share `run.recipe` | done |
+| Side-by-side videos + `facts` under the Runs room | done |
+| No fifth rail button / Evaluate room | done |
+
+Pick two runs of the same task → **Compare**. Still four rooms.
 
 ### Phase 4 — Real robot (after 3c)
 
@@ -356,6 +394,29 @@ recipe. No fifth studio room.
 speed; NaN or pose-limit kills the policy; no silent checkpoint
 fallback. Policies stay `sim-only` until a hardware eval profile
 passes.
+
+| Deliverable | Status |
+|---|---|
+| Stamp `facts.sim_only=true` on every in-process run | done |
+| `ht deploy <run_id>` fail-closed gate (cartpole / stand / mustard refused) | done |
+| Require passed `g1-walk` + `eval.mp4` + `HT_HARDWARE_PROFILE` | done (harness) |
+| Runs UI shows `sim-only` (and `policy=` when present) | done |
+| Studio **Deploy to robot** + `POST /api/runs/{id}/deploy` fail closed | done |
+| `GET /api/runs/{id}/deploy` preflight + Runs “why sim-only” + Back to runs | done |
+| Stamp `facts.engine` on gymnasium / mujoco hold runs | done |
+| Proof/deploy refuse stand-gold byte match + require on-disk `eval.mp4` | done |
+| Runs Deploy button projects gate (no hardcoded recipe id) | done |
+| Unitree reduced-speed driver + NaN / pose-limit kills | **not done** |
+| Live hardware eval that clears `sim_only` | **not done** (needs robot + live walk proof) |
+
+```bash
+ht deploy <run_id>          # exit 12 until a hardware profile + driver exist
+# Optional operator file once a real hardware eval passes:
+# HT_HARDWARE_PROFILE=/path/to/hw.json  # {"passed": true, "kind": "hardware"}
+```
+
+Do not treat a green `assess_deploy` checklist as live torque. The driver
+is still unwired on purpose.
 
 ---
 
@@ -365,10 +426,12 @@ passes.
 - A new cluster orchestrator (emit OSMO / HF Jobs / Docker)
 - Competing with LeLab on SO-ARM101
 - Fleet operations (Foxglove / Formant)
-- A fifth studio room before Phase 3g
+- A fifth studio room before Phase 4 (Evaluate stays in Runs)
 - Fake walk / ACT / Isaac / OSMO success on a CPU laptop
 - Finger grasping before ACT ships
 - Hardware deploy before a live walk clip exists
+
+For polish of the existing four rooms, see [BETTERMENT.md](./BETTERMENT.md).
 
 ---
 

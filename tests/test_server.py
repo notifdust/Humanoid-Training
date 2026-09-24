@@ -25,7 +25,7 @@ def test_health_and_recipes() -> None:
     assert by_id["cartpole-balance"]["has_gold"] is True
     assert by_id["g1-walk"]["has_gold"] is False
     assert by_id["g1-walk"]["launch_here"] is False
-    assert by_id["g1-reach"]["launch_here"] is False
+    assert "g1-reach" not in by_id
     assert by_id["cartpole-balance"]["launch_here"] is True
     assert health.get("engines")
     assert "playground_ready" in health["engines"]
@@ -48,6 +48,10 @@ def test_health_and_recipes() -> None:
     assert js.headers.get("cache-control") == "no-store"
     assert "Start here" in js.text
     assert "Train again" in js.text
+    gates = client.get("/gates.js")
+    assert gates.status_code == 200
+    assert gates.headers.get("cache-control") == "no-store"
+    assert "decideUnsavedDemoTrain" in gates.text
     css = client.get("/styles.css")
     assert css.headers.get("cache-control") == "no-store"
 
@@ -199,6 +203,38 @@ def test_api_train_cartpole(tmp_path: Path, monkeypatch) -> None:
     video = client.get(f"/api/runs/{run_id}/artifacts/eval.mp4")
     assert video.status_code == 200
     assert video.headers["content-type"].startswith("video/")
+    assert (body.get("facts") or {}).get("sim_only") is True
+    deploy = client.post(f"/api/runs/{run_id}/deploy")
+    assert deploy.status_code == 200, deploy.text
+    report = deploy.json()
+    assert report.get("ok") is False
+    assert report.get("deployed") is False
+    assert "sim-only" in (report.get("error") or "").lower() or "Hardware deploy is blocked" in (
+        report.get("error") or ""
+    )
+
+
+def test_api_refuses_second_concurrent_train(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HT_RUNS_DIR", str(tmp_path))
+    import humanoid_training.server as server
+
+    server._active_train_id = "busy-run-1"
+    try:
+        client = TestClient(app)
+        spec = {
+            "spec_version": "0.1.0",
+            "name": "cartpole-balance",
+            "robot": {"id": "cartpole", "source": "catalog"},
+            "task": {"recipe": "cartpole-balance"},
+            "train": {"method": "rl", "steps": 10, "seed": 0},
+            "eval": {"episodes": 1, "record_video": False},
+            "backend": {"prefer": ["gymnasium"], "compute": "local"},
+        }
+        resp = client.post("/api/runs", json={"spec": spec})
+        assert resp.status_code == 409
+        assert "one train at a time" in resp.json()["detail"].lower()
+    finally:
+        server._active_train_id = None
 
 
 def test_api_g1_walk_blocks_with_next_step(tmp_path: Path, monkeypatch) -> None:
@@ -242,15 +278,47 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "function readGamepadStick" in js
     assert "function demoSaveSummary" in js
     assert "function boundDemoHint" in js
+    assert "id=\"unsaved-demo-hint\"" in js
+    assert "HTGates.decideUnsavedDemoTrain" in js
+    assert "function formatHealthStrip" in js
     assert "teleopNeedRelease" in js
     assert "r.start_here" in js
     assert "id=\"open-imitate\"" in js
     assert "r.launch_here" in js
     assert "function backendBadge" in js
     assert "facts.engine" in js
-    assert "id=\"backend-badge\"" in js
+    assert "backend-badge" in js
     assert "This recipe has no movable objects" in js
     assert "state.selected?.launch_here" in js
+    assert "function compareSelection" in js
+    assert "function toggleCompareId" in js
+    assert "function renderCompare" in js
+    assert "function factsListHTML" in js
+    assert "function runArtifactUrl" in js
+    assert "encodeURIComponent" in js
+    assert "&quot;" in js
+    assert "id=\"compare-runs\"" in js
+    assert "compare-grid" in js
+    assert "Pick two runs of the same task." in js
+    assert 'data-view="evaluate"' not in js
+    assert "runs[0].recipe !== runs[1].recipe" in js
+    assert "sim-only" in js
+    assert "facts.policy" in js or "facts.sim_only" in js
+    assert "id=\"deploy-run\"" in js
+    assert "function attemptDeploy" in js
+    assert "function deployButtonState" in js
+    assert "function loadDeployPreflight" in js
+    assert 'run.recipe !== "g1-walk"' not in js
+    assert "Hardware gate — fails closed" in js
+    assert "id=\"deploy-preflight\"" in js
+    assert "id=\"back-runs\"" in js
+    assert "/deploy" in js
+    assert "id=\"sim-only-badge\"" in js
+    assert "function isSimOnly" in js
+    assert "escapeHtml(hint)" in js
+    assert "escapeHtml(englishRunStatus(run))" in js
+    assert "sim-only — not cleared for hardware" in js
+    assert "Why this stays sim-only" in js
 
 
 def test_studio_js_bc_freshness_contract() -> None:
@@ -274,3 +342,18 @@ def test_studio_css_disabled_cursor() -> None:
     )
     assert "cursor: not-allowed" in css
     assert "button.busy:disabled" in css
+    assert ".compare-grid" in css
+    assert ".facts-list" in css
+    assert ".run-check" in css
+
+
+def test_studio_has_four_rooms_not_five() -> None:
+    html = (Path(__file__).resolve().parents[1] / "studio" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    assert 'data-view="robots"' in html
+    assert 'data-view="tasks"' in html
+    assert 'data-view="data"' in html
+    assert 'data-view="runs"' in html
+    assert 'data-view="evaluate"' not in html
+    assert html.count("data-view=") == 4

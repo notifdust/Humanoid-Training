@@ -74,14 +74,14 @@ studio:
 {
   "recipes": [/* as_public_dict() */],
   "ready": ["cartpole-balance", "g1-stand", "pick-and-place"],
-  "later": ["g1-walk", "g1-reach"],
+  "later": ["g1-walk"],
   "start_here": ["cartpole-balance", "g1-stand", "pick-and-place"]
 }
 ```
 
 On a GPU box with Playground, mjlab, or Isaac Lab ready, `g1-walk`
 moves from `later` to `ready` because `launch_here` is true.
-`g1-reach` stays later: there is no G1 reach env to launch.
+There is no `g1-reach` recipe: no upstream G1 reach env exists to pin.
 
 The browser **projects** `availability`, `launch_here`, `promise`, `train_hint`,
 `blocked_hint`, `scene_hint`, and `record_hint`. It must not hardcode
@@ -127,7 +127,7 @@ not harvest a remote clip.
 | `playground` | Compile + launch G1 walk via `train-jax-ppo` when GPU + CLI are present; otherwise compile and block |
 | `mjlab` | Compile + launch G1 walk `Mjlab-Velocity-Flat-Unitree-G1` when mjlab + GPU are present; otherwise compile and block |
 | `isaaclab` | Compile OSMO YAML; launch via `isaaclab.sh`, GPU Docker, or OSMO submit→poll→rsync harvest |
-| `lerobot` | Compile future ACT script; CPU imitation stays on mujoco |
+| `lerobot` | Compile + launch ACT (`lerobot-train`) when LeRobot + GPU are present; CPU imitation stays on mujoco linear-BC |
 
 The MuJoCo adapter is three modules, not one god file:
 
@@ -160,7 +160,7 @@ stream (`SERVED_ARTIFACTS`). `collect_artifacts` and
 `EvalResult.facts` is the machine-readable eval. The runner copies it
 onto `manifest.json` as `facts`. Notes stay English for humans. The
 studio **projects** `facts` (arm_mode, bc_steps, keep_episodes, kind,
-engine, device, runner) and only scrapes notes for older runs that have none.
+engine, device, runner, policy, sim_only) and only scrapes notes for older runs that have none.
 
 Every run directory contains:
 
@@ -178,7 +178,7 @@ Status:
 
 - `passed` — eval boolean true
 - `completed` — ran, boolean false
-- `blocked` — adapter unavailable (expected on CPU for walk/reach)
+- `blocked` — adapter unavailable (expected on CPU for walk)
 - `compiled` — `--compile-only`
 - `failed` — unexpected exception
 
@@ -186,7 +186,7 @@ The CPU Docker image is Phase 1 (`ht train --docker`). It remounts only
 `/runs`, sets `HT_RUN_ID`, and runs in-process train inside the container
 (never `--docker`, or it would recurse). GPU recipes (`availability: gpu`)
 are **refused** on that image unless `HT_DOCKER_GPU=1` (future GPU
-container). Walk/reach `backend.compute: local-docker` still means that
+container). Walk `backend.compute: local-docker` still means that
 future image — the studio does not auto-route those onto the CPU image.
 HF Jobs / OSMO are later Phase 3. The studio-server stays in-process: it
 does not SSH and does not put cloud credentials in the browser.
@@ -237,6 +237,8 @@ src/humanoid_training/
   recipes.py               # expand + public_catalog
   artifacts.py             # run file inventory
   hardware.py              # GPU / engine CLI probes
+  proof.py                 # Phase 3c GPU walk proof
+  deploy.py                # Phase 4 fail-closed hardware deploy gate
   adapters/                # compile / launch
     process.py             # shared subprocess + mp4 harvest
     playground.py

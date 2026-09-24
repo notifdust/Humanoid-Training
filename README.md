@@ -46,12 +46,11 @@ still scores success; it will not write `eval.mp4`.
 2. **G1 stand → Train.** Humanoid holds a pose and waves. Not walking.
 3. **Pick and place → Train.** Mustard goes in the bowl; the arm follows. Not finger grasping.
 
-Skip **G1 reach** — there is no G1 reach environment upstream.
-**G1 walk** stops on a laptop (needs an NVIDIA GPU and Playground,
-mjlab, or Isaac Lab). On a GPU box it launches for real — not a
-stand clip.
+There is no G1 reach task — no upstream env. **G1 walk** stops on a laptop
+(needs an NVIDIA GPU and Playground, mjlab, or Isaac Lab). On a GPU box it
+launches for real — not a stand clip.
 
-Rooms: Robots · Tasks · Data · Runs. Job spec is under **Advanced**.
+Rooms: Robots · Tasks · Data · Runs (compare two runs of the same task here). Job spec is under **Advanced**.
 
 ### Same jobs from the CLI
 
@@ -83,11 +82,16 @@ python -m humanoid_training.cli train spec/examples/g1-walk.json
 next step. With the OSMO CLI logged in (no local GPU), Train can still
 harvest a remote Isaac walk clip (Phase 3d).
 
+`ht deploy <run_id>` is the Phase 4 gate: it always fails closed until a
+passed hardware eval profile exists and a Unitree driver ships. Every
+run stays `facts.sim_only=true`.
+
 Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
 
 ## Read this first
 
-- **[Roadmap](docs/ROADMAP.md)** — what is live, what this round verified, what comes next
+- **[Roadmap](docs/ROADMAP.md)** — what is live, what this round verified, what comes next (GPU / hardware)
+- **[Betterment](docs/BETTERMENT.md)** — polish the CPU studio that already ships (B0–B5)
 - **[Product vision](docs/VISION.md)** — landscape and why we compile instead of replacing engines
 - **[Architecture](docs/ARCHITECTURE.md)** — job spec, adapters, runners
 
@@ -98,8 +102,7 @@ Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
 | `cartpole-balance` | Gymnasium RL on CPU, eval video, gold clip |
 | `g1-stand` | MuJoCo G1 from Menagerie, stand + both-arm wave, eval video, gold clip |
 | `g1-walk` | Compile to Playground / mjlab / Isaac Lab. **Launches** the first ready engine (local GPU or OSMO harvest). |
-| `g1-reach` | Blocked. No G1 reach env in Playground, mjlab, or Isaac Lab. |
-| `pick-and-place` | Demos → linear BC steers mustard; G1 arm plays pick/lift/place. Gold clip. Not finger grasping, not ACT. |
+| `pick-and-place` | Demos → ACT when LeRobot+GPU; else linear-BC on mujoco. Gold clip is CPU linear-BC. Not finger grasping. |
 
 ## Non-goals (for now)
 

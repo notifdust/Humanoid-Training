@@ -295,8 +295,15 @@ def _notes_text(recipe: Recipe, manifest: dict[str, Any]) -> str:
     extra = []
     if kind:
         extra.append(f"kind={kind}")
+    if facts.get("policy"):
+        extra.append(f"policy={facts['policy']}")
+    if facts.get("engine"):
+        extra.append(f"engine={facts['engine']}")
     if facts.get("arm_mode"):
         extra.append(f"arm_mode={facts['arm_mode']}")
+    # Cleared only by an explicit hardware eval (sim_only=false).
+    if facts.get("sim_only") is not False:
+        extra.append("sim_only=true")
     passed = (manifest.get("metrics") or {}).get("passed")
     extra.append(f"passed={passed}")
     return f"{first} {' '.join(extra)}\n"

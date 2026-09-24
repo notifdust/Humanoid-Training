@@ -103,23 +103,34 @@ def run_walk_proof(
 
 def summarize_walk_proof(manifest: dict[str, Any], *, expected_engine: str | None = None) -> dict[str, Any]:
     """Judge a completed walk run for the Phase 3c exit test."""
+    from humanoid_training.artifacts import looks_like_g1_stand_gold, resolve_eval_mp4
+
     run_dir = Path(manifest.get("run_dir") or "")
     facts = dict(manifest.get("facts") or {})
     status = str(manifest.get("status") or "")
-    video = run_dir / "eval.mp4" if run_dir else Path()
+    recipe = str(manifest.get("recipe") or "")
+    video = resolve_eval_mp4(manifest)
     engine = str(facts.get("engine") or "")
     errors: list[str] = []
+    if recipe and recipe != "g1-walk":
+        errors.append(f"recipe={recipe!r} (want g1-walk). Do not proof a stand or mustard run.")
+    elif not recipe:
+        errors.append("recipe missing (want g1-walk)")
     if status != "passed":
         errors.append(f"status={status!r} (want passed). {manifest.get('error') or ''}".strip())
-    if not video.is_file():
+    if video is None:
         errors.append("missing eval.mp4 — not a walk proof. Do not substitute a stand clip.")
     elif video.stat().st_size < 8:
         errors.append("eval.mp4 is empty or tiny — not a walk proof.")
+    elif looks_like_g1_stand_gold(video):
+        errors.append(
+            "eval.mp4 matches recipes/g1-stand/gold — refuse stand clip as walk proof."
+        )
     if engine not in WALK_ENGINES:
         errors.append(f"facts.engine={engine!r} (want playground|mjlab|isaaclab)")
     if expected_engine and engine and engine != expected_engine:
         errors.append(f"facts.engine={engine!r} but proof targeted {expected_engine!r}")
-    if facts.get("kind") and facts.get("kind") != "rl":
+    if facts.get("kind") != "rl":
         errors.append(f"facts.kind={facts.get('kind')!r} (want rl)")
     ok = not errors
     return {
@@ -129,7 +140,7 @@ def summarize_walk_proof(manifest: dict[str, Any], *, expected_engine: str | Non
         "run_dir": str(run_dir) if run_dir else None,
         "status": status,
         "engine": engine or None,
-        "video": str(video) if video.is_file() else None,
+        "video": str(video) if video is not None else None,
         "facts": facts,
         "error": "; ".join(errors) if errors else None,
     }
