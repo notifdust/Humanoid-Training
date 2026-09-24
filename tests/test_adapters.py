@@ -80,10 +80,19 @@ def test_g1_stand_selects_mujoco() -> None:
     assert "unitree_g1" in payload.env_name
 
 
-def test_g1_reach_has_no_engine_to_compile() -> None:
-    spec = _expand("g1-reach.json")
-    with pytest.raises(NoAdapter, match="no G1 reach"):
-        select_adapter(spec)
+def test_deleted_g1_reach_is_unknown_recipe() -> None:
+    from humanoid_training.errors import RecipeError
+
+    with pytest.raises(RecipeError, match="Unknown recipe 'g1-reach'"):
+        expand_spec(
+            {
+                "spec_version": "0.1.0",
+                "name": "missing-reach",
+                "robot": {"id": "unitree-g1-29dof", "source": "catalog"},
+                "task": {"recipe": "g1-reach"},
+                "train": {"method": "rl"},
+            }
+        )
 
 
 def test_pick_and_place_selects_mujoco_preview() -> None:
@@ -96,14 +105,21 @@ def test_pick_and_place_selects_mujoco_preview() -> None:
     assert payload.extra.get("scene_preview") is True
 
 
-def test_lerobot_support_points_at_mujoco_bc() -> None:
+def test_lerobot_support_ok_for_imitation() -> None:
     from humanoid_training.adapters.lerobot import LeRobotAdapter
 
     spec = _expand("g1-mustard-in-bowl.json")
-    spec["data"] = {"datasets": ["/tmp/fake"]}
     support = LeRobotAdapter().support(spec)
-    assert support.ok is False
-    assert "ACT" in support.reason or "mujoco" in support.reason.lower()
-    assert "Phase 2" not in support.reason or "mujoco" in support.reason.lower()
-    # Prefer the honest "CPU imitation already runs" framing.
-    assert "mujoco" in support.reason.lower() or "linear BC" in support.reason
+    assert support.ok is True
+    payload = LeRobotAdapter().compile(spec)
+    assert payload.extra.get("policy") == "act"
+    assert "train_lerobot.sh" in payload.files
+    assert "--policy.type=act" in payload.files["train_lerobot.sh"]
+
+
+def test_pick_and_place_cpu_still_selects_mujoco() -> None:
+    """Prefer lists lerobot first; without GPU it is not launch-ready."""
+    spec = _expand("g1-mustard-in-bowl.json")
+    prefer = list((spec.get("backend") or {}).get("prefer") or [])
+    assert prefer and prefer[0] == "lerobot"
+    assert select_adapter(spec).name == "mujoco"

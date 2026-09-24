@@ -100,6 +100,7 @@ def test_docker_success_stamps_runner_and_does_not_recurse(
     monkeypatch.setattr("humanoid_training.docker_runner.subprocess.run", fake_run)
     manifest = run_job_via_docker(_cartpole(), runs_dir=tmp_path, run_id="dock-1")
     assert manifest["facts"]["runner"] == "docker"
+    assert manifest["facts"].get("sim_only") is True
     assert "host_spec_hash" in manifest["facts"]
     assert "--docker" not in captured["cmd"]
     assert "HT_IN_CONTAINER=1" in captured["cmd"]

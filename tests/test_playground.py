@@ -8,6 +8,7 @@ from humanoid_training.adapters.playground import (
     apply_flag,
     harvest_rollout_mp4,
 )
+from humanoid_training.errors import RecipeError
 from humanoid_training.runner import run_job
 from humanoid_training.spec import load_spec
 
@@ -171,19 +172,27 @@ def test_g1_walk_record_video_false_skips_harvest(
     assert (manifest.get("facts") or {}).get("engine") == "playground"
 
 
-def test_g1_reach_does_not_launch_playground_walk(
+def test_unknown_reach_recipe_does_not_launch_playground_walk(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Even with Playground ready, a deleted g1-reach id must not train walk."""
+    from humanoid_training.errors import RecipeError
+
     cli = _fake_cli(tmp_path)
     monkeypatch.setenv("HT_PLAYGROUND_CLI", str(cli))
     monkeypatch.setenv("HT_PLAYGROUND_GPU", "1")
     monkeypatch.setenv("HT_GPU", "1")
-    spec = load_spec(Path(__file__).resolve().parents[1] / "spec" / "examples" / "g1-reach.json")
-    manifest = run_job(spec, runs_dir=tmp_path / "runs")
-    assert manifest["status"] == "blocked"
-    err = (manifest.get("error") or "").lower()
-    assert "mjlab" in err or "reach" in err
-    assert not (Path(manifest["run_dir"]) / "eval.mp4").is_file()
+    with pytest.raises(RecipeError, match="Unknown recipe 'g1-reach'"):
+        run_job(
+            {
+                "spec_version": "0.1.0",
+                "name": "missing-reach",
+                "robot": {"id": "unitree-g1-29dof", "source": "catalog"},
+                "task": {"recipe": "g1-reach"},
+                "train": {"method": "rl", "steps": 8},
+            },
+            runs_dir=tmp_path / "runs",
+        )
 
 
 def test_hardware_env_overrides(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

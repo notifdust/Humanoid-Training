@@ -32,7 +32,7 @@
     "seed": 1
   },
   "backend": {
-    "prefer": ["mujoco", "lerobot", "mjlab", "isaaclab"],
+    "prefer": ["lerobot", "mujoco", "mjlab", "isaaclab"],
     "compute": "local"
   },
   "eval": {

@@ -8,6 +8,7 @@ const state = {
   expanded: null,
   runs: [],
   run: null,
+  compareIds: [],
   poll: null,
   stream: null,
   dataset: null,
@@ -16,6 +17,7 @@ const state = {
   recording: false,
   pendingTrajectories: [],
   lastDemoMessage: "",
+  trainBusy: false,
   teleopRaf: 0,
   teleopPath: null,
   teleopOrigin: null,
@@ -319,7 +321,15 @@ function sceneHTML(spec) {
 function boundDemoHint(recipe) {
   if (!recipe || !recipe.imitate) return "";
   const nTakes = state.pendingTrajectories.length;
-  if (state.recording || nTakes) return "";
+  if (state.recording) return "";
+  if (nTakes) {
+    const hint =
+      (typeof HTGates !== "undefined" && HTGates.unsavedTakesHint
+        ? HTGates.unsavedTakesHint(nTakes)
+        : "") ||
+      `You have ${nTakes} unsaved take(s). Click Save before Train.`;
+    return `<p class="error" id="unsaved-demo-hint">${escapeHtml(hint)}</p>`;
+  }
   const boundDs = (state.starter?.data?.datasets || [])[0];
   if (!boundDs) {
     return `<p class="meta">No demos saved yet — Train will use built-in scripted takes. Or record by dragging ${escapeHtml(objectLabel())} below.</p>`;
@@ -788,6 +798,40 @@ async function trainCurrent() {
   if (status) status.textContent = "queued…";
   if (err) err.textContent = "";
   try {
+    const gateFn =
+      typeof HTGates !== "undefined" && HTGates.decideUnsavedDemoTrain
+        ? HTGates.decideUnsavedDemoTrain
+        : null;
+    const gate = gateFn
+      ? gateFn(state.pendingTrajectories.length)
+      : state.pendingTrajectories.length
+        ? {
+            action: "confirm_discard_or_cancel",
+            message: "You have unsaved demo takes. Save them first.",
+            confirmLabel: "Discard unsaved and train on built-in scripted demos",
+            cancelLabel: "Cancel — go Save first",
+          }
+        : { action: "proceed" };
+    if (gate.action === "confirm_discard_or_cancel") {
+      const ok = window.confirm(
+        `${gate.message}\n\nOK = ${gate.confirmLabel}\nCancel = ${gate.cancelLabel}`
+      );
+      if (!ok) {
+        if (err) err.textContent = gate.message;
+        if (status) status.textContent = "";
+        if (btn) {
+          btn.disabled = false;
+          btn.classList.remove("busy");
+        }
+        return;
+      }
+      state.pendingTrajectories = [];
+      state.lastDemoMessage =
+        "Discarded unsaved takes — training on built-in scripted demos.";
+    }
+    if (state.trainBusy) {
+      throw new Error("Another train is already running. Wait for it to finish.");
+    }
     const editor = document.getElementById("spec-json");
     if (editor) {
       state.starter = JSON.parse(editor.value);
@@ -825,6 +869,7 @@ async function trainCurrent() {
       // Do not leak Data-room keep filters onto non-imitation recipes.
       delete state.starter.data.keep_episodes;
     }
+    state.trainBusy = true;
     const run = await api("/api/runs", {
       method: "POST",
       body: JSON.stringify({ spec: state.starter }),
@@ -832,6 +877,7 @@ async function trainCurrent() {
     state.view = "run";
     await showRun(run.run_id);
   } catch (error) {
+    state.trainBusy = false;
     if (err) err.textContent = error.message;
     if (btn) {
       btn.disabled = false;
@@ -1146,9 +1192,11 @@ function runDemoHint(run) {
   ) {
     bits.push("stale? re-train for BC");
   }
+  if (facts.policy) bits.push(`policy=${facts.policy}`);
   if (facts.engine) bits.push(facts.engine);
   if (facts.device) bits.push(facts.device);
   if (facts.runner === "docker") bits.push("Docker");
+  if (isSimOnly(facts)) bits.push("sim-only");
   if (run.status === "blocked") {
     if (rec && rec.availability === "gpu") {
       bits.push(rec.blocked_hint || "needs a GPU");
@@ -1157,7 +1205,127 @@ function runDemoHint(run) {
   return bits.length ? ` · ${bits.join(" · ")}` : "";
 }
 
+function toggleCompareId(runId) {
+  const id = String(runId || "");
+  if (!id) return;
+  const cur = state.compareIds || [];
+  if (cur.includes(id)) {
+    state.compareIds = cur.filter((x) => x !== id);
+    return;
+  }
+  if (cur.length >= 2) {
+    state.compareIds = [cur[1], id];
+    return;
+  }
+  state.compareIds = [...cur, id];
+}
+
+function compareSelection() {
+  const ids = state.compareIds || [];
+  const byId = Object.fromEntries((state.runs || []).map((r) => [r.run_id, r]));
+  const runs = ids.map((id) => byId[id]).filter(Boolean);
+  if (ids.length !== 2 || runs.length !== 2) {
+    return { ok: false, reason: "Pick two runs to compare.", runs: [] };
+  }
+  if (runs[0].recipe !== runs[1].recipe) {
+    return {
+      ok: false,
+      reason: "Pick two runs of the same task.",
+      runs,
+    };
+  }
+  return { ok: true, reason: "", runs, recipe: runs[0].recipe };
+}
+
+function factsListHTML(facts) {
+  const entries = Object.entries(facts || {}).filter(
+    ([, v]) => v !== undefined && v !== null && v !== ""
+  );
+  if (!entries.length) return `<p class="meta">No facts on this run.</p>`;
+  const rows = entries
+    .map(
+      ([k, v]) =>
+        `<div class="fact-row"><span class="fact-key">${escapeHtml(k)}</span><span class="fact-val">${escapeHtml(
+          typeof v === "object" ? JSON.stringify(v) : String(v)
+        )}</span></div>`
+    )
+    .join("");
+  return `<div class="facts-list">${rows}</div>`;
+}
+
+function paintCompareColumn(run) {
+  const facts = runFacts(run);
+  const statusClass =
+    run.status === "passed" || (run.metrics && run.metrics.passed === true)
+      ? "passed"
+      : run.status === "completed"
+        ? "completed"
+        : run.status || "";
+  const video =
+    run.artifacts && run.artifacts["eval.mp4"]
+      ? `<video controls muted src="${runArtifactUrl(run.run_id, "eval.mp4")}"></video>`
+      : `<p class="lede">No eval video.</p>`;
+  const metrics =
+    run.metrics && run.metrics.eval_episodes != null
+      ? `<p class="meta">score ${fmt(run.metrics.success_rate)} · passed=${run.metrics.passed ?? "—"}</p>`
+      : "";
+  const simOnly =
+    isSimOnly(facts)
+      ? `<p class="meta">sim-only — not cleared for hardware</p>`
+      : "";
+  return `
+    <section class="compare-col" data-compare-run="${escapeHtml(run.run_id)}">
+      <h2>${escapeHtml(prettyRecipe(run.recipe))}</h2>
+      <p class="meta">${escapeHtml(run.run_id)}</p>
+      <p class="status ${statusClass}">${escapeHtml(englishRunStatus(run))}</p>
+      ${metrics}
+      ${simOnly}
+      ${backendBadge(facts)}
+      ${video}
+      <h3>Facts</h3>
+      ${factsListHTML(facts)}
+    </section>`;
+}
+
+async function renderCompare() {
+  const sel = compareSelection();
+  if (!sel.ok) {
+    renderRuns();
+    return;
+  }
+  state.view = "compare";
+  setActive("runs");
+  const [left, right] = await Promise.all(
+    sel.runs.map((r) => api(`/api/runs/${r.run_id}`))
+  );
+  main.innerHTML = `
+    <h1>Compare</h1>
+    <p class="lede">Same task side by side — videos and facts. Not a fifth room.</p>
+    <div class="actions recipe-bar">
+      <button class="ghost" id="back-runs">Back to runs</button>
+      <button class="ghost" id="clear-compare">Clear selection</button>
+    </div>
+    <div class="compare-grid">
+      ${paintCompareColumn(left)}
+      ${paintCompareColumn(right)}
+    </div>
+  `;
+  document.getElementById("back-runs")?.addEventListener("click", () => switchView("runs"));
+  document.getElementById("clear-compare")?.addEventListener("click", () => {
+    state.compareIds = [];
+    switchView("runs");
+  });
+}
+
 function renderRuns() {
+  const sel = compareSelection();
+  const compareHint = (() => {
+    const n = (state.compareIds || []).length;
+    if (n === 0) return "Check two runs of the same task, then Compare.";
+    if (n === 1) return "Pick one more run of the same task.";
+    if (!sel.ok) return sel.reason;
+    return `Ready: ${prettyRecipe(sel.recipe)}.`;
+  })();
   const rows = state.runs
     .map((run) => {
       const passed = run.metrics && run.metrics.passed === true;
@@ -1175,25 +1343,48 @@ function renderRuns() {
         run.metrics.passed === false
           ? " · failed metrics"
           : "";
+      const checked = (state.compareIds || []).includes(run.run_id) ? "checked" : "";
       return `
       <li>
-        <div class="run-row" data-run="${run.run_id}">
-          <div>
+        <div class="run-row" data-run="${escapeHtml(run.run_id)}">
+          <label class="run-check" data-compare-toggle="${escapeHtml(run.run_id)}">
+            <input type="checkbox" ${checked} aria-label="Select for compare" />
+          </label>
+          <div class="run-main">
             <strong>${escapeHtml(prettyRecipe(run.recipe))}</strong>
-            <div class="meta">${run.run_id}${run.artifacts && run.artifacts["eval.mp4"] ? " · eval.mp4" : ""}${hint}${failedHint}</div>
+            <div class="meta">${escapeHtml(run.run_id)}${run.artifacts && run.artifacts["eval.mp4"] ? " · eval.mp4" : ""}${escapeHtml(hint)}${escapeHtml(failedHint)}</div>
           </div>
-          <div class="status ${statusClass}">${englishRunStatus(run)}</div>
+          <div class="status ${statusClass}">${escapeHtml(englishRunStatus(run))}</div>
         </div>
       </li>`;
     })
     .join("");
   main.innerHTML = `
     <h1>Runs</h1>
-    <p class="lede">Click a run to watch the video. Green means the task succeeded. Orange means it finished but failed, or it cannot train on this computer.</p>
+    <p class="lede">Click a run to watch the video. Check two of the same task to compare side by side. Green means the task succeeded. Orange means it finished but failed, or it cannot train on this computer.</p>
+    <div class="actions recipe-bar runs-compare-bar">
+      <button class="primary" id="compare-runs" ${sel.ok ? "" : "disabled"}>Compare</button>
+      <span class="meta" id="compare-hint">${escapeHtml(compareHint)}</span>
+    </div>
     <ul class="runs">${rows || `<li class='lede'>No runs yet. Open ${escapeHtml(firstReadyRecipe()?.title || "a task")} from Tasks and click Train.</li>`}</ul>
   `;
   main.querySelectorAll("[data-run]").forEach((el) => {
-    el.addEventListener("click", () => showRun(el.dataset.run));
+    el.addEventListener("click", (ev) => {
+      if (ev.target.closest("[data-compare-toggle]")) return;
+      showRun(el.dataset.run);
+    });
+  });
+  main.querySelectorAll("[data-compare-toggle]").forEach((el) => {
+    el.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      toggleCompareId(el.dataset.compareToggle);
+      renderRuns();
+    });
+  });
+  document.getElementById("compare-runs")?.addEventListener("click", () => {
+    if (!compareSelection().ok) return;
+    renderCompare();
   });
 }
 
@@ -1207,19 +1398,40 @@ function englishRunStatus(run) {
   return run.status || "";
 }
 
+function isSimOnly(facts) {
+  // Cleared only by a live hardware eval (facts.sim_only=false). Missing = still gated.
+  return !(facts && facts.sim_only === false);
+}
+
 function backendBadge(facts) {
   const parts = [];
   if (facts.engine) parts.push(facts.engine);
   if (facts.device) parts.push(facts.device);
   if (facts.runner === "docker") parts.push("Docker");
+  if (isSimOnly(facts)) parts.push("sim-only");
+  if (facts.policy) parts.push(`policy=${facts.policy}`);
   if (!parts.length) return "";
-  return `<p class="meta" id="backend-badge">${escapeHtml(parts.join(" · "))}</p>`;
+  return `<p class="meta backend-badge">${escapeHtml(parts.join(" · "))}</p>`;
+}
+
+function deployButtonState(run) {
+  if (["queued", "running"].includes(run.status)) {
+    return { disabled: true, title: "Wait until training finishes." };
+  }
+  if (run.status === "blocked") {
+    return { disabled: true, title: "This run never trained — nothing to deploy." };
+  }
+  // Eligibility comes from GET /api/runs/{id}/deploy (preflight), not recipe ids.
+  return {
+    disabled: false,
+    title: "Hardware gate — fails closed until a live walk + profile pass. See why below.",
+  };
 }
 
 function paintRun(run, logText) {
   const facts = runFacts(run);
   const video = run.artifacts && run.artifacts["eval.mp4"]
-    ? `<video controls autoplay muted src="/api/runs/${run.run_id}/artifacts/eval.mp4?t=${Date.now()}"></video>`
+    ? `<video controls autoplay muted src="${runArtifactUrl(run.run_id, "eval.mp4")}?t=${Date.now()}"></video>`
     : `<p class="lede">${
         run.status === "blocked"
           ? "No video — this task cannot train on this computer."
@@ -1228,7 +1440,7 @@ function paintRun(run, logText) {
             : "No eval video. On a machine without a display, Train still scores success but skips the clip."
       }</p>`;
   const scene = run.artifacts && run.artifacts["composed_scene.xml"]
-    ? `<p class="lede"><a href="/api/runs/${run.run_id}/artifacts/composed_scene.xml">Scene file</a> — open in MuJoCo if you want.</p>`
+    ? `<p class="lede"><a href="${runArtifactUrl(run.run_id, "composed_scene.xml")}">Scene file</a> — open in MuJoCo if you want.</p>`
     : "";
   const notes = (run.notes || []).map((n) => escapeHtml(n)).join(" · ");
   const hasMetrics = run.metrics && run.metrics.eval_episodes != null;
@@ -1241,6 +1453,10 @@ function paintRun(run, logText) {
       : run.status === "completed"
         ? "completed"
         : run.status || "";
+  const simOnly =
+    isSimOnly(facts)
+      ? `<p class="meta" id="sim-only-badge">sim-only — not cleared for hardware</p>`
+      : "";
   const headline = englishRunStatus(run);
   const readyTitles = readyRecipes(state.recipes).map((r) => r.title);
   const laterTitles = laterRecipes(state.recipes).map((r) => r.title);
@@ -1250,17 +1466,23 @@ function paintRun(run, logText) {
           readyTitles.length ? ` Use ${escapeHtml(englishList(readyTitles))} on this computer.` : ""
         }${laterTitles.length ? ` ${escapeHtml(englishList(laterTitles))} need a GPU box.` : ""}</p>`
       : "";
+  const deployBtn = deployButtonState(run);
   main.innerHTML = `
     ${stepsHTML("video")}
     <h1>${escapeHtml(prettyRecipe(run.recipe))}</h1>
     <p class="status ${statusClass}">${escapeHtml(headline)}</p>
     ${metrics}
+    ${simOnly}
     ${run.error ? `<p class="error">${escapeHtml(plainError(run.error))}</p>` : ""}
     ${blockedHelp}
     <div class="actions recipe-bar">
       <button class="primary" id="train-again">Train again</button>
+      <button class="ghost" id="deploy-run" ${deployBtn.disabled ? "disabled" : ""} title="${escapeHtml(deployBtn.title)}">Deploy to robot</button>
+      <button class="ghost" id="back-runs">Back to runs</button>
       <button class="ghost" id="back-tasks">Back to tasks</button>
     </div>
+    <div class="lede" id="deploy-preflight">Checking hardware gate…</div>
+    <p class="error" id="deploy-status" hidden></p>
     <div class="detail">
       <section>
         <h2>Did it work?</h2>
@@ -1278,7 +1500,71 @@ function paintRun(run, logText) {
     </div>
   `;
   document.getElementById("train-again")?.addEventListener("click", trainCurrent);
+  document.getElementById("back-runs")?.addEventListener("click", () => switchView("runs"));
   document.getElementById("back-tasks")?.addEventListener("click", () => switchView("tasks"));
+  document.getElementById("deploy-run")?.addEventListener("click", () => attemptDeploy(run.run_id));
+  loadDeployPreflight(run);
+}
+
+async function loadDeployPreflight(run) {
+  const el = document.getElementById("deploy-preflight");
+  if (!el) return;
+  if (["queued", "running"].includes(run.status)) {
+    el.textContent = "Hardware gate waits until training finishes.";
+    return;
+  }
+  if (run.status === "blocked") {
+    el.textContent = "No deploy — this run never trained.";
+    return;
+  }
+  try {
+    const report = await api(`/api/runs/${encodeURIComponent(run.run_id)}/deploy`);
+    const reasons = Array.isArray(report.reasons) ? report.reasons.filter(Boolean) : [];
+    if (report.ok) {
+      el.textContent =
+        "Checklist passed, but the Unitree driver is still unwired — stays sim-only.";
+      return;
+    }
+    if (reasons.length) {
+      el.innerHTML = `<strong>Why this stays sim-only</strong><ul class="deploy-reasons">${reasons
+        .map((r) => `<li>${escapeHtml(r)}</li>`)
+        .join("")}</ul>`;
+      return;
+    }
+    el.textContent = report.error || "Deploy blocked — stay sim-only.";
+  } catch (error) {
+    el.textContent = error.message || String(error);
+  }
+}
+
+async function attemptDeploy(runId) {
+  const status = document.getElementById("deploy-status");
+  const btn = document.getElementById("deploy-run");
+  if (status) {
+    status.hidden = false;
+    status.textContent = "Checking deploy gate…";
+  }
+  if (btn) btn.disabled = true;
+  try {
+    const report = await api(`/api/runs/${encodeURIComponent(runId)}/deploy`, {
+      method: "POST",
+      body: "{}",
+    });
+    const reasons = Array.isArray(report.reasons) ? report.reasons.filter(Boolean) : [];
+    const msg =
+      report.error ||
+      (reasons.length ? reasons.join(" ") : "Deploy blocked — stay sim-only.");
+    if (status) status.textContent = msg;
+  } catch (error) {
+    if (status) status.textContent = error.message || String(error);
+  } finally {
+    if (btn) {
+      const run = state.run || { run_id: runId };
+      const next = deployButtonState(run);
+      btn.disabled = next.disabled;
+      btn.title = next.title;
+    }
+  }
 }
 
 function prettyRecipe(id) {
@@ -1310,7 +1596,14 @@ async function showRun(runId) {
   state.run = run;
   let logText = run.log || "";
   paintRun(run, logText);
-  if (!["queued", "running"].includes(run.status)) return;
+  if (!["queued", "running"].includes(run.status)) {
+    state.trainBusy = false;
+    return;
+  }
+
+  const clearBusyIfDone = (status) => {
+    if (!["queued", "running"].includes(status)) state.trainBusy = false;
+  };
 
   if (window.EventSource) {
     state.stream = new EventSource(`/api/runs/${runId}/events`);
@@ -1333,6 +1626,7 @@ async function showRun(runId) {
       const statusEl = document.querySelector("main .status");
       if (statusEl) statusEl.textContent = englishRunStatus(run);
       if (!["queued", "running"].includes(run.status)) {
+        clearBusyIfDone(run.status);
         stopPoll();
         paintRun(run, logText);
       }
@@ -1343,6 +1637,8 @@ async function showRun(runId) {
       paintRun(latest, latest.log || "");
       if (["queued", "running"].includes(latest.status)) {
         state.poll = setTimeout(paint, 400);
+      } else {
+        clearBusyIfDone(latest.status);
       }
     };
     state.poll = setTimeout(paint, 400);
@@ -1359,7 +1655,13 @@ function escapeHtml(text) {
   return String(text)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function runArtifactUrl(runId, name) {
+  return `/api/runs/${encodeURIComponent(String(runId))}/artifacts/${encodeURIComponent(String(name))}`;
 }
 
 function stopPoll() {
@@ -1399,12 +1701,25 @@ document.querySelectorAll(".rail-btn").forEach((btn) => {
   btn.addEventListener("click", () => switchView(btn.dataset.view));
 });
 
+function formatHealthStrip(health) {
+  if (!health || !health.ok) return "offline";
+  const bits = [`local · v${health.version || "dev"}`];
+  const e = health.engines || {};
+  bits.push(e.gpu ? "GPU" : "CPU");
+  const walk = [];
+  if (e.playground_ready) walk.push("playground");
+  if (e.mjlab_ready) walk.push("mjlab");
+  if (e.isaac_launch_ready) walk.push("isaac");
+  if (e.osmo_ready) walk.push("osmo");
+  bits.push(walk.length ? `walk:${walk.join("+")}` : "walk:later");
+  if (e.lerobot_ready) bits.push("ACT:ready");
+  return bits.join(" · ");
+}
+
 async function boot() {
   try {
     const health = await api("/api/health");
-    document.getElementById("health").textContent = health.ok
-      ? `local · v${health.version || "dev"}`
-      : "offline";
+    document.getElementById("health").textContent = formatHealthStrip(health);
     const [recipes, robots] = await Promise.all([
       api("/api/recipes"),
       api("/api/robots"),

@@ -149,6 +149,9 @@ def run_job(
     finally:
         facts = dict(manifest.get("facts") or {})
         facts.setdefault("runner", "inprocess")
+        # Phase 4: every in-process eval stays sim-only until a hardware
+        # profile passes. Never clear this silently.
+        facts.setdefault("sim_only", True)
         manifest["facts"] = facts
         manifest["finished_at"] = datetime.now(timezone.utc).isoformat()
         write_manifest(run_dir, manifest)

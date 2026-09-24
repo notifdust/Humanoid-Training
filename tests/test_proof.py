@@ -117,12 +117,60 @@ def test_summarize_rejects_missing_video(tmp_path: Path) -> None:
     report = summarize_walk_proof(
         {
             "status": "passed",
+            "recipe": "g1-walk",
             "run_dir": str(run_dir),
             "facts": {"kind": "rl", "engine": "playground"},
         }
     )
     assert report["ok"] is False
     assert "eval.mp4" in (report["error"] or "")
+
+
+def test_summarize_requires_kind_rl_and_walk_recipe(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "eval.mp4").write_bytes(b"fake-walk-not-stand")
+    hold = summarize_walk_proof(
+        {
+            "status": "passed",
+            "recipe": "g1-walk",
+            "run_dir": str(run_dir),
+            "facts": {"kind": "hold", "engine": "playground"},
+        }
+    )
+    assert hold["ok"] is False
+    assert "kind" in (hold["error"] or "")
+
+    stand_recipe = summarize_walk_proof(
+        {
+            "status": "passed",
+            "recipe": "g1-stand",
+            "run_dir": str(run_dir),
+            "facts": {"kind": "rl", "engine": "playground"},
+        }
+    )
+    assert stand_recipe["ok"] is False
+    assert "g1-walk" in (stand_recipe["error"] or "")
+
+
+def test_summarize_rejects_stand_gold_as_walk(tmp_path: Path) -> None:
+    from humanoid_training.artifacts import g1_stand_gold_path
+
+    gold = g1_stand_gold_path()
+    assert gold.is_file()
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "eval.mp4").write_bytes(gold.read_bytes())
+    report = summarize_walk_proof(
+        {
+            "status": "passed",
+            "recipe": "g1-walk",
+            "run_dir": str(run_dir),
+            "facts": {"kind": "rl", "engine": "playground"},
+        }
+    )
+    assert report["ok"] is False
+    assert "stand" in (report["error"] or "").lower()
 
 
 def test_proof_walk_spec_targets_ready_engine(monkeypatch: pytest.MonkeyPatch) -> None:

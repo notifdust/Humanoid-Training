@@ -18,5 +18,6 @@ def _cpu_studio_host(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HT_MJLAB_CLI", "0")
     monkeypatch.setenv("HT_ISAAC_CLI", "0")
     monkeypatch.setenv("HT_OSMO_CLI", "0")
+    monkeypatch.setenv("HT_LEROBOT_CLI", "0")
     monkeypatch.setenv("HT_DOCKER_GPU", "0")
 
