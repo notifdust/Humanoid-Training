@@ -1376,13 +1376,11 @@ function deployButtonState(run) {
   if (run.status === "blocked") {
     return { disabled: true, title: "This run never trained — nothing to deploy." };
   }
-  if (run.recipe !== "g1-walk") {
-    return {
-      disabled: false,
-      title: "Only a passed g1-walk can clear the hardware gate. Click to see why this stays sim-only.",
-    };
-  }
-  return { disabled: false, title: "Phase 4 gate — fails closed until a hardware profile passes." };
+  // Eligibility comes from GET /api/runs/{id}/deploy (preflight), not recipe ids.
+  return {
+    disabled: false,
+    title: "Hardware gate — fails closed until a live walk + profile pass. See why below.",
+  };
 }
 
 function paintRun(run, logText) {

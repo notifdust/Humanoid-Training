@@ -17,6 +17,7 @@ Phase 3e  ACT on the same demos                 ← launch path done (needs GPU 
 Phase 3f  honest G1 manipulation recipe     ← done (deleted dishonest g1-reach)
 Phase 3g  compare two runs in Runs           ← done (side-by-side in Runs room)
 Phase 4   real G1/H1 deploy with safety gates ← gate done (live torque **not** wired)
+Phase 4b  proof/deploy honesty + Runs projects gate ← this branch
 ```
 
 This file is the **continuation plan from what is actually running**, not
@@ -399,6 +400,8 @@ passes.
 | Studio **Deploy to robot** + `POST /api/runs/{id}/deploy` fail closed | done |
 | `GET /api/runs/{id}/deploy` preflight + Runs “why sim-only” + Back to runs | done |
 | Stamp `facts.engine` on gymnasium / mujoco hold runs | done |
+| Proof/deploy refuse stand-gold byte match + require on-disk `eval.mp4` | done |
+| Runs Deploy button projects gate (no hardcoded recipe id) | done |
 | Unitree reduced-speed driver + NaN / pose-limit kills | **not done** |
 | Live hardware eval that clears `sim_only` | **not done** (needs robot + live walk proof) |
 

@@ -63,6 +63,8 @@ def _blocked_message(run_id: str, *, reason: str) -> str:
 
 def assess_deploy(manifest: dict[str, Any]) -> dict[str, Any]:
     """Return ok/blocked assessment. Never launches actuators."""
+    from humanoid_training.artifacts import looks_like_g1_stand_gold, resolve_eval_mp4
+
     run_id = str(manifest.get("run_id") or "")
     facts = dict(manifest.get("facts") or {})
     recipe = str(manifest.get("recipe") or "")
@@ -84,8 +86,15 @@ def assess_deploy(manifest: dict[str, Any]) -> dict[str, Any]:
             reasons.append(f"facts.kind={facts.get('kind')!r} — need a walk RL eval")
         if not facts.get("engine"):
             reasons.append("facts.engine missing — walk must stamp the engine that ran")
-        if not (manifest.get("artifacts") or {}).get("eval.mp4"):
-            reasons.append("no eval.mp4 — refuse to deploy without a sim video")
+        video = resolve_eval_mp4(manifest)
+        if video is None:
+            reasons.append("no eval.mp4 on disk — refuse to deploy without a sim video")
+        elif video.stat().st_size < 8:
+            reasons.append("eval.mp4 is empty or tiny — refuse to deploy")
+        elif looks_like_g1_stand_gold(video):
+            reasons.append(
+                "eval.mp4 matches g1-stand gold — refuse stand clip as walk deploy"
+            )
         if not hardware_profile_present():
             reasons.append("no passed HT_HARDWARE_PROFILE (policies stay sim-only)")
 
@@ -111,6 +120,7 @@ def deploy_run(run_id: str, *, runs_dir: Path | None = None) -> dict[str, Any]:
             "ht proof walk on a GPU box before any hardware attempt."
         )
     manifest = load_manifest(run_dir)
+    manifest.setdefault("run_dir", str(run_dir))
     report = assess_deploy(manifest)
     if not report["ok"]:
         raise AdapterUnavailable(report["error"] or "Deploy blocked.")

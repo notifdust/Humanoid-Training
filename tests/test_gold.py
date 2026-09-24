@@ -89,10 +89,14 @@ def test_cpu_train_eval_resembles_gold(tmp_path: Path) -> None:
         method = recipe.as_public_dict()["method"]
         if method == "rl":
             assert facts.get("kind") == "rl"
+            assert facts.get("engine") == "gymnasium"
         elif method == "hold":
             assert facts.get("kind") == "hold"
+            assert facts.get("engine") == "mujoco"
         elif method == "imitation":
             assert facts.get("kind") == "imitation"
+            assert facts.get("policy") == "linear-bc"
+        assert facts.get("sim_only") is True
         produced = Path(recorded["path"])
         result = compare_eval_videos(produced, gold)
         assert result.ok, f"{recipe.id}: {result.reason} {result}"
