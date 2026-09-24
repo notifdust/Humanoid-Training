@@ -46,10 +46,9 @@ still scores success; it will not write `eval.mp4`.
 2. **G1 stand → Train.** Humanoid holds a pose and waves. Not walking.
 3. **Pick and place → Train.** Mustard goes in the bowl; the arm follows. Not finger grasping.
 
-Skip **G1 reach** — there is no G1 reach environment upstream.
-**G1 walk** stops on a laptop (needs an NVIDIA GPU and Playground,
-mjlab, or Isaac Lab). On a GPU box it launches for real — not a
-stand clip.
+There is no G1 reach task — no upstream env. **G1 walk** stops on a laptop
+(needs an NVIDIA GPU and Playground, mjlab, or Isaac Lab). On a GPU box it
+launches for real — not a stand clip.
 
 Rooms: Robots · Tasks · Data · Runs (compare two runs of the same task here). Job spec is under **Advanced**.
 
