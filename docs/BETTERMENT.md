@@ -10,9 +10,9 @@ the **CPU studio loop** clearer, honester, and harder to misuse.
 ```
 B0  stop silent wrong trains          ← done
 B1  one train at a time + health strip ← done
-B2  copy / docs match the four rooms  ← next
-B3  Deploy + Robots honesty
-B4  status, Data, first-run friction
+B2  copy / docs match the four rooms  ← done
+B3  Deploy + Robots honesty           ← done
+B4  status, Data, first-run friction  ← next
 B5  interaction tests + small cleanup
 ```
 
@@ -100,7 +100,7 @@ Primary paths: `src/humanoid_training/server.py`, `studio/app.js`,
 
 ---
 
-## B2 — Copy and docs match the four rooms (next)
+## B2 — Copy and docs match the four rooms (done)
 
 **Problem.** README still says “Skip G1 reach.” Vision still describes five
 rooms / Evaluate as its own room. Recipe and robot blurbs drift from the
@@ -117,17 +117,18 @@ phase board. Beginners read two products.
 | Deliverable | Status |
 |---|---|
 | README: drop reach; keep Cartpole → stand → mustard → walk-blocked | done |
-| VISION: four-room map; Cartpole-first Phase 0 aligns with ROADMAP | **not done** |
-| Recipe / robot catalog copy hygiene (H1 “catalog only”, pick-and-place Phase wording) | **not done** |
-| ARCHITECTURE: OSMO harvest = harness done, live proof not done | **not done** |
-| Deduplicate cartpole `gold.notes` in `recipe.yaml` | **not done** |
+| VISION: four-room map; Cartpole-first Phase 0 aligns with ROADMAP | done |
+| Recipe / robot catalog copy hygiene (H1 “catalog only”, pick-and-place Phase wording) | done |
+| ARCHITECTURE: OSMO harvest = harness done, live proof not done | done |
+| Deduplicate cartpole `gold.notes` in `recipe.yaml` | done |
+| Reliable `./run-studio.sh` (reuse install / repair broken venv) | done |
 
 Primary paths: `README.md`, `docs/VISION.md`, `docs/ARCHITECTURE.md`,
-`robots/catalog.yaml`, `recipes/*/recipe.yaml`.
+`robots/catalog.yaml`, `recipes/*/recipe.yaml`, `run-studio.sh`.
 
 ---
 
-## B3 — Deploy and Robots honesty
+## B3 — Deploy and Robots honesty (done)
 
 **Problem.** Every finished run gets a clickable **Deploy to robot**, so
 Cartpole and stand feel hardware-ready until the gate text appears. The
@@ -145,17 +146,17 @@ The scene badge hardcodes `G1`.
 
 | Deliverable | Status |
 |---|---|
-| Deploy button state follows preflight (not “always clickable”) | **not done** |
-| Robots room copy from catalog, not hardcoded G1 prose | **not done** |
-| Scene `robot-mark` from selected robot | **not done** |
-| H1: honest empty / catalog-only state | **not done** |
+| Deploy button state follows preflight (not “always clickable”) | done |
+| Robots room copy from catalog, not hardcoded G1 prose | done |
+| Scene `robot-mark` from selected robot | done |
+| H1: honest empty / catalog-only state | done |
 
 Primary paths: `studio/app.js` (`deployButtonState`, `loadDeployPreflight`,
 `renderRobots`), `robots/catalog.yaml`.
 
 ---
 
-## B4 — Status color, Data in the loop, first-run friction
+## B4 — Status color, Data in the loop, first-run friction (next)
 
 **Problem.** Blocked (“can't train here”) and failed (“finished — did not
 pass”) share orange. The Task → Train → Video steps ignore Data, so demos

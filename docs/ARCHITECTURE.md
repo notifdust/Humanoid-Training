@@ -188,8 +188,11 @@ The CPU Docker image is Phase 1 (`ht train --docker`). It remounts only
 are **refused** on that image unless `HT_DOCKER_GPU=1` (future GPU
 container). Walk `backend.compute: local-docker` still means that
 future image — the studio does not auto-route those onto the CPU image.
-HF Jobs / OSMO are later Phase 3. The studio-server stays in-process: it
-does not SSH and does not put cloud credentials in the browser.
+OSMO harvest is a Phase 3d **harness** (submit → poll → rsync when the
+`osmo` CLI is logged in). Live OSMO pool proof is still outstanding.
+HF Jobs is the same harvest contract later. The studio-server stays
+in-process: it does not SSH and does not put cloud credentials in the
+browser.
 
 `src/humanoid_training/hardware.py` probes GPU (`nvidia-smi` /
 `HT_GPU` / `HT_PLAYGROUND_GPU`) and engine CLIs (`HT_PLAYGROUND_CLI`,
