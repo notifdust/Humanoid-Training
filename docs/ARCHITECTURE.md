@@ -160,7 +160,7 @@ stream (`SERVED_ARTIFACTS`). `collect_artifacts` and
 `EvalResult.facts` is the machine-readable eval. The runner copies it
 onto `manifest.json` as `facts`. Notes stay English for humans. The
 studio **projects** `facts` (arm_mode, bc_steps, keep_episodes, kind,
-engine, device, runner) and only scrapes notes for older runs that have none.
+engine, device, runner, policy, sim_only) and only scrapes notes for older runs that have none.
 
 Every run directory contains:
 
@@ -178,7 +178,7 @@ Status:
 
 - `passed` — eval boolean true
 - `completed` — ran, boolean false
-- `blocked` — adapter unavailable (expected on CPU for walk/reach)
+- `blocked` — adapter unavailable (expected on CPU for walk)
 - `compiled` — `--compile-only`
 - `failed` — unexpected exception
 
@@ -186,7 +186,7 @@ The CPU Docker image is Phase 1 (`ht train --docker`). It remounts only
 `/runs`, sets `HT_RUN_ID`, and runs in-process train inside the container
 (never `--docker`, or it would recurse). GPU recipes (`availability: gpu`)
 are **refused** on that image unless `HT_DOCKER_GPU=1` (future GPU
-container). Walk/reach `backend.compute: local-docker` still means that
+container). Walk `backend.compute: local-docker` still means that
 future image — the studio does not auto-route those onto the CPU image.
 HF Jobs / OSMO are later Phase 3. The studio-server stays in-process: it
 does not SSH and does not put cloud credentials in the browser.

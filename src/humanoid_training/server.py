@@ -285,7 +285,9 @@ def start_run(body: SpecBody) -> dict[str, Any]:
 def assess_deploy_api(run_id: str) -> dict[str, Any]:
     """Phase 4 preflight: assess only. Does not attempt deploy."""
     path = _find_run(run_id)
-    report = assess_deploy(load_manifest(path))
+    manifest = load_manifest(path)
+    manifest.setdefault("run_dir", str(path))
+    report = assess_deploy(manifest)
     return {**report, "deployed": False}
 
 
@@ -294,6 +296,7 @@ def deploy_run_api(run_id: str) -> dict[str, Any]:
     """Phase 4 gate: assess + fail closed. Never starts robot torque."""
     path = _find_run(run_id)
     manifest = load_manifest(path)
+    manifest.setdefault("run_dir", str(path))
     report = assess_deploy(manifest)
     try:
         deploy_run(run_id, runs_dir=_runs_root())

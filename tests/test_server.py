@@ -271,12 +271,15 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "compare-grid" in js
     assert "Pick two runs of the same task." in js
     assert 'data-view="evaluate"' not in js
+    assert "runs[0].recipe !== runs[1].recipe" in js
     assert "sim-only" in js
     assert "facts.policy" in js or "facts.sim_only" in js
     assert "id=\"deploy-run\"" in js
     assert "function attemptDeploy" in js
     assert "function deployButtonState" in js
     assert "function loadDeployPreflight" in js
+    assert 'run.recipe !== "g1-walk"' not in js
+    assert "Hardware gate — fails closed" in js
     assert "id=\"deploy-preflight\"" in js
     assert "id=\"back-runs\"" in js
     assert "/deploy" in js

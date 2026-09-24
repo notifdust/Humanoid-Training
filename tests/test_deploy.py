@@ -64,10 +64,18 @@ def test_assess_deploy_blocks_cartpole() -> None:
 
 
 def test_assess_deploy_blocks_walk_without_hardware_profile(
-    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv("HT_HARDWARE_PROFILE", raising=False)
-    report = assess_deploy(_walk_manifest())
+    run_dir = tmp_path / "walk-1"
+    run_dir.mkdir()
+    (run_dir / "eval.mp4").write_bytes(b"fake-walk-clip")
+    report = assess_deploy(
+        _walk_manifest(
+            run_dir=str(run_dir),
+            artifacts={"eval.mp4": str(run_dir / "eval.mp4")},
+        )
+    )
     assert report["ok"] is False
     assert "HT_HARDWARE_PROFILE" in (report["error"] or "")
 
@@ -78,7 +86,15 @@ def test_assess_deploy_ok_shape_with_profile(
     profile = tmp_path / "hw.json"
     profile.write_text(json.dumps({"passed": True, "kind": "hardware"}), encoding="utf-8")
     monkeypatch.setenv("HT_HARDWARE_PROFILE", str(profile))
-    report = assess_deploy(_walk_manifest())
+    run_dir = tmp_path / "walk-1"
+    run_dir.mkdir()
+    (run_dir / "eval.mp4").write_bytes(b"fake-walk-clip")
+    report = assess_deploy(
+        _walk_manifest(
+            run_dir=str(run_dir),
+            artifacts={"eval.mp4": str(run_dir / "eval.mp4")},
+        )
+    )
     assert report["ok"] is True
     assert report["sim_only"] is True  # still sim-only until live torque ships
 
@@ -93,9 +109,15 @@ def test_deploy_run_fails_closed_even_with_profile(
     run_dir = runs / "walk-1"
     run_dir.mkdir(parents=True)
     (run_dir / "manifest.json").write_text(
-        json.dumps(_walk_manifest()), encoding="utf-8"
+        json.dumps(
+            _walk_manifest(
+                run_dir=str(run_dir),
+                artifacts={"eval.mp4": str(run_dir / "eval.mp4")},
+            )
+        ),
+        encoding="utf-8",
     )
-    (run_dir / "eval.mp4").write_bytes(b"fake")
+    (run_dir / "eval.mp4").write_bytes(b"fake-walk-clip-bytes")
     with pytest.raises(AdapterUnavailable, match="not wired"):
         deploy_run("walk-1", runs_dir=runs)
 
@@ -151,6 +173,42 @@ def test_assess_deploy_blocks_missing_eval_mp4(
     assert any("eval.mp4" in r for r in report["reasons"])
 
 
+def test_assess_deploy_blocks_artifact_key_without_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An artifacts entry alone is not enough — the file must exist on disk."""
+    profile = tmp_path / "hw.json"
+    profile.write_text(json.dumps({"passed": True, "kind": "hardware"}), encoding="utf-8")
+    monkeypatch.setenv("HT_HARDWARE_PROFILE", str(profile))
+    report = assess_deploy(
+        _walk_manifest(artifacts={"eval.mp4": str(tmp_path / "missing.mp4")})
+    )
+    assert report["ok"] is False
+    assert any("eval.mp4" in r for r in report["reasons"])
+
+
+def test_assess_deploy_blocks_stand_gold_as_walk(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from humanoid_training.artifacts import g1_stand_gold_path
+
+    profile = tmp_path / "hw.json"
+    profile.write_text(json.dumps({"passed": True, "kind": "hardware"}), encoding="utf-8")
+    monkeypatch.setenv("HT_HARDWARE_PROFILE", str(profile))
+    gold = g1_stand_gold_path()
+    run_dir = tmp_path / "walk-1"
+    run_dir.mkdir()
+    (run_dir / "eval.mp4").write_bytes(gold.read_bytes())
+    report = assess_deploy(
+        _walk_manifest(
+            run_dir=str(run_dir),
+            artifacts={"eval.mp4": str(run_dir / "eval.mp4")},
+        )
+    )
+    assert report["ok"] is False
+    assert any("stand" in r.lower() for r in report["reasons"])
+
+
 def test_api_deploy_get_is_preflight_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HT_RUNS_DIR", str(tmp_path))
     from fastapi.testclient import TestClient
@@ -190,10 +248,15 @@ def test_api_deploy_walk_with_profile_still_not_wired(
     run_dir = tmp_path / "walk-1"
     run_dir.mkdir()
     (run_dir / "manifest.json").write_text(
-        json.dumps(_walk_manifest(artifacts={"eval.mp4": str(run_dir / "eval.mp4")})),
+        json.dumps(
+            _walk_manifest(
+                run_dir=str(run_dir),
+                artifacts={"eval.mp4": str(run_dir / "eval.mp4")},
+            )
+        ),
         encoding="utf-8",
     )
-    (run_dir / "eval.mp4").write_bytes(b"fake")
+    (run_dir / "eval.mp4").write_bytes(b"fake-walk-clip-bytes")
     from fastapi.testclient import TestClient
     from humanoid_training.server import app
 

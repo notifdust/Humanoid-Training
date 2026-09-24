@@ -41,6 +41,7 @@ def test_g1_walk_is_blocked_without_playground(tmp_path: Path) -> None:
     spec = load_spec(Path(__file__).resolve().parents[1] / "spec" / "examples" / "g1-walk.json")
     manifest = run_job(spec, runs_dir=tmp_path)
     assert manifest["status"] == "blocked"
+    assert (manifest.get("facts") or {}).get("sim_only") is True
     err = manifest["error"] or ""
     assert "Playground" in err
     assert "blocked" in err.lower() or "CPU studio" in err or "g1-stand" in err

@@ -1,1 +1,1 @@
-A pole stays up. Proof Train → video works on this computer. ~30s. kind=rl passed=True
+A pole stays up. Proof Train → video works on this computer. ~30s. kind=rl engine=gymnasium sim_only=true passed=True
