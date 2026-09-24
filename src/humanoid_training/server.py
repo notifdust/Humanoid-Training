@@ -27,12 +27,16 @@ from humanoid_training.spec import validate_spec
 
 app = FastAPI(title="Humanoid Training Studio", version="0.1.0")
 
+# Betterment B1: one in-process studio train at a time (this server process).
+_train_lock = threading.Lock()
+_active_train_id: str | None = None
+
 
 @app.middleware("http")
 async def studio_no_store(request, call_next):
     """Studio JS/CSS must not stick after a pull. Eval videos stay cacheable under /api."""
     response = await call_next(request)
-    if request.url.path in {"/", "/index.html", "/app.js", "/styles.css"}:
+    if request.url.path in {"/", "/index.html", "/app.js", "/gates.js", "/styles.css"}:
         response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -253,6 +257,7 @@ def get_artifact(run_id: str, name: str):
 
 @app.post("/api/runs")
 def start_run(body: SpecBody) -> dict[str, Any]:
+    global _active_train_id
     try:
         expanded = expand_spec(body.spec)
     except (SpecError, RecipeError) as err:
@@ -261,21 +266,38 @@ def start_run(body: SpecBody) -> dict[str, Any]:
     run_id = new_run_id(str(public.get("name") or "job"))
     runs_dir = _runs_root()
     run_dir = runs_dir / run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
-    queued = {
-        "run_id": run_id,
-        "status": "queued",
-        "recipe": (public.get("task") or {}).get("recipe"),
-        "run_dir": str(run_dir),
-        "error": None,
-        "metrics": {},
-        "facts": {},
-        "artifacts": {},
-    }
-    write_manifest(run_dir, queued)
+
+    with _train_lock:
+        if _active_train_id is not None:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Another train is already running ({_active_train_id}). "
+                    "Wait for it to finish — one train at a time on this studio."
+                ),
+            )
+        run_dir.mkdir(parents=True, exist_ok=True)
+        queued = {
+            "run_id": run_id,
+            "status": "queued",
+            "recipe": (public.get("task") or {}).get("recipe"),
+            "run_dir": str(run_dir),
+            "error": None,
+            "metrics": {},
+            "facts": {},
+            "artifacts": {},
+        }
+        write_manifest(run_dir, queued)
+        _active_train_id = run_id
 
     def _work() -> None:
-        run_job(body.spec, runs_dir=runs_dir, log=None, run_id=run_id)
+        global _active_train_id
+        try:
+            run_job(body.spec, runs_dir=runs_dir, log=None, run_id=run_id)
+        finally:
+            with _train_lock:
+                if _active_train_id == run_id:
+                    _active_train_id = None
 
     threading.Thread(target=_work, daemon=True).start()
     return queued

@@ -17,6 +17,7 @@ const state = {
   recording: false,
   pendingTrajectories: [],
   lastDemoMessage: "",
+  trainBusy: false,
   teleopRaf: 0,
   teleopPath: null,
   teleopOrigin: null,
@@ -320,7 +321,15 @@ function sceneHTML(spec) {
 function boundDemoHint(recipe) {
   if (!recipe || !recipe.imitate) return "";
   const nTakes = state.pendingTrajectories.length;
-  if (state.recording || nTakes) return "";
+  if (state.recording) return "";
+  if (nTakes) {
+    const hint =
+      (typeof HTGates !== "undefined" && HTGates.unsavedTakesHint
+        ? HTGates.unsavedTakesHint(nTakes)
+        : "") ||
+      `You have ${nTakes} unsaved take(s). Click Save before Train.`;
+    return `<p class="error" id="unsaved-demo-hint">${escapeHtml(hint)}</p>`;
+  }
   const boundDs = (state.starter?.data?.datasets || [])[0];
   if (!boundDs) {
     return `<p class="meta">No demos saved yet — Train will use built-in scripted takes. Or record by dragging ${escapeHtml(objectLabel())} below.</p>`;
@@ -789,6 +798,40 @@ async function trainCurrent() {
   if (status) status.textContent = "queued…";
   if (err) err.textContent = "";
   try {
+    const gateFn =
+      typeof HTGates !== "undefined" && HTGates.decideUnsavedDemoTrain
+        ? HTGates.decideUnsavedDemoTrain
+        : null;
+    const gate = gateFn
+      ? gateFn(state.pendingTrajectories.length)
+      : state.pendingTrajectories.length
+        ? {
+            action: "confirm_discard_or_cancel",
+            message: "You have unsaved demo takes. Save them first.",
+            confirmLabel: "Discard unsaved and train on built-in scripted demos",
+            cancelLabel: "Cancel — go Save first",
+          }
+        : { action: "proceed" };
+    if (gate.action === "confirm_discard_or_cancel") {
+      const ok = window.confirm(
+        `${gate.message}\n\nOK = ${gate.confirmLabel}\nCancel = ${gate.cancelLabel}`
+      );
+      if (!ok) {
+        if (err) err.textContent = gate.message;
+        if (status) status.textContent = "";
+        if (btn) {
+          btn.disabled = false;
+          btn.classList.remove("busy");
+        }
+        return;
+      }
+      state.pendingTrajectories = [];
+      state.lastDemoMessage =
+        "Discarded unsaved takes — training on built-in scripted demos.";
+    }
+    if (state.trainBusy) {
+      throw new Error("Another train is already running. Wait for it to finish.");
+    }
     const editor = document.getElementById("spec-json");
     if (editor) {
       state.starter = JSON.parse(editor.value);
@@ -826,6 +869,7 @@ async function trainCurrent() {
       // Do not leak Data-room keep filters onto non-imitation recipes.
       delete state.starter.data.keep_episodes;
     }
+    state.trainBusy = true;
     const run = await api("/api/runs", {
       method: "POST",
       body: JSON.stringify({ spec: state.starter }),
@@ -833,6 +877,7 @@ async function trainCurrent() {
     state.view = "run";
     await showRun(run.run_id);
   } catch (error) {
+    state.trainBusy = false;
     if (err) err.textContent = error.message;
     if (btn) {
       btn.disabled = false;
@@ -1551,7 +1596,14 @@ async function showRun(runId) {
   state.run = run;
   let logText = run.log || "";
   paintRun(run, logText);
-  if (!["queued", "running"].includes(run.status)) return;
+  if (!["queued", "running"].includes(run.status)) {
+    state.trainBusy = false;
+    return;
+  }
+
+  const clearBusyIfDone = (status) => {
+    if (!["queued", "running"].includes(status)) state.trainBusy = false;
+  };
 
   if (window.EventSource) {
     state.stream = new EventSource(`/api/runs/${runId}/events`);
@@ -1574,6 +1626,7 @@ async function showRun(runId) {
       const statusEl = document.querySelector("main .status");
       if (statusEl) statusEl.textContent = englishRunStatus(run);
       if (!["queued", "running"].includes(run.status)) {
+        clearBusyIfDone(run.status);
         stopPoll();
         paintRun(run, logText);
       }
@@ -1584,6 +1637,8 @@ async function showRun(runId) {
       paintRun(latest, latest.log || "");
       if (["queued", "running"].includes(latest.status)) {
         state.poll = setTimeout(paint, 400);
+      } else {
+        clearBusyIfDone(latest.status);
       }
     };
     state.poll = setTimeout(paint, 400);
@@ -1646,12 +1701,25 @@ document.querySelectorAll(".rail-btn").forEach((btn) => {
   btn.addEventListener("click", () => switchView(btn.dataset.view));
 });
 
+function formatHealthStrip(health) {
+  if (!health || !health.ok) return "offline";
+  const bits = [`local · v${health.version || "dev"}`];
+  const e = health.engines || {};
+  bits.push(e.gpu ? "GPU" : "CPU");
+  const walk = [];
+  if (e.playground_ready) walk.push("playground");
+  if (e.mjlab_ready) walk.push("mjlab");
+  if (e.isaac_launch_ready) walk.push("isaac");
+  if (e.osmo_ready) walk.push("osmo");
+  bits.push(walk.length ? `walk:${walk.join("+")}` : "walk:later");
+  if (e.lerobot_ready) bits.push("ACT:ready");
+  return bits.join(" · ");
+}
+
 async function boot() {
   try {
     const health = await api("/api/health");
-    document.getElementById("health").textContent = health.ok
-      ? `local · v${health.version || "dev"}`
-      : "offline";
+    document.getElementById("health").textContent = formatHealthStrip(health);
     const [recipes, robots] = await Promise.all([
       api("/api/recipes"),
       api("/api/robots"),
