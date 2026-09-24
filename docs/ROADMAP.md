@@ -25,6 +25,10 @@ from the original vision’s wish list. Vision still says where the product
 is going ([VISION.md](./VISION.md)). Architecture still says how
 ([ARCHITECTURE.md](./ARCHITECTURE.md)).
 
+To **improve the CPU studio that already ships** (honesty, Train UX, copy,
+Deploy affordances) follow [BETTERMENT.md](./BETTERMENT.md) — tracks B0–B5.
+Do not mix those polish tracks with live GPU / hardware exit tests here.
+
 ---
 
 ## Where the loop is today
@@ -426,6 +430,8 @@ is still unwired on purpose.
 - Fake walk / ACT / Isaac / OSMO success on a CPU laptop
 - Finger grasping before ACT ships
 - Hardware deploy before a live walk clip exists
+
+For polish of the existing four rooms, see [BETTERMENT.md](./BETTERMENT.md).
 
 ---
 
