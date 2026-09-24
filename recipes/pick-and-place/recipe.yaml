@@ -51,9 +51,9 @@ adapters:
   playground:
     unsupported: "Playground has no mustard-in-bowl env yet. CPU imitation uses mujoco + a LeRobot dataset."
   isaaclab:
-    unsupported: "Isaac Lab manipulation launch is Phase 3."
+    unsupported: "No confirmed Isaac G1 PickPlace task id in-repo yet. CPU imitation stays mujoco; pin a real env id before claiming Isaac."
   mjlab:
-    unsupported: "mjlab pick-and-place launch is Phase 3."
+    unsupported: "No confirmed mjlab pick-and-place task id in-repo yet. CPU imitation stays mujoco."
   lerobot:
     policy: act
 gold:

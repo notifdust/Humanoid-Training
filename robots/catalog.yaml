@@ -13,4 +13,5 @@ robots:
     name: Unitree H1
     kind: humanoid
     dofs: 19
-    summary: Cataloged for later recipes. No runnable adapter in Phase 0.
+    catalog_only: true
+    summary: Catalog only — no H1 recipe yet. Use G1 or CartPole to train.
