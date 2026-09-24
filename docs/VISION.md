@@ -148,16 +148,18 @@ What we refuse to own on day one:
 
 ## Studio surface (what the UI actually contains)
 
-Five rooms. Not a dozen.
+Four rooms. Evaluate lives inside **Runs** — not a fifth rail button.
 
-1. **Robots** — catalog + import URDF/MJCF. Calibration and camera attach for real hardware later.
-2. **Tasks** — recipes with a plain-language description, success criteria, and a scene. Natural language compiles to a spec; drag-and-drop is for placing objects and goals, not for wiring neural nets.
-3. **Data** — record demos, import LeRobot datasets, preview episodes like a video editor, drop the bad takes.
-4. **Train** — one primary button, advanced panel collapsed. Backend badge: "running on mjlab · 1× RTX." Live eval clips every N minutes.
-5. **Evaluate & deploy** — side-by-side videos, success rate, "this checkpoint is worse than last Tuesday." Deploy to sim by default. Real robot is a separate, scary-looking door.
+1. **Robots** — catalog (CartPole smoke test, Unitree G1, H1 catalog-only until a recipe ships).
+2. **Tasks** — recipes with a plain-language description, success criteria, and a scene. Natural language / drag-and-drop author the job spec; they do not wire neural nets.
+3. **Data** — record demos, import local LeRobot datasets, preview episodes, drop the bad takes.
+4. **Runs** — play `eval.mp4`, English status + `facts`, compare two same-recipe runs, and a fail-closed **Deploy to robot** door (sim-only until a live walk + hardware profile exist).
 
-A Python pane exists. It is an *inspector* on the generated spec and hooks,
-not the home screen.
+Train is the primary button on a task — not its own room. Advanced / job-spec
+JSON is an *inspector*, not the home screen.
+
+What ships on a laptop CPU today: Cartpole, G1 stand, pick-and-place
+(linear-BC). G1 walk compiles and blocks without a GPU (or OSMO harvest).
 
 ---
 
@@ -230,9 +232,10 @@ That combination is not shipped.
 
 ## Phased build (technical, not calendar)
 
-**Phase 0 — contract.** Job spec schema, one recipe (G1 velocity / walk),
-one adapter (mjlab or Playground), headless train + eval video on disk.
-No UI yet. If this is not reproducible, the studio is theater.
+**Phase 0 — contract.** Job spec schema, one real train loop that writes
+`eval.mp4` (Cartpole on CPU first — then G1 recipes). One adapter path is
+enough to prove the compiler. No UI yet. If this is not reproducible, the
+studio is theater.
 
 **Phase 1 — studio shell.** Browser app that authors the spec: pick robot,
 pick recipe, set a few knobs, start job, watch eval clips. Local Docker

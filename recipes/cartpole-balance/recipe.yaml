@@ -33,8 +33,6 @@ gold:
   notes: |
     On CPU this usually crosses a 400 return in a few hundred episodes.
     It is not a humanoid task. It exists so the compiler loop is real.
-    On CPU this usually crosses a 400 return in a few hundred episodes.
-    It is not a humanoid task. It exists so the compiler loop is real.
 studio:
   availability: cpu
   start_here: true
