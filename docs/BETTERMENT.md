@@ -8,9 +8,9 @@ OSMO live harvest, ACT-on-GPU, and Unitree torque. This file owns making
 the **CPU studio loop** clearer, honester, and harder to misuse.
 
 ```
-B0  stop silent wrong trains          ← next
-B1  one train at a time + health strip
-B2  copy / docs match the four rooms
+B0  stop silent wrong trains          ← done
+B1  one train at a time + health strip ← done
+B2  copy / docs match the four rooms  ← next
 B3  Deploy + Robots honesty
 B4  status, Data, first-run friction
 B5  interaction tests + small cleanup
@@ -48,7 +48,7 @@ Do not re-litigate these; build on them.
 
 ---
 
-## B0 — Stop silent wrong trains (next)
+## B0 — Stop silent wrong trains (done)
 
 **Problem.** A beginner can record canvas takes, skip **Save**, and click
 **Train**. The “no demos saved” hint vanishes once takes exist, and Train
@@ -65,16 +65,16 @@ falls back to scripted demos. That is an honesty hole.
 
 | Deliverable | Status |
 |---|---|
-| Keep / restore a visible “unsaved takes” warning while `pendingTrajectories.length > 0` | **not done** |
-| Train refuses silent scripted fallback when unsaved takes exist | **not done** |
-| Behavioral test for unsaved → Train | **not done** |
+| Keep / restore a visible “unsaved takes” warning while `pendingTrajectories.length > 0` | done |
+| Train refuses silent scripted fallback when unsaved takes exist | done |
+| Behavioral test for unsaved → Train | done (`studio/gates.js` + `tests/test_studio_gates.py`) |
 
-Primary paths: `studio/app.js` (`boundDemoHint`, `trainCurrent`,
+Primary paths: `studio/gates.js`, `studio/app.js` (`boundDemoHint`, `trainCurrent`,
 `pendingTrajectories`).
 
 ---
 
-## B1 — One train at a time + readiness strip
+## B1 — One train at a time + readiness strip (done)
 
 **Problem.** Studio trains are fire-and-forget daemon threads. Double-click
 Train (or train from two tabs) can overlap MuJoCo/GLFW and scramble logs.
@@ -91,16 +91,16 @@ engine probes.
 
 | Deliverable | Status |
 |---|---|
-| Server: at most one active in-process train (or explicit queue) | **not done** |
-| Studio: disable Train + show “already training …” across rooms | **not done** |
-| Project health engines (and render/video possible when known) in the chrome | **not done** |
+| Server: at most one active in-process train (or explicit queue) | done (409 Conflict) |
+| Studio: disable Train + show “already training …” across rooms | done (`trainBusy` + 409 message) |
+| Project health engines (and render/video possible when known) in the chrome | done (`formatHealthStrip`) |
 
 Primary paths: `src/humanoid_training/server.py`, `studio/app.js`,
 `studio/index.html` / `styles.css`.
 
 ---
 
-## B2 — Copy and docs match the four rooms
+## B2 — Copy and docs match the four rooms (next)
 
 **Problem.** README still says “Skip G1 reach.” Vision still describes five
 rooms / Evaluate as its own room. Recipe and robot blurbs drift from the

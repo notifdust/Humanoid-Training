@@ -48,6 +48,10 @@ def test_health_and_recipes() -> None:
     assert js.headers.get("cache-control") == "no-store"
     assert "Start here" in js.text
     assert "Train again" in js.text
+    gates = client.get("/gates.js")
+    assert gates.status_code == 200
+    assert gates.headers.get("cache-control") == "no-store"
+    assert "decideUnsavedDemoTrain" in gates.text
     css = client.get("/styles.css")
     assert css.headers.get("cache-control") == "no-store"
 
@@ -210,6 +214,29 @@ def test_api_train_cartpole(tmp_path: Path, monkeypatch) -> None:
     )
 
 
+def test_api_refuses_second_concurrent_train(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HT_RUNS_DIR", str(tmp_path))
+    import humanoid_training.server as server
+
+    server._active_train_id = "busy-run-1"
+    try:
+        client = TestClient(app)
+        spec = {
+            "spec_version": "0.1.0",
+            "name": "cartpole-balance",
+            "robot": {"id": "cartpole", "source": "catalog"},
+            "task": {"recipe": "cartpole-balance"},
+            "train": {"method": "rl", "steps": 10, "seed": 0},
+            "eval": {"episodes": 1, "record_video": False},
+            "backend": {"prefer": ["gymnasium"], "compute": "local"},
+        }
+        resp = client.post("/api/runs", json={"spec": spec})
+        assert resp.status_code == 409
+        assert "one train at a time" in resp.json()["detail"].lower()
+    finally:
+        server._active_train_id = None
+
+
 def test_api_g1_walk_blocks_with_next_step(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("HT_RUNS_DIR", str(tmp_path))
     os.environ["HT_RUNS_DIR"] = str(tmp_path)
@@ -251,6 +278,9 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "function readGamepadStick" in js
     assert "function demoSaveSummary" in js
     assert "function boundDemoHint" in js
+    assert "id=\"unsaved-demo-hint\"" in js
+    assert "HTGates.decideUnsavedDemoTrain" in js
+    assert "function formatHealthStrip" in js
     assert "teleopNeedRelease" in js
     assert "r.start_here" in js
     assert "id=\"open-imitate\"" in js
