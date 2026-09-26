@@ -16,7 +16,7 @@
     <div class="app">
       <header class="top">
         <div class="brand">
-          <span class="mark">HT</span>
+          <span class="mark" aria-hidden="true">HT</span>
           <div>
             <strong>Humanoid Training</strong>
             <p>Pick a task. Click Train. Watch if it worked.</p>
@@ -26,10 +26,22 @@
       </header>
       <div class="shell">
         <nav class="rail" aria-label="Studio rooms">
-          <button class="rail-btn" data-view="robots">Robots</button>
-          <button class="rail-btn active" data-view="tasks">Tasks</button>
-          <button class="rail-btn" data-view="data">Data</button>
-          <button class="rail-btn" data-view="runs">Runs</button>
+          <button class="rail-btn" data-view="robots" type="button">
+            <span class="rail-label">Robots</span>
+            <span class="rail-hint">Who trains</span>
+          </button>
+          <button class="rail-btn active" data-view="tasks" type="button" aria-current="page">
+            <span class="rail-label">Tasks</span>
+            <span class="rail-hint">Start here</span>
+          </button>
+          <button class="rail-btn" data-view="data" type="button">
+            <span class="rail-label">Data</span>
+            <span class="rail-hint">Demos</span>
+          </button>
+          <button class="rail-btn" data-view="runs" type="button">
+            <span class="rail-label">Runs</span>
+            <span class="rail-hint">Watch results</span>
+          </button>
         </nav>
         <main id="main"></main>
       </div>

@@ -326,13 +326,13 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "escapeHtml(englishRunStatus(run))" in js
     assert "sim-only — not cleared for hardware" in js
     assert "Why this stays sim-only" in js
-    assert "function stepsHTML" in js
-    assert '["data", "2. Data"]' in js or '"2. Data"' in js
-    assert "function runStatusClass" in js
-    assert "function recordTargetObject" in js
-    assert "HT_NO_RENDER" in js
-    assert "id=\"goto-data\"" in js
+    assert "function statusLegendHTML" in js
+    assert "function bindStepNav" in js
     assert "blue-gray cannot train here" in js
+    assert "id=\"goto-data\"" in js
+    assert "rail-hint" in (Path(__file__).resolve().parents[1] / "studio" / "index.html").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_studio_js_bc_freshness_contract() -> None:
@@ -364,6 +364,11 @@ def test_studio_css_disabled_cursor() -> None:
     assert ".status.failed" in css
     assert ".start-here" not in css
     assert "rail-btn:focus-visible" in css
+    assert ".status-legend" in css
+    assert ".rail-hint" in css
+    assert "main-in" in css
+    assert ".hint-callout" in css
+    assert ".empty-state" in css
 
 
 def test_menagerie_offline_error_names_source(monkeypatch, tmp_path: Path) -> None:

@@ -107,12 +107,80 @@ function stepsHTML(active, opts) {
     video: "video",
   };
   const now = map[active] || active;
+  const order = items.map(([id]) => id);
+  const nowIdx = order.indexOf(now);
   return `<ol class="steps" aria-label="Progress">${items
-    .map(
-      ([id, label]) =>
-        `<li class="${id === now ? "active" : ""}">${escapeHtml(label)}</li>`
-    )
+    .map(([id, label], i) => {
+      const classes = [];
+      if (id === now) classes.push("active");
+      else if (i < nowIdx) classes.push("done");
+      const current = id === now ? ' aria-current="step"' : "";
+      return `<li class="${classes.join(" ")}" data-step="${id}" tabindex="0" role="link"${current}>${escapeHtml(
+        label
+      )}</li>`;
+    })
     .join("")}</ol>`;
+}
+
+function bindStepNav() {
+  main.querySelectorAll(".steps [data-step]").forEach((el) => {
+    const go = () => {
+      const step = el.dataset.step;
+      if (el.classList.contains("active")) return;
+      if (step === "task") {
+        switchView("tasks");
+        return;
+      }
+      if (step === "data") {
+        switchView("data");
+        return;
+      }
+      if (step === "train") {
+        if (state.selected) {
+          state.view = "recipe";
+          setActive("tasks");
+          renderRecipe();
+          flashMain();
+        } else {
+          switchView("tasks");
+        }
+        return;
+      }
+      if (step === "video") {
+        if (state.run) {
+          state.view = "run";
+          setActive("runs");
+          paintRun(state.run, "");
+          flashMain();
+        } else {
+          switchView("runs");
+        }
+      }
+    };
+    el.addEventListener("click", go);
+    el.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        go();
+      }
+    });
+  });
+}
+
+function flashMain() {
+  main.classList.remove("enter");
+  void main.offsetWidth;
+  main.classList.add("enter");
+}
+
+function statusLegendHTML() {
+  // Keep contract wording for blocked color in Runs copy/tests.
+  return `<ul class="status-legend" aria-label="Status colors">
+    <li><span class="status-dot passed" aria-hidden="true"></span> worked</li>
+    <li><span class="status-dot completed" aria-hidden="true"></span> finished — did not pass</li>
+    <li><span class="status-dot failed" aria-hidden="true"></span> broke</li>
+    <li><span class="status-dot blocked" aria-hidden="true"></span> blue-gray cannot train here</li>
+  </ul>`;
 }
 
 function recipesForRobot() {
@@ -159,7 +227,9 @@ function renderRobots() {
         ? `<button class="ghost" disabled title="No recipe for this robot yet.">Catalog only</button>`
         : `<button class="primary" data-robot="${escapeHtml(robot.id)}">Use this robot</button>`;
       return `
-      <article class="card robot-card ${selected ? "selected" : ""}">
+      <article class="card robot-card ${selected ? "selected" : ""} ${catalogOnly ? "" : "card-open"}" ${
+        catalogOnly ? "" : `data-robot-card="${escapeHtml(robot.id)}" tabindex="0"`
+      }>
         <h2>${escapeHtml(robot.name)}</h2>
         <p class="meta">${escapeHtml(robot.kind)} · ${robot.dofs} joints${
           catalogOnly ? " · catalog only" : ""
@@ -171,18 +241,36 @@ function renderRobots() {
     .join("");
   main.innerHTML = `
     ${stepsHTML("task")}
+    <p class="eyebrow">Room 1 of 4</p>
     <h1>Robots</h1>
     <p class="lede">${escapeHtml(robotsLede())}</p>
     <div class="grid">${cards}</div>
   `;
+  const pick = (id) => {
+    const robot = state.robots.find((r) => r.id === id) || null;
+    if (robot && robot.catalog_only) return;
+    state.robot = robot;
+    switchView("tasks");
+  };
   main.querySelectorAll("[data-robot]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const robot = state.robots.find((r) => r.id === btn.dataset.robot) || null;
-      if (robot && robot.catalog_only) return;
-      state.robot = robot;
-      switchView("tasks");
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      pick(btn.dataset.robot);
     });
   });
+  main.querySelectorAll("[data-robot-card]").forEach((card) => {
+    card.addEventListener("click", (ev) => {
+      if (ev.target.closest("button")) return;
+      pick(card.dataset.robotCard);
+    });
+    card.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        pick(card.dataset.robotCard);
+      }
+    });
+  });
+  bindStepNav();
 }
 
 function renderRecipes() {
@@ -192,7 +280,7 @@ function renderRecipes() {
   const readyCards = ready
     .map(
       (r) => `
-      <article class="card hero-card">
+      <article class="card hero-card card-open" data-open="${escapeHtml(r.id)}" tabindex="0">
         ${pill(r)}
         <h2>${escapeHtml(r.title)}</h2>
         <p>${escapeHtml(r.promise || r.summary)}</p>
@@ -205,7 +293,7 @@ function renderRecipes() {
   const laterCards = later
     .map(
       (r) => `
-      <article class="card">
+      <article class="card card-open" data-open="${escapeHtml(r.id)}" tabindex="0">
         ${pill(r)}
         <h2>${escapeHtml(r.title)}</h2>
         <p>${escapeHtml(r.blocked_hint || r.promise || r.summary)}</p>
@@ -222,8 +310,9 @@ function renderRecipes() {
     : "";
   const emptyReady =
     !readyCards && state.robot && state.robot.catalog_only
-      ? `<p class="lede">No recipes for ${escapeHtml(state.robot.name)}. Use Unitree G1 or CartPole.</p>`
-      : readyCards || `<p class="lede">No recipes for this robot yet.</p>`;
+      ? `<div class="empty-state"><p>No recipes for ${escapeHtml(state.robot.name)}. Use Unitree G1 or CartPole.</p>
+         <div class="actions"><button class="primary" id="goto-robots">Choose a robot</button></div></div>`
+      : readyCards || `<div class="empty-state"><p>No recipes for this robot yet.</p></div>`;
   const skipLine = later.length
     ? ` ${englishList(later.map((r) => r.title))} ${
         later.length === 1 ? "is" : "are"
@@ -233,11 +322,13 @@ function renderRecipes() {
     : "";
   main.innerHTML = `
     ${stepsHTML("task")}
+    <p class="eyebrow">Start here</p>
     <h1>What should the robot do?</h1>
     <p class="lede" id="start-here">
-      Start here: click a task, then Train. You should get a video. That is the whole product today.
+      Click a task, then Train — you should get a video. That is the whole loop.
       ${filter}${skipLine}
     </p>
+    ${readyCards ? `<p class="eyebrow">Ready on this computer</p>` : ""}
     <div class="grid">${emptyReady}</div>
     ${
       laterCards
@@ -247,9 +338,23 @@ function renderRecipes() {
         : ""
     }
   `;
-  main.querySelectorAll("[data-open]").forEach((btn) => {
-    btn.addEventListener("click", () => openRecipe(btn.dataset.open));
+  const open = (id) => openRecipe(id);
+  main.querySelectorAll("[data-open]").forEach((el) => {
+    el.addEventListener("click", (ev) => {
+      if (el.tagName === "ARTICLE" && ev.target.closest("button")) return;
+      open(el.dataset.open);
+    });
+    if (el.tagName === "ARTICLE") {
+      el.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          open(el.dataset.open);
+        }
+      });
+    }
   });
+  document.getElementById("goto-robots")?.addEventListener("click", () => switchView("robots"));
+  bindStepNav();
 }
 
 async function openRecipe(id) {
@@ -272,6 +377,7 @@ async function openRecipe(id) {
   state.view = "recipe";
   setActive("tasks");
   renderRecipe();
+  flashMain();
 }
 
 function clearDemoSession() {
@@ -450,7 +556,7 @@ function renderRecipe() {
   const canLaunch = Boolean(r.launch_here);
   const trainLabel = canLaunch ? "Train" : "Compile (will stop — needs GPU)";
   const hintText = r.train_hint || r.promise || r.summary || "";
-  const trainHint = hintText ? `<p class="lede">${escapeHtml(hintText)}</p>` : "";
+  const trainHint = hintText ? `<p class="hint-callout">${escapeHtml(hintText)}</p>` : "";
   const nTakes = state.pendingTrajectories.length;
   const boundHint = boundDemoHint(r);
   const saveBtn = nTakes
@@ -468,15 +574,16 @@ function renderRecipe() {
     : "";
   main.innerHTML = `
     ${stepsHTML("train", { imitate: Boolean(r.imitate) })}
+    <p class="eyebrow">${r.imitate ? "Step 3 · Train" : "Step 2 · Train"}</p>
     <h1>${escapeHtml(r.title)}</h1>
     <p class="lede">${escapeHtml(r.language || r.summary || "")}</p>
     <div class="detail">
-      <section>
-        <p>${pill(r)}</p>
+      <section class="panel">
+        <div class="panel-head">${pill(r)}</div>
         <div class="actions recipe-bar">
           <button class="primary" id="train">${trainLabel}</button>
           ${r.imitate ? `<button class="ghost" id="goto-data">Data</button>` : ""}
-          <button class="ghost" id="back">Back</button>
+          <button class="ghost" id="back">Back to tasks</button>
         </div>
         <p class="status" id="train-status"></p>
         <p class="error" id="train-error"></p>
@@ -528,6 +635,7 @@ function renderRecipe() {
   bindTeleopKeys();
   if (state.recording) startTeleopLoop();
   else stopTeleopLoop();
+  bindStepNav();
 }
 
 async function applySpecEditor() {
@@ -1044,18 +1152,19 @@ function renderData() {
       : "This room is for demonstration data. Open an imitation task, record takes, uncheck the bad ones, then Train.";
   main.innerHTML = `
     ${stepsHTML("data", { imitate: true })}
+    <p class="eyebrow">Step 2 · Data</p>
     <h1>Data</h1>
     <p class="lede">
       ${escapeHtml(dataLede)}
     </p>
-    <section>
+    <section class="panel">
       <h2>On this job</h2>
       ${datasetList}
       ${recordActions}
       <p class="status" id="record-status"></p>
       <p class="error" id="record-error"></p>
     </section>
-    <section style="margin-top:24px">
+    <section class="panel section-gap">
       <h2>Inspect local dataset</h2>
       <p class="lede">Path to a directory that contains <code>meta/info.json</code>.</p>
       <div class="actions">
@@ -1090,6 +1199,7 @@ function renderData() {
       refreshKeepSummary();
     });
   });
+  bindStepNav();
 }
 
 function refreshKeepSummary() {
@@ -1413,14 +1523,23 @@ function renderRuns() {
     })
     .join("");
   main.innerHTML = `
+    <p class="eyebrow">Results</p>
     <h1>Runs</h1>
-    <p class="lede">Click a run to watch the video. Check two of the same task to compare side by side. Green means success; orange finished but did not pass; red broke; blue-gray cannot train here.</p>
+    <p class="lede">Click a run to watch the video. Check two of the same task to compare side by side.</p>
+    ${statusLegendHTML()}
     <div class="actions recipe-bar runs-compare-bar">
       <button class="primary" id="compare-runs" ${sel.ok ? "" : "disabled"}>Compare</button>
       <span class="meta" id="compare-hint">${escapeHtml(compareHint)}</span>
     </div>
-    <ul class="runs">${rows || `<li class='lede'>No runs yet. Open ${escapeHtml(firstReadyRecipe()?.title || "a task")} from Tasks and click Train.</li>`}</ul>
+    <ul class="runs">${
+      rows ||
+      `<li class="empty-state"><p>No runs yet. Open ${escapeHtml(
+        firstReadyRecipe()?.title || "a task"
+      )} from Tasks and click Train.</p>
+      <div class="actions"><button class="primary" id="empty-goto-tasks">Go to Tasks</button></div></li>`
+    }</ul>
   `;
+  document.getElementById("empty-goto-tasks")?.addEventListener("click", () => switchView("tasks"));
   main.querySelectorAll("[data-run]").forEach((el) => {
     el.addEventListener("click", (ev) => {
       if (ev.target.closest("[data-compare-toggle]")) return;
@@ -1548,6 +1667,7 @@ function paintRun(run, logText) {
     : `<p class="lede">${emptyVideo}</p>`;
   main.innerHTML = `
     ${stepsHTML("video", { imitate: imitateRun })}
+    <p class="eyebrow">Step ${imitateRun ? "4" : "3"} · Video</p>
     <h1>${escapeHtml(prettyRecipe(run.recipe))}</h1>
     <p class="status ${statusClass}">${escapeHtml(headline)}</p>
     ${metrics}
@@ -1563,7 +1683,7 @@ function paintRun(run, logText) {
     <div class="lede" id="deploy-preflight">Checking hardware gate…</div>
     <p class="error" id="deploy-status" hidden></p>
     <div class="detail">
-      <section>
+      <section class="panel">
         <h2>Did it work?</h2>
         ${backendBadge(facts)}
         ${video}
@@ -1583,6 +1703,7 @@ function paintRun(run, logText) {
   document.getElementById("back-tasks")?.addEventListener("click", () => switchView("tasks"));
   document.getElementById("deploy-run")?.addEventListener("click", () => attemptDeploy(run.run_id));
   loadDeployPreflight(run);
+  bindStepNav();
 }
 
 async function loadDeployPreflight(run) {
@@ -1763,7 +1884,10 @@ function stopPoll() {
 
 function setActive(view) {
   document.querySelectorAll(".rail-btn").forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.view === view);
+    const on = btn.dataset.view === view;
+    btn.classList.toggle("active", on);
+    if (on) btn.setAttribute("aria-current", "page");
+    else btn.removeAttribute("aria-current");
   });
 }
 
@@ -1781,6 +1905,7 @@ async function switchView(view) {
     state.runs = (await api("/api/runs")).runs;
     renderRuns();
   }
+  flashMain();
 }
 
 document.querySelectorAll(".rail-btn").forEach((btn) => {
