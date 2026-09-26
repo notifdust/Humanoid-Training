@@ -84,15 +84,30 @@ function pill(recipe) {
   return `<span class="pill blocked">later</span>`;
 }
 
-function stepsHTML(active) {
-  const items = [
-    ["task", "1. Task"],
-    ["train", "2. Train"],
-    ["video", "3. Video"],
-  ];
-  const map = { robots: "task", task: "task", scene: "task", train: "train", video: "video" };
+function stepsHTML(active, opts) {
+  const imitate = Boolean(opts && opts.imitate);
+  const items = imitate
+    ? [
+        ["task", "1. Task"],
+        ["data", "2. Data"],
+        ["train", "3. Train"],
+        ["video", "4. Video"],
+      ]
+    : [
+        ["task", "1. Task"],
+        ["train", "2. Train"],
+        ["video", "3. Video"],
+      ];
+  const map = {
+    robots: "task",
+    task: "task",
+    scene: "task",
+    data: "data",
+    train: "train",
+    video: "video",
+  };
   const now = map[active] || active;
-  return `<ol class="steps">${items
+  return `<ol class="steps" aria-label="Progress">${items
     .map(
       ([id, label]) =>
         `<li class="${id === now ? "active" : ""}">${escapeHtml(label)}</li>`
@@ -452,7 +467,7 @@ function renderRecipe() {
         <p class="error" id="demo-error"></p>`
     : "";
   main.innerHTML = `
-    ${stepsHTML("train")}
+    ${stepsHTML("train", { imitate: Boolean(r.imitate) })}
     <h1>${escapeHtml(r.title)}</h1>
     <p class="lede">${escapeHtml(r.language || r.summary || "")}</p>
     <div class="detail">
@@ -460,6 +475,7 @@ function renderRecipe() {
         <p>${pill(r)}</p>
         <div class="actions recipe-bar">
           <button class="primary" id="train">${trainLabel}</button>
+          ${r.imitate ? `<button class="ghost" id="goto-data">Data</button>` : ""}
           <button class="ghost" id="back">Back</button>
         </div>
         <p class="status" id="train-status"></p>
@@ -489,6 +505,7 @@ function renderRecipe() {
   `;
   document.getElementById("train").addEventListener("click", trainCurrent);
   document.getElementById("back").addEventListener("click", () => switchView("tasks"));
+  document.getElementById("goto-data")?.addEventListener("click", () => switchView("data"));
   document.getElementById("apply-spec").addEventListener("click", applySpecEditor);
   document.getElementById("toggle-record")?.addEventListener("click", () => {
     if (state.recording) {
@@ -645,9 +662,14 @@ function clampTablePoint(pt) {
   };
 }
 
-function mustardObject() {
+function recordTargetObject() {
   const id = recordTargetId();
   return (state.starter?.scene?.objects || []).find((item) => item.id === id) || null;
+}
+
+/** @deprecated use recordTargetObject */
+function mustardObject() {
+  return recordTargetObject();
 }
 
 function movementCodesHeld() {
@@ -659,7 +681,7 @@ function movementCodesHeld() {
 
 function stepTeleop(delta) {
   if (state.teleopNeedRelease) return;
-  const obj = mustardObject();
+  const obj = recordTargetObject();
   if (!obj) return;
   if (!state.teleopPath) {
     state.teleopOrigin = { x: Number(obj.x) || 0, y: Number(obj.y) || 0 };
@@ -685,7 +707,7 @@ function finishTeleopTake(opts) {
     state.pendingTrajectories.push(path);
     state.lastDemoMessage = pendingTakeMessage();
   }
-  const obj = mustardObject();
+  const obj = recordTargetObject();
   if (obj && state.teleopOrigin) {
     obj.x = state.teleopOrigin.x;
     obj.y = state.teleopOrigin.y;
@@ -699,7 +721,7 @@ function finishTeleopTake(opts) {
 }
 
 function cancelTeleopTake() {
-  const obj = mustardObject();
+  const obj = recordTargetObject();
   if (obj && state.teleopOrigin) {
     obj.x = state.teleopOrigin.x;
     obj.y = state.teleopOrigin.y;
@@ -1021,6 +1043,7 @@ function renderData() {
       ? state.selected.record_hint
       : "This room is for demonstration data. Open an imitation task, record takes, uncheck the bad ones, then Train.";
   main.innerHTML = `
+    ${stepsHTML("data", { imitate: true })}
     <h1>Data</h1>
     <p class="lede">
       ${escapeHtml(dataLede)}
@@ -1296,12 +1319,7 @@ function factsListHTML(facts) {
 
 function paintCompareColumn(run) {
   const facts = runFacts(run);
-  const statusClass =
-    run.status === "passed" || (run.metrics && run.metrics.passed === true)
-      ? "passed"
-      : run.status === "completed"
-        ? "completed"
-        : run.status || "";
+  const statusClass = runStatusClass(run);
   const video =
     run.artifacts && run.artifacts["eval.mp4"]
       ? `<video controls muted src="${runArtifactUrl(run.run_id, "eval.mp4")}"></video>`
@@ -1369,13 +1387,7 @@ function renderRuns() {
   })();
   const rows = state.runs
     .map((run) => {
-      const passed = run.metrics && run.metrics.passed === true;
-      const statusClass =
-        run.status === "passed" || passed
-          ? "passed"
-          : run.status === "completed"
-            ? "completed"
-            : run.status || "";
+      const statusClass = runStatusClass(run);
       const hint = runDemoHint(run);
       const failedHint =
         !hint &&
@@ -1402,7 +1414,7 @@ function renderRuns() {
     .join("");
   main.innerHTML = `
     <h1>Runs</h1>
-    <p class="lede">Click a run to watch the video. Check two of the same task to compare side by side. Green means the task succeeded. Orange means it finished but failed, or it cannot train on this computer.</p>
+    <p class="lede">Click a run to watch the video. Check two of the same task to compare side by side. Green means success; orange finished but did not pass; red broke; blue-gray cannot train here.</p>
     <div class="actions recipe-bar runs-compare-bar">
       <button class="primary" id="compare-runs" ${sel.ok ? "" : "disabled"}>Compare</button>
       <span class="meta" id="compare-hint">${escapeHtml(compareHint)}</span>
@@ -1436,6 +1448,17 @@ function englishRunStatus(run) {
   if (run.status === "blocked") return "can't train here";
   if (run.status === "failed") return "broke";
   if (run.status === "completed") return "finished — did not pass";
+  return run.status || "";
+}
+
+function runStatusClass(run) {
+  if (run.status === "passed" || (run.metrics && run.metrics.passed === true)) {
+    return "passed";
+  }
+  if (run.status === "completed") return "completed";
+  if (run.status === "blocked") return "blocked";
+  if (run.status === "failed") return "failed";
+  if (run.status === "queued" || run.status === "running") return run.status;
   return run.status || "";
 }
 
@@ -1488,15 +1511,6 @@ function applyDeployButton(run, preflight) {
 
 function paintRun(run, logText) {
   const facts = runFacts(run);
-  const video = run.artifacts && run.artifacts["eval.mp4"]
-    ? `<video controls autoplay muted src="${runArtifactUrl(run.run_id, "eval.mp4")}?t=${Date.now()}"></video>`
-    : `<p class="lede">${
-        run.status === "blocked"
-          ? "No video — this task cannot train on this computer."
-          : ["queued", "running"].includes(run.status)
-            ? "Video appears when training finishes."
-            : "No eval video. On a machine without a display, Train still scores success but skips the clip. Set HT_NO_RENDER=0 (and use a display or xvfb) for eval.mp4."
-      }</p>`;
   const scene = run.artifacts && run.artifacts["composed_scene.xml"]
     ? `<p class="lede"><a href="${runArtifactUrl(run.run_id, "composed_scene.xml")}">Scene file</a> — open in MuJoCo if you want.</p>`
     : "";
@@ -1505,12 +1519,7 @@ function paintRun(run, logText) {
   const metrics = hasMetrics
     ? `<p class="meta">score ${fmt(run.metrics.success_rate)} · passed=${run.metrics.passed ?? "—"}</p>`
     : "";
-  const statusClass =
-    run.status === "passed" || (run.metrics && run.metrics.passed === true)
-      ? "passed"
-      : run.status === "completed"
-        ? "completed"
-        : run.status || "";
+  const statusClass = runStatusClass(run);
   const simOnly =
     isSimOnly(facts)
       ? `<p class="meta" id="sim-only-badge">sim-only — not cleared for hardware</p>`
@@ -1525,8 +1534,20 @@ function paintRun(run, logText) {
         }${laterTitles.length ? ` ${escapeHtml(englishList(laterTitles))} need a GPU box.` : ""}</p>`
       : "";
   const deployBtn = deployButtonState(run, null);
+  const imitateRun = Boolean(recipeById(run.recipe)?.imitate);
+  const emptyVideo =
+    run.status === "blocked"
+      ? "No video — this task cannot train on this computer."
+      : ["queued", "running"].includes(run.status)
+        ? "Video appears when training finishes."
+        : hasMetrics && (run.metrics.passed === true || run.status === "passed")
+          ? "No eval.mp4 — training scored success but rendering was skipped (headless / HT_NO_RENDER). Use a display or xvfb for a clip."
+          : "No eval video. On a machine without a display, Train may still score success but skip the clip.";
+  const video = run.artifacts && run.artifacts["eval.mp4"]
+    ? `<video controls autoplay muted src="${runArtifactUrl(run.run_id, "eval.mp4")}?t=${Date.now()}"></video>`
+    : `<p class="lede">${emptyVideo}</p>`;
   main.innerHTML = `
-    ${stepsHTML("video")}
+    ${stepsHTML("video", { imitate: imitateRun })}
     <h1>${escapeHtml(prettyRecipe(run.recipe))}</h1>
     <p class="status ${statusClass}">${escapeHtml(headline)}</p>
     ${metrics}

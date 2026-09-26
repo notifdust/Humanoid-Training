@@ -326,6 +326,13 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "escapeHtml(englishRunStatus(run))" in js
     assert "sim-only — not cleared for hardware" in js
     assert "Why this stays sim-only" in js
+    assert "function stepsHTML" in js
+    assert '["data", "2. Data"]' in js or '"2. Data"' in js
+    assert "function runStatusClass" in js
+    assert "function recordTargetObject" in js
+    assert "HT_NO_RENDER" in js
+    assert "id=\"goto-data\"" in js
+    assert "blue-gray cannot train here" in js
 
 
 def test_studio_js_bc_freshness_contract() -> None:
@@ -352,6 +359,32 @@ def test_studio_css_disabled_cursor() -> None:
     assert ".compare-grid" in css
     assert ".facts-list" in css
     assert ".run-check" in css
+    assert "--blocked:" in css
+    assert ".status.blocked" in css
+    assert ".status.failed" in css
+    assert ".start-here" not in css
+    assert "rail-btn:focus-visible" in css
+
+
+def test_menagerie_offline_error_names_source(monkeypatch, tmp_path: Path) -> None:
+    from humanoid_training.assets import ensure_menagerie_robot
+    from humanoid_training.errors import AdapterUnavailable
+    import subprocess
+    from unittest.mock import patch
+
+    monkeypatch.setenv("HT_CACHE", str(tmp_path))
+    with patch("humanoid_training.assets.subprocess.run") as run:
+        run.side_effect = subprocess.CalledProcessError(
+            128, ["git", "clone"], stderr="Could not resolve host"
+        )
+        try:
+            ensure_menagerie_robot("unitree_g1")
+            raise AssertionError("expected AdapterUnavailable")
+        except AdapterUnavailable as err:
+            msg = str(err)
+            assert "Menagerie" in msg
+            assert "30MB" in msg or "~30MB" in msg
+            assert "network" in msg.lower() or "git" in msg.lower()
 
 
 def test_studio_has_four_rooms_not_five() -> None:
