@@ -43,4 +43,4 @@ studio:
   availability: cpu
   start_here: true
   promise: The humanoid holds still and waves. Not walking.
-  train_hint: You will see the G1 stand and wave. It is holding a pose, not learning to walk or balance.
+  train_hint: First train may download ~30MB from MuJoCo Menagerie. You will see the G1 stand and wave — holding a pose, not learning to walk.

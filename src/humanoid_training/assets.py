@@ -69,7 +69,10 @@ def ensure_menagerie_robot(name: str, log=None) -> Path:
         marker.write_text("ok\n", encoding="utf-8")
     except subprocess.CalledProcessError as err:
         raise AdapterUnavailable(
-            "Could not download MuJoCo Menagerie assets. Need git and network.\n"
+            "Could not download MuJoCo Menagerie robot assets "
+            "(~30MB first fetch for Unitree G1). "
+            "Need git and network access to "
+            "github.com/google-deepmind/mujoco_menagerie.\n"
             f"{err.stderr or err.stdout}"
         ) from err
     return dest
