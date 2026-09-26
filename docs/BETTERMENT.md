@@ -12,8 +12,8 @@ B0  stop silent wrong trains          ← done
 B1  one train at a time + health strip ← done
 B2  copy / docs match the four rooms  ← done
 B3  Deploy + Robots honesty           ← done
-B4  status, Data, first-run friction  ← next
-B5  interaction tests + small cleanup
+B4  status, Data, first-run friction  ← done
+B5  interaction tests + small cleanup ← next
 ```
 
 Each track has an **exit test**. If the test fails, the track is not
@@ -156,7 +156,7 @@ Primary paths: `studio/app.js` (`deployButtonState`, `loadDeployPreflight`,
 
 ---
 
-## B4 — Status color, Data in the loop, first-run friction (next)
+## B4 — Status color, Data in the loop, first-run friction (done)
 
 **Problem.** Blocked (“can't train here”) and failed (“finished — did not
 pass”) share orange. The Task → Train → Video steps ignore Data, so demos
@@ -175,10 +175,10 @@ headless success without `eval.mp4` still surprises people.
 
 | Deliverable | Status |
 |---|---|
-| Distinct blocked vs failed styling | **not done** |
-| Data visible in steps for imitate recipes | **not done** |
-| Menagerie first-run copy + clearer offline error | **not done** |
-| Honest empty-video copy when render skipped | **not done** |
+| Distinct blocked vs failed styling | done (`--blocked` vs `--bad` / `--warn`) |
+| Data visible in steps for imitate recipes | done (`stepsHTML` + Data button) |
+| Menagerie first-run copy + clearer offline error | done (`train_hint` + `assets.py`) |
+| Honest empty-video copy when render skipped | done (`HT_NO_RENDER` copy) |
 
 Primary paths: `studio/app.js`, `studio/styles.css`,
 `src/humanoid_training/assets.py` (error text), recipe `train_hint`s.
@@ -204,7 +204,7 @@ the code look unfinished.
 | Deliverable | Status |
 |---|---|
 | Interaction tests for Save/Train, compare, deploy preflight | **not done** |
-| Rename mustard helpers; remove dead CSS | **not done** |
+| Rename mustard helpers; remove dead CSS | partial (`recordTargetObject` + dead CSS gone; alias kept) |
 | CONTRIBUTING or README troubleshooting section | **not done** |
 
 Primary paths: `tests/`, `studio/app.js`, `studio/styles.css`, `README.md`.
