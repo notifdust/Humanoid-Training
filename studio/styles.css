@@ -10,6 +10,7 @@
   --warn: #ffb45a;
   --bad: #ff6b6b;
   --ok: #7dffb3;
+  --blocked: #8eb4c9;
   --font: "IBM Plex Sans", sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, monospace;
 }
@@ -95,6 +96,7 @@ body {
   appearance: none;
   background: transparent;
   border: 0;
+  border-left: 2px solid transparent;
   color: var(--muted);
   text-align: left;
   padding: 10px 12px;
@@ -106,6 +108,18 @@ body {
 .rail-btn:hover {
   background: var(--bg-3);
   color: var(--ink);
+}
+
+.rail-btn.active {
+  border-left-color: var(--accent);
+  color: var(--ink);
+}
+
+.rail-btn:focus-visible,
+button.primary:focus-visible,
+button.ghost:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 #main {
@@ -171,7 +185,7 @@ h1 {
 }
 
 .pill.blocked {
-  color: var(--warn);
+  color: var(--blocked);
 }
 
 .card p {
@@ -247,10 +261,13 @@ pre,
   color: var(--warn);
 }
 
-.status.blocked,
+.status.blocked {
+  color: var(--blocked);
+}
+
 .status.queued,
 .status.running {
-  color: var(--warn);
+  color: var(--accent);
 }
 
 .status.failed {
@@ -426,26 +443,6 @@ video.gold {
   cursor: grabbing;
   background: var(--accent);
   color: var(--accent-ink);
-}
-
-.start-here {
-  background: var(--bg-2);
-  border: 1px solid var(--line);
-  padding: 14px 16px;
-  margin: 0 0 22px;
-}
-
-.start-here p {
-  margin: 0 0 10px;
-  color: var(--muted);
-}
-
-.start-here .actions {
-  align-items: center;
-}
-
-.start-here .meta {
-  margin-right: 12px;
 }
 
 .recipe-bar {
