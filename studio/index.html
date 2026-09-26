@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/styles.css" />
@@ -27,20 +27,32 @@
       <div class="shell">
         <nav class="rail" aria-label="Studio rooms">
           <button class="rail-btn" data-view="robots" type="button">
-            <span class="rail-label">Robots</span>
-            <span class="rail-hint">Who trains</span>
+            <span class="rail-num" aria-hidden="true">1</span>
+            <span class="rail-text">
+              <span class="rail-label">Robots</span>
+              <span class="rail-hint">Who trains</span>
+            </span>
           </button>
           <button class="rail-btn active" data-view="tasks" type="button" aria-current="page">
-            <span class="rail-label">Tasks</span>
-            <span class="rail-hint">Start here</span>
+            <span class="rail-num" aria-hidden="true">2</span>
+            <span class="rail-text">
+              <span class="rail-label">Tasks</span>
+              <span class="rail-hint">Start here</span>
+            </span>
           </button>
           <button class="rail-btn" data-view="data" type="button">
-            <span class="rail-label">Data</span>
-            <span class="rail-hint">Demos</span>
+            <span class="rail-num" aria-hidden="true">3</span>
+            <span class="rail-text">
+              <span class="rail-label">Data</span>
+              <span class="rail-hint">Demos</span>
+            </span>
           </button>
           <button class="rail-btn" data-view="runs" type="button">
-            <span class="rail-label">Runs</span>
-            <span class="rail-hint">Watch results</span>
+            <span class="rail-num" aria-hidden="true">4</span>
+            <span class="rail-text">
+              <span class="rail-label">Runs</span>
+              <span class="rail-hint">Watch results</span>
+            </span>
           </button>
         </nav>
         <main id="main"></main>

@@ -183,6 +183,10 @@ function statusLegendHTML() {
   </ul>`;
 }
 
+function nextCueHTML(text) {
+  return `<p class="next-cue" role="status"><span class="next-cue-label">Next</span> ${escapeHtml(text)}</p>`;
+}
+
 function recipesForRobot() {
   if (!state.robot) return state.recipes;
   // Catalog-only robots (e.g. H1) must not inherit G1/Cartpole start_here cards.
@@ -241,8 +245,9 @@ function renderRobots() {
     .join("");
   main.innerHTML = `
     ${stepsHTML("task")}
-    <p class="eyebrow">Room 1 of 4</p>
+    <p class="eyebrow">Optional</p>
     <h1>Robots</h1>
+    ${nextCueHTML("Pick a robot, then choose a task.")}
     <p class="lede">${escapeHtml(robotsLede())}</p>
     <div class="grid">${cards}</div>
   `;
@@ -277,28 +282,31 @@ function renderRecipes() {
   const list = recipesForRobot();
   const ready = readyRecipes(list);
   const later = laterRecipes(list);
+  const firstId = firstReadyRecipe()?.id;
   const readyCards = ready
-    .map(
-      (r) => `
-      <article class="card hero-card card-open" data-open="${escapeHtml(r.id)}" tabindex="0">
+    .map((r) => {
+      const tryFirst = r.id === firstId;
+      return `
+      <article class="card hero-card card-open${tryFirst ? " try-first" : ""}" data-open="${escapeHtml(r.id)}" tabindex="0">
+        ${tryFirst ? `<span class="card-kicker">Try this first</span>` : ""}
         ${pill(r)}
         <h2>${escapeHtml(r.title)}</h2>
         <p>${escapeHtml(r.promise || r.summary)}</p>
         <div class="actions">
-          <button class="primary" data-open="${escapeHtml(r.id)}">Open and train</button>
+          <button class="primary" data-open="${escapeHtml(r.id)}">Train →</button>
         </div>
-      </article>`
-    )
+      </article>`;
+    })
     .join("");
   const laterCards = later
     .map(
       (r) => `
-      <article class="card card-open" data-open="${escapeHtml(r.id)}" tabindex="0">
+      <article class="card card-muted card-open" data-open="${escapeHtml(r.id)}" tabindex="0">
         ${pill(r)}
         <h2>${escapeHtml(r.title)}</h2>
         <p>${escapeHtml(r.blocked_hint || r.promise || r.summary)}</p>
         <div class="actions">
-          <button class="ghost" data-open="${escapeHtml(r.id)}">See why it is blocked</button>
+          <button class="ghost" data-open="${escapeHtml(r.id)}">Why blocked?</button>
         </div>
       </article>`
     )
@@ -313,28 +321,23 @@ function renderRecipes() {
       ? `<div class="empty-state"><p>No recipes for ${escapeHtml(state.robot.name)}. Use Unitree G1 or CartPole.</p>
          <div class="actions"><button class="primary" id="goto-robots">Choose a robot</button></div></div>`
       : readyCards || `<div class="empty-state"><p>No recipes for this robot yet.</p></div>`;
-  const skipLine = later.length
-    ? ` ${englishList(later.map((r) => r.title))} ${
-        later.length === 1 ? "is" : "are"
-      } listed below so ${later.length === 1 ? "it does" : "they do"} not look like silent failures — skip ${
-        later.length === 1 ? "it" : "them"
-      } on this computer.`
-    : "";
   main.innerHTML = `
     ${stepsHTML("task")}
     <p class="eyebrow">Start here</p>
     <h1>What should the robot do?</h1>
+    ${nextCueHTML("Pick a ready task, then click Train.")}
     <p class="lede" id="start-here">
-      Click a task, then Train — you should get a video. That is the whole loop.
-      ${filter}${skipLine}
+      One loop: task → Train → video.${filter}
     </p>
     ${readyCards ? `<p class="eyebrow">Ready on this computer</p>` : ""}
     <div class="grid">${emptyReady}</div>
     ${
       laterCards
-        ? `<h2 class="later-head">Needs a GPU (skip)</h2>
-           <p class="lede">These compile a job for another machine. Train will stop with a next step, not a fake success clip.</p>
-           <div class="grid">${laterCards}</div>`
+        ? `<details class="later-fold">
+             <summary>Needs a GPU — skip for now (${later.length})</summary>
+             <p class="lede">These compile a job for another machine. Train will stop with a next step, not a fake success clip.</p>
+             <div class="grid">${laterCards}</div>
+           </details>`
         : ""
     }
   `;
@@ -572,25 +575,34 @@ function renderRecipe() {
         <p class="status" id="demo-status">${escapeHtml(state.lastDemoMessage || pendingTakeMessage())}</p>
         <p class="error" id="demo-error"></p>`
     : "";
+  const cue = canLaunch
+    ? r.imitate && nTakes
+      ? "Save demos if you want them, then click Train."
+      : "Click Train — watch the result in Runs."
+    : "Compile only — this task needs a GPU box.";
   main.innerHTML = `
     ${stepsHTML("train", { imitate: Boolean(r.imitate) })}
     <p class="eyebrow">${r.imitate ? "Step 3 · Train" : "Step 2 · Train"}</p>
     <h1>${escapeHtml(r.title)}</h1>
     <p class="lede">${escapeHtml(r.language || r.summary || "")}</p>
+    ${nextCueHTML(cue)}
     <div class="detail">
       <section class="panel">
         <div class="panel-head">${pill(r)}</div>
-        <div class="actions recipe-bar">
-          <button class="primary" id="train">${trainLabel}</button>
-          ${r.imitate ? `<button class="ghost" id="goto-data">Data</button>` : ""}
+        <div class="actions recipe-bar train-actions">
+          <button class="primary train-cta" id="train">${trainLabel}</button>
+          ${r.imitate ? `<button class="ghost" id="goto-data">Edit demos</button>` : ""}
           <button class="ghost" id="back">Back to tasks</button>
         </div>
         <p class="status" id="train-status"></p>
         <p class="error" id="train-error"></p>
         ${trainHint}
         ${r.has_gold
-          ? `<video class="gold" controls muted playsinline src="/api/recipes/${encodeURIComponent(r.id)}/gold/eval.mp4"></video>
-             <p class="meta">Gold clip — what Train should look like on this computer.</p>`
+          ? `<div class="gold-block">
+               <p class="eyebrow">What success looks like</p>
+               <video class="gold" controls muted playsinline src="/api/recipes/${encodeURIComponent(r.id)}/gold/eval.mp4"></video>
+               <p class="meta">Gold clip — Train should look like this on this computer.</p>
+             </div>`
           : ""}
         ${boundHint}
         ${demoControls}
@@ -1150,10 +1162,14 @@ function renderData() {
     state.selected?.imitate && state.selected.record_hint
       ? state.selected.record_hint
       : "This room is for demonstration data. Open an imitation task, record takes, uncheck the bad ones, then Train.";
+  const dataCue = imitateOpen
+    ? "Record or inspect demos, then Train."
+    : "Open an imitation task to record demos — or Train a ready task from Tasks.";
   main.innerHTML = `
     ${stepsHTML("data", { imitate: true })}
     <p class="eyebrow">Step 2 · Data</p>
     <h1>Data</h1>
+    ${nextCueHTML(dataCue)}
     <p class="lede">
       ${escapeHtml(dataLede)}
     </p>
@@ -1507,6 +1523,7 @@ function renderRuns() {
           ? " · failed metrics"
           : "";
       const checked = (state.compareIds || []).includes(run.run_id) ? "checked" : "";
+      const hasVideo = Boolean(run.artifacts && run.artifacts["eval.mp4"]);
       return `
       <li>
         <div class="run-row" data-run="${escapeHtml(run.run_id)}">
@@ -1515,17 +1532,21 @@ function renderRuns() {
           </label>
           <div class="run-main">
             <strong>${escapeHtml(prettyRecipe(run.recipe))}</strong>
-            <div class="meta">${escapeHtml(run.run_id)}${run.artifacts && run.artifacts["eval.mp4"] ? " · eval.mp4" : ""}${escapeHtml(hint)}${escapeHtml(failedHint)}</div>
+            <div class="meta">${hasVideo ? "Has video · " : ""}${escapeHtml(run.run_id)}${escapeHtml(hint)}${escapeHtml(failedHint)}</div>
           </div>
-          <div class="status ${statusClass}">${escapeHtml(englishRunStatus(run))}</div>
+          <div class="status-chip ${statusClass}">${escapeHtml(englishRunStatus(run))}</div>
         </div>
       </li>`;
     })
     .join("");
+  const runsCue = state.runs.length
+    ? "Click a run to watch the video."
+    : `Train ${firstReadyRecipe()?.title || "a task"} to create your first run.`;
   main.innerHTML = `
     <p class="eyebrow">Results</p>
     <h1>Runs</h1>
-    <p class="lede">Click a run to watch the video. Check two of the same task to compare side by side.</p>
+    ${nextCueHTML(runsCue)}
+    <p class="lede">Check two of the same task to compare side by side.</p>
     ${statusLegendHTML()}
     <div class="actions recipe-bar runs-compare-bar">
       <button class="primary" id="compare-runs" ${sel.ok ? "" : "disabled"}>Compare</button>
@@ -1665,11 +1686,20 @@ function paintRun(run, logText) {
   const video = run.artifacts && run.artifacts["eval.mp4"]
     ? `<video controls autoplay muted src="${runArtifactUrl(run.run_id, "eval.mp4")}?t=${Date.now()}"></video>`
     : `<p class="lede">${emptyVideo}</p>`;
+  const videoCue =
+    run.status === "blocked"
+      ? "Pick a ready task from Tasks — this one cannot train here."
+      : ["queued", "running"].includes(run.status)
+        ? "Training… video appears when it finishes."
+        : run.artifacts && run.artifacts["eval.mp4"]
+          ? "Watch the clip below. Train again or pick another task."
+          : "No clip this time — Train again with a display, or try another task.";
   main.innerHTML = `
     ${stepsHTML("video", { imitate: imitateRun })}
     <p class="eyebrow">Step ${imitateRun ? "4" : "3"} · Video</p>
     <h1>${escapeHtml(prettyRecipe(run.recipe))}</h1>
-    <p class="status ${statusClass}">${escapeHtml(headline)}</p>
+    <p class="status-chip ${statusClass}">${escapeHtml(headline)}</p>
+    ${nextCueHTML(videoCue)}
     ${metrics}
     ${simOnly}
     ${run.error ? `<p class="error">${escapeHtml(plainError(run.error))}</p>` : ""}

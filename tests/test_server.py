@@ -328,8 +328,11 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "Why this stays sim-only" in js
     assert "function statusLegendHTML" in js
     assert "function bindStepNav" in js
+    assert "function nextCueHTML" in js
     assert "blue-gray cannot train here" in js
     assert "id=\"goto-data\"" in js
+    assert "Try this first" in js
+    assert "later-fold" in js
     assert "rail-hint" in (Path(__file__).resolve().parents[1] / "studio" / "index.html").read_text(
         encoding="utf-8"
     )
@@ -369,6 +372,13 @@ def test_studio_css_disabled_cursor() -> None:
     assert "main-in" in css
     assert ".hint-callout" in css
     assert ".empty-state" in css
+    assert "--accent:" in css
+    assert "Outfit" in css or "--font:" in css
+    assert "#0d8f7c" in css or "0d8f7c" in css
+    assert ".next-cue" in css
+    assert ".status-chip" in css
+    assert ".later-fold" in css
+    assert ".try-first" in css
 
 
 def test_menagerie_offline_error_names_source(monkeypatch, tmp_path: Path) -> None:
