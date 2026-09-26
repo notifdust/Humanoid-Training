@@ -369,6 +369,9 @@ def test_studio_css_disabled_cursor() -> None:
     assert "main-in" in css
     assert ".hint-callout" in css
     assert ".empty-state" in css
+    assert "--accent:" in css
+    assert "Outfit" in css or "--font:" in css
+    assert "#0d8f7c" in css or "0d8f7c" in css
 
 
 def test_menagerie_offline_error_names_source(monkeypatch, tmp_path: Path) -> None:
