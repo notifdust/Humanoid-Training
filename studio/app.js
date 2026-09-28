@@ -787,11 +787,6 @@ function recordTargetObject() {
   return (state.starter?.scene?.objects || []).find((item) => item.id === id) || null;
 }
 
-/** @deprecated use recordTargetObject */
-function mustardObject() {
-  return recordTargetObject();
-}
-
 function movementCodesHeld() {
   const keys = state.keys || new Set();
   return ["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].some((code) =>
@@ -1412,19 +1407,19 @@ function toggleCompareId(runId) {
 
 function compareSelection() {
   const ids = state.compareIds || [];
-  const byId = Object.fromEntries((state.runs || []).map((r) => [r.run_id, r]));
-  const runs = ids.map((id) => byId[id]).filter(Boolean);
-  if (ids.length !== 2 || runs.length !== 2) {
+  const runs = state.runs || [];
+  if (typeof HTGates !== "undefined" && HTGates.decideCompareSelection) {
+    return HTGates.decideCompareSelection(ids, runs);
+  }
+  const byId = Object.fromEntries(runs.map((r) => [r.run_id, r]));
+  const picked = ids.map((id) => byId[id]).filter(Boolean);
+  if (ids.length !== 2 || picked.length !== 2) {
     return { ok: false, reason: "Pick two runs to compare.", runs: [] };
   }
-  if (runs[0].recipe !== runs[1].recipe) {
-    return {
-      ok: false,
-      reason: "Pick two runs of the same task.",
-      runs,
-    };
+  if (picked[0].recipe !== picked[1].recipe) {
+    return { ok: false, reason: "Pick two runs of the same task.", runs: picked };
   }
-  return { ok: true, reason: "", runs, recipe: runs[0].recipe };
+  return { ok: true, reason: "", runs: picked, recipe: picked[0].recipe };
 }
 
 function factsListHTML(facts) {
@@ -1462,7 +1457,7 @@ function paintCompareColumn(run) {
     <section class="compare-col" data-compare-run="${escapeHtml(run.run_id)}">
       <h2>${escapeHtml(prettyRecipe(run.recipe))}</h2>
       <p class="meta">${escapeHtml(run.run_id)}</p>
-      <p class="status ${statusClass}">${escapeHtml(englishRunStatus(run))}</p>
+      <p class="status-chip ${statusClass}">${escapeHtml(englishRunStatus(run))}</p>
       ${metrics}
       ${simOnly}
       ${backendBadge(facts)}
@@ -1619,6 +1614,9 @@ function backendBadge(facts) {
 }
 
 function deployButtonState(run, preflight) {
+  if (typeof HTGates !== "undefined" && HTGates.decideDeployButton) {
+    return HTGates.decideDeployButton(run, preflight);
+  }
   if (["queued", "running"].includes(run.status)) {
     return { disabled: true, title: "Wait until training finishes." };
   }
