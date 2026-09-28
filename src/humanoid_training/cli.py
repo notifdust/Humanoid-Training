@@ -91,6 +91,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_proof.add_argument("--steps", type=int, default=None, help="Override train steps (default: short proof)")
     p_proof.add_argument("--out", type=Path, default=None, help="Runs directory")
+    p_proof.add_argument(
+        "--check",
+        action="store_true",
+        help="Only report whether this host can run the walk proof (no train)",
+    )
 
     p_deploy = sub.add_parser(
         "deploy",
@@ -120,7 +125,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "gold":
             return _cmd_gold(args.recipe, args.out)
         if args.cmd == "proof":
-            return _cmd_proof(args.what, args.prefer, args.steps, args.out)
+            return _cmd_proof(args.what, args.prefer, args.steps, args.out, args.check)
         if args.cmd == "deploy":
             return _cmd_deploy(args.run_id, args.out)
     except (SpecError, RecipeError, AdapterError, FileNotFoundError) as err:
@@ -245,12 +250,17 @@ def _cmd_proof(
     prefer: list[str] | None,
     steps: int | None,
     out: Path | None,
+    check: bool = False,
 ) -> int:
-    from humanoid_training.proof import PROOF_STEPS, run_walk_proof
+    from humanoid_training.proof import PROOF_STEPS, assess_walk_proof_host, run_walk_proof
 
     if what != "walk":
         print(f"Unknown proof target {what!r}. Use: ht proof walk", file=sys.stderr)
         return 2
+    if check:
+        report = assess_walk_proof_host(prefer=prefer)
+        print(json.dumps(report, indent=2, default=str))
+        return 0 if report.get("ok") else 12
     try:
         report = run_walk_proof(
             runs_dir=out or default_runs_dir(),

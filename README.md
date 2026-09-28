@@ -80,9 +80,10 @@ python -m humanoid_training.cli train spec/examples/g1-walk.json
 ```
 
 `ht proof walk` is the Phase 3c exit command: short train, require
-`eval.mp4`, stamp `facts.engine`. Without a GPU it exits 12 with the
-next step. With the OSMO CLI logged in (no local GPU), Train can still
-harvest a remote Isaac walk clip (Phase 3d).
+`eval.mp4`, stamp `facts.engine`, write `proof_3c.json`. Without a GPU
+it exits 12 with the next step. Check readiness only with
+`ht proof walk --check`. With the OSMO CLI logged in (no local GPU),
+Train can still harvest a remote Isaac walk clip (Phase 3d).
 
 `ht deploy <run_id>` is the Phase 4 gate: it always fails closed until a
 passed hardware eval profile exists and a Unitree driver ships. Every

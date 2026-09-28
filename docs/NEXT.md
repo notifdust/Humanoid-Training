@@ -102,21 +102,29 @@ Corrective action:        Resume ROADMAP Phase 3c → 3d → 3e → PickPlace �
 Do these in order. Do **not** invent engines, policies, formats, or
 orchestrators. Do **not** check in a fake walk clip.
 
-### N1 — Phase 3c: live GPU walk proof  ← **next**
+### N1 — Phase 3c: live GPU walk proof
 
-**Who:** operator with an NVIDIA GPU box (not this CPU CI agent alone).
+**N1a — operator harness (done on CPU).** Host preflight, durable report,
+studio projection — so a GPU operator has a clear path and evidence file.
 
-**Exit test.**
+| Work | Status |
+|---|---|
+| `assess_walk_proof_host` + `ht proof walk --check` | done |
+| `GET /api/proof/walk` | done |
+| Write `proof_3c.json` beside a proof run | done |
+| Studio G1 walk Train page shows Phase 3c readiness | done |
+| Still no fake walk success on CPU CI | held |
+
+**N1b — live clip (next; needs NVIDIA GPU).** ← **current focus**
 
 ```bash
 pip install playground   # or mjlab / Isaac Lab
+ht proof walk --check    # should report ok:true on the GPU box
 ht proof walk
-# optional: ht proof walk --prefer mjlab
-# optional: HT_ISAAC_CLI=… ht proof walk --prefer isaaclab
 ```
 
-Must produce a **walking** `eval.mp4`, stamp `facts.engine`, studio Plays
-it with a backend badge. Harness already exists; live clip does not.
+Must produce a **walking** `eval.mp4`, stamp `facts.engine`, write
+`proof_3c.json`, studio Plays it with a backend badge.
 
 | Work | Notes |
 |---|---|
@@ -125,8 +133,7 @@ it with a backend badge. Harness already exists; live clip does not.
 | Document “verified on &lt;GPU&gt; / &lt;engine&gt;” in ROADMAP | Date + hardware note |
 | Still **no** gold walk clip in git | Keep |
 
-**Blocker if agent lacks GPU:** land any harness fixes discovered; leave
-“live clip” unchecked until an operator (or GPU-backed agent) runs proof.
+This CPU environment cannot close N1b. Do not claim Phase 3c done.
 
 ### N2 — Phase 3d: live OSMO (or equivalent) harvest
 
@@ -158,6 +165,11 @@ This is how the beginner bar (“no CUDA install”) reconnects to the wedge.
 **Exit test.** Pin a **confirmed** Isaac Lab / mjlab G1 PickPlace (or
 equivalent) task string under an honest recipe name. No invented env ids.
 
+Upstream candidates already documented by Isaac Lab (confirm on a GPU box
+before pinning): `Isaac-PickPlace-Locomanipulation-G1-Abs-v0`,
+`Isaac-PickPlace-FixedBaseUpperBodyIK-G1-Abs-v0`,
+`Isaac-PickPlace-G1-InspireFTP-Abs-v0`.
+
 | Work | Notes |
 |---|---|
 | Confirm upstream task id on a GPU box | Write it down in recipe + ROADMAP |
@@ -167,7 +179,7 @@ equivalent) task string under an honest recipe name. No invented env ids.
 If no upstream id is confirmable, **skip** — keep `pick-and-place` as the
 arm demo. Deleting `g1-reach` already satisfied honesty.
 
-### N5 — Phase 4: live hardware (only after N1)
+### N5 — Phase 4: live hardware (only after N1b)
 
 **Exit test.** Passed sim walk → reduced-speed Unitree driver; NaN /
 pose-limit kills; hardware eval clears `sim_only`.
@@ -178,7 +190,7 @@ pose-limit kills; hardware eval clears `sim_only`.
 | Hardware eval profile that Deploy accepts | `HT_HARDWARE_PROFILE` |
 | Studio Deploy stays fail-closed until then | Gate already correct |
 
-### N6 — Grow the recipe library (after N1 at least)
+### N6 — Grow the recipe library (after N1b at least)
 
 Vision’s “5–10 video-backed tasks.” Prefer **reproducible pins** over UI.
 
@@ -201,6 +213,20 @@ Do **not** start a B6 theme rewrite or fifth room.
 
 ---
 
+## Further roadmap after this track (N1a)
+
+| Priority | Item | Needs |
+|---|---|---|
+| **1** | **N1b** live `ht proof walk` on a GPU box | NVIDIA GPU + Playground/mjlab/Isaac |
+| 2 | N2 live OSMO harvest from a laptop | OSMO credentials + pool |
+| 3 | N3 live ACT on pick-and-place demos | GPU + `lerobot[training]` |
+| 4 | N4 pin confirmed Isaac G1 PickPlace recipe | GPU to confirm task id |
+| 5 | N5 Unitree hardware driver (after N1b) | Robot + live walk |
+| 6 | N6 more video-backed recipes | After walk proof |
+| 7 | N7 power-user export / English failure modes | Optional |
+
+---
+
 ## What not to do next
 
 - Fake walk / ACT / OSMO success on CPU CI
@@ -209,16 +235,17 @@ Do **not** start a B6 theme rewrite or fifth room.
 - Finger grasping before live ACT
 - New physics / policy / dataset format / cluster product
 - Competing with LeLab on SO-ARM101
-- Another long polish-only train while 3c is still open
+- Another long polish-only train while N1b is still open
 
 ---
 
 ## How to use this file
 
-1. Default agent / PR focus: **N1**, then N2–N5 in order.
+1. Default agent / PR focus: **N1b**, then N2–N5 in order.
 2. If the environment has no GPU / OSMO / robot, ship harness fixes and
    docs honesty — do not claim the live exit test.
 3. Update [ROADMAP.md](./ROADMAP.md) status tables when an exit test is
    met; update this file’s scorecard date when the verdict changes.
 4. Keep [BETTERMENT.md](./BETTERMENT.md) as historical polish — reopen
    only for new CPU honesty holes.
+5. After each shipped track, refresh the **Further roadmap** table above.

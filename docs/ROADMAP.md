@@ -11,7 +11,7 @@ Phase 2   demonstration data (LeRobot)       ← done with substitutions (linear
 Phase 2.5 recipe gold + CI videos            ← done
 Phase 3a  first real G1 walk (Playground)    ← launch path done
 Phase 3b  mjlab / Isaac G1 walk + OSMO       ← launch path done (no G1 reach env upstream)
-Phase 3c  GPU-box walk proof                 ← next (`ht proof walk`; live clip still needs a GPU)
+Phase 3c  GPU-box walk proof                 ← next live clip (`ht proof walk`; harness + preflight done)
 Phase 3d  remote harvest (OSMO / GPU queue)  ← launch path done (needs OSMO pool for live proof)
 Phase 3e  ACT on the same demos                 ← launch path done (needs GPU for live ACT)
 Phase 3f  honest G1 manipulation recipe     ← done (deleted dishonest g1-reach)
@@ -291,7 +291,7 @@ an mp4. A live walking video is still the GPU-box proof.
 Do not skip ahead to ACT, grasping, or hardware while the walk path
 is still unproven on a real GPU. Each phase has an exit test.
 
-### Phase 3c — GPU-box walk proof (next)
+### Phase 3c — GPU-box walk proof (next: live clip)
 
 **Exit test.** On a machine with an NVIDIA GPU:
 
@@ -300,17 +300,21 @@ pip install playground   # or mjlab / Isaac Lab
 ht proof walk
 # optional: ht proof walk --prefer mjlab
 # optional: HT_ISAAC_CLI=/path/to/isaaclab.sh ht proof walk --prefer isaaclab
+# readiness only (no train): ht proof walk --check
 ```
 
 That must write a **walking** `eval.mp4`, stamp `facts.engine` to the
-engine that ran, and the studio must Play it with a backend badge.
-`ht proof walk` fails closed on a CPU laptop (exit 12) with the next
-step — that is expected.
+engine that ran, persist `proof_3c.json` beside the run, and the studio
+must Play the video with a backend badge. `ht proof walk` fails closed on
+a CPU laptop (exit 12) with the next step — that is expected.
 
 | Deliverable | Status |
 |---|---|
 | `ht proof walk` operator command | done (harness) |
 | Short proof train + require `eval.mp4` + `facts.engine` | done (harness) |
+| Host preflight (`assess_walk_proof_host`, `ht proof walk --check`, `GET /api/proof/walk`) | done |
+| Durable `proof_3c.json` on the run | done |
+| Studio G1 walk page projects proof readiness | done |
 | Live walk clip from a real GPU box | **not done** (needs GPU) |
 | Still no gold walk clip checked into the repo | keep |
 
