@@ -13,7 +13,7 @@ B1  one train at a time + health strip ← done
 B2  copy / docs match the four rooms  ← done
 B3  Deploy + Robots honesty           ← done
 B4  status, Data, first-run friction  ← done
-B5  interaction tests + small cleanup ← next
+B5  interaction tests + small cleanup ← done
 ```
 
 Each track has an **exit test**. If the test fails, the track is not
@@ -185,7 +185,7 @@ Primary paths: `studio/app.js`, `studio/styles.css`,
 
 ---
 
-## B5 — Interaction tests and small cleanup
+## B5 — Interaction tests and small cleanup (done)
 
 **Problem.** Studio contracts are mostly “string exists in `app.js`.” That
 misses the unsaved-demo bug class. Dead CSS and mustard-named helpers make
@@ -203,11 +203,12 @@ the code look unfinished.
 
 | Deliverable | Status |
 |---|---|
-| Interaction tests for Save/Train, compare, deploy preflight | **not done** |
-| Rename mustard helpers; remove dead CSS | partial (`recordTargetObject` + dead CSS gone; alias kept) |
-| CONTRIBUTING or README troubleshooting section | **not done** |
+| Interaction tests for Save/Train, compare, deploy preflight | done (`studio/gates.js` + `tests/test_studio_gates.py`) |
+| Rename mustard helpers; remove dead CSS | done (`recordTargetObject`; `.start-here` CSS gone) |
+| CONTRIBUTING or README troubleshooting section | done |
 
-Primary paths: `tests/`, `studio/app.js`, `studio/styles.css`, `README.md`.
+Primary paths: `tests/`, `studio/gates.js`, `studio/app.js`, `studio/styles.css`,
+`README.md`, `CONTRIBUTING.md`.
 
 ---
 
