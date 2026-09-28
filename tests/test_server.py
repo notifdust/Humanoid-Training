@@ -31,6 +31,11 @@ def test_health_and_recipes() -> None:
     assert "playground_ready" in health["engines"]
     assert "mjlab_ready" in health["engines"]
     assert "isaac_launch_ready" in health["engines"]
+    proof = client.get("/api/proof/walk").json()
+    assert proof["phase"] == "3c"
+    assert proof["ok"] is False
+    assert proof["live_clip"] is False
+    assert "ht proof walk" in proof["command"]
     gold = client.get("/api/recipes/cartpole-balance/gold/eval.mp4")
     assert gold.status_code == 200
     assert gold.headers["content-type"].startswith("video/")
@@ -319,6 +324,9 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "Start with the Unitree G1" not in js
     assert '<span class="robot-mark">G1</span>' not in js
     assert "function loadDeployPreflight" in js
+    assert "function loadProofPreflight" in js
+    assert 'id="proof-preflight"' in js or "id=\"proof-preflight\"" in js
+    assert "/api/proof/walk" in js
     assert 'run.recipe !== "g1-walk"' not in js
     assert "Stays sim-only" in js or "why below" in js
     assert "id=\"deploy-preflight\"" in js

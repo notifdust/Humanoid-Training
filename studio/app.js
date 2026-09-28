@@ -580,6 +580,15 @@ function renderRecipe() {
       ? "Save demos if you want them, then click Train."
       : "Click Train — watch the result in Runs."
     : "Compile only — this task needs a GPU box.";
+  const proofBlock =
+    r.id === "g1-walk"
+      ? `<div class="proof-block" id="proof-preflight">
+           <p class="eyebrow">Phase 3c · walk proof</p>
+           <p class="lede" id="proof-note">Checking whether this machine can prove a walking clip…</p>
+           <p class="meta" id="proof-command"></p>
+           <ul class="reasons" id="proof-reasons" hidden></ul>
+         </div>`
+      : "";
   main.innerHTML = `
     ${stepsHTML("train", { imitate: Boolean(r.imitate) })}
     <p class="eyebrow">${r.imitate ? "Step 3 · Train" : "Step 2 · Train"}</p>
@@ -597,6 +606,7 @@ function renderRecipe() {
         <p class="status" id="train-status"></p>
         <p class="error" id="train-error"></p>
         ${trainHint}
+        ${proofBlock}
         ${r.has_gold
           ? `<div class="gold-block">
                <p class="eyebrow">What success looks like</p>
@@ -648,6 +658,43 @@ function renderRecipe() {
   if (state.recording) startTeleopLoop();
   else stopTeleopLoop();
   bindStepNav();
+  if (r.id === "g1-walk") loadProofPreflight();
+}
+
+async function loadProofPreflight() {
+  const note = document.getElementById("proof-note");
+  const cmd = document.getElementById("proof-command");
+  const reasonsEl = document.getElementById("proof-reasons");
+  if (!note) return;
+  try {
+    const report = await api("/api/proof/walk");
+    if (report.ok) {
+      note.textContent =
+        report.note ||
+        `This machine can run the Phase 3c walk proof via ${report.engine}.`;
+    } else {
+      note.textContent =
+        report.note ||
+        "This machine cannot complete Phase 3c — need an NVIDIA GPU and a walk engine.";
+    }
+    if (cmd && report.command) {
+      cmd.textContent = report.ok
+        ? `On this box: ${report.command}`
+        : `On a GPU box: ${report.command}`;
+    }
+    if (reasonsEl) {
+      const reasons = Array.isArray(report.reasons) ? report.reasons : [];
+      if (reasons.length) {
+        reasonsEl.hidden = false;
+        reasonsEl.innerHTML = reasons.map((r) => `<li>${escapeHtml(r)}</li>`).join("");
+      } else {
+        reasonsEl.hidden = true;
+        reasonsEl.innerHTML = "";
+      }
+    }
+  } catch (error) {
+    note.textContent = error.message || "Could not check walk-proof readiness.";
+  }
 }
 
 async function applySpecEditor() {

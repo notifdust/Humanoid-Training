@@ -84,6 +84,14 @@ def health() -> dict[str, Any]:
     }
 
 
+@app.get("/api/proof/walk")
+def assess_walk_proof_api() -> dict[str, Any]:
+    """Phase 3c preflight: can this host prove a G1 walk? Does not train."""
+    from humanoid_training.proof import assess_walk_proof_host
+
+    return assess_walk_proof_host()
+
+
 @app.get("/api/robots")
 def robots() -> dict[str, Any]:
     return {"robots": load_robot_catalog()}
