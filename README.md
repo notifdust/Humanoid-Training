@@ -121,6 +121,18 @@ pytest
 # HT_GOLD=1 xvfb-run -a pytest -m gold
 ```
 
+## Troubleshooting
+
+| Symptom | What to do |
+|---|---|
+| First G1 stand train hangs / fails offline | Needs git + network once (~30MB MuJoCo Menagerie). Or `ht fetch-assets unitree_g1`. |
+| Train scores success but no `eval.mp4` | Need a display (or xvfb). Headless: `HT_NO_RENDER=1` skips the clip on purpose. |
+| Docker train says daemon / PATH missing | Install Docker and start the daemon, or use in-process Train (default). |
+| G1 walk exits 12 / “can't train here” | Expected on CPU. Needs NVIDIA GPU + Playground, mjlab, Isaac, or OSMO. Not a stand clip. |
+| Studio port already in use | `HT_PORT=8060 ./run-studio.sh` |
+
+More setup notes: [CONTRIBUTING.md](./CONTRIBUTING.md).
+
 ## License
 
 TBD.

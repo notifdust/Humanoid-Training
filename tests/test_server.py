@@ -301,7 +301,11 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "compare-grid" in js
     assert "Pick two runs of the same task." in js
     assert 'data-view="evaluate"' not in js
-    assert "runs[0].recipe !== runs[1].recipe" in js
+    assert "HTGates.decideCompareSelection" in js
+    gates = (Path(__file__).resolve().parents[1] / "studio" / "gates.js").read_text(
+        encoding="utf-8"
+    )
+    assert "picked[0].recipe !== picked[1].recipe" in gates
     assert "sim-only" in js
     assert "facts.policy" in js or "facts.sim_only" in js
     assert "id=\"deploy-run\"" in js
