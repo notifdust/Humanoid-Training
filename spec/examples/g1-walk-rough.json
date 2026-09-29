@@ -1,0 +1,20 @@
+{
+  "spec_version": "0.1.0",
+  "name": "g1-walk-rough",
+  "robot": {
+    "id": "unitree-g1-29dof",
+    "source": "catalog"
+  },
+  "task": {
+    "recipe": "g1-walk-rough",
+    "language": "Walk on rough terrain without falling."
+  },
+  "train": {
+    "method": "rl",
+    "seed": 1
+  },
+  "backend": {
+    "prefer": ["mjlab", "isaaclab"],
+    "compute": "local-docker"
+  }
+}

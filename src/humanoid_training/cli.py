@@ -80,8 +80,8 @@ def main(argv: list[str] | None = None) -> int:
         "what",
         nargs="?",
         default="walk",
-        choices=["walk"],
-        help="What to prove (only walk today)",
+        choices=["walk", "act", "osmo"],
+        help="What to prove: walk (3c), act (3e check), osmo (3d check)",
     )
     p_proof.add_argument(
         "--prefer",
@@ -271,9 +271,18 @@ def _cmd_proof(
     check: bool = False,
 ) -> int:
     from humanoid_training.proof import PROOF_STEPS, assess_walk_proof_host, run_walk_proof
+    from humanoid_training.readiness import assess_act_host, assess_osmo_host
 
+    if what == "act":
+        report = assess_act_host()
+        print(json.dumps(report, indent=2, default=str))
+        return 0 if report.get("ok") else 12
+    if what == "osmo":
+        report = assess_osmo_host()
+        print(json.dumps(report, indent=2, default=str))
+        return 0 if report.get("ok") else 12
     if what != "walk":
-        print(f"Unknown proof target {what!r}. Use: ht proof walk", file=sys.stderr)
+        print(f"Unknown proof target {what!r}. Use: ht proof walk|act|osmo", file=sys.stderr)
         return 2
     if check:
         report = assess_walk_proof_host(prefer=prefer)

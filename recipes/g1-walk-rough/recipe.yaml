@@ -1,0 +1,48 @@
+id: g1-walk-rough
+version: 0.1.0
+phase: 3
+runnable: true
+title: G1 walk (rough)
+summary: Unitree G1 velocity tracking on rough terrain. Pins real mjlab / Isaac Lab task ids. Needs a GPU — not a flat-walk stand-in, not a gold clip.
+language: Walk on rough terrain without falling.
+robot: unitree-g1-29dof
+success:
+  type: upright-duration
+  hold_s: 8
+train:
+  method: rl
+  policy: ppo
+  steps: 100000
+  seed: 1
+eval:
+  episodes: 10
+  record_video: true
+backend:
+  prefer: [mjlab, isaaclab]
+  compute: local-docker
+adapters:
+  mjlab:
+    task: Mjlab-Velocity-Rough-Unitree-G1
+  isaaclab:
+    task: Isaac-Velocity-Rough-G1-v0
+    image: nvcr.io/nvidia/isaac-lab:2.2.0
+  playground:
+    unsupported: "Playground pin is flat G1JoystickFlatTerrain (see g1-walk). Rough walk uses mjlab / Isaac Lab."
+  gymnasium:
+    unsupported: "G1 locomotion is not a Gymnasium environment."
+  mujoco:
+    unsupported: "Rough walking RL is not the CPU hold adapter. Use g1-stand for a MuJoCo preview, or g1-walk / g1-walk-rough on a GPU."
+gold:
+  notes: |
+    Needs an NVIDIA GPU. Pins upstream:
+    mjlab Mjlab-Velocity-Rough-Unitree-G1,
+    Isaac Lab Isaac-Velocity-Rough-G1-v0.
+    Do not check in gold/eval.mp4 — a flat or stand clip is not rough walk.
+studio:
+  availability: gpu
+  start_here: false
+  promise: Rough-terrain walking is not available on this computer.
+  ready_promise: GPU rough walk on this machine (mjlab or Isaac Lab). Eval video should show terrain walking — not a stand clip.
+  train_hint: Rough walk needs a GPU box. Clicking Train writes job files and stops here. Start with G1 walk (flat) or G1 stand on this computer.
+  ready_hint: This computer can launch a rough G1 walk engine (mjlab or Isaac Lab). Train should write a walking eval.mp4 — not a stand clip.
+  blocked_hint: Needs mjlab or Isaac Lab on a GPU box. Not a frozen walk clip.

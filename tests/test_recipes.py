@@ -10,7 +10,14 @@ from humanoid_training.spec import load_spec
 
 def test_recipe_catalog_contains_core() -> None:
     ids = {r.id for r in list_recipes()}
-    assert {"cartpole-balance", "g1-walk", "g1-stand", "pick-and-place", "g1-pickplace"} <= ids
+    assert {
+        "cartpole-balance",
+        "g1-walk",
+        "g1-walk-rough",
+        "g1-stand",
+        "pick-and-place",
+        "g1-pickplace",
+    } <= ids
     assert "g1-reach" not in ids
 
 
@@ -80,7 +87,9 @@ def test_recipe_catalog_is_the_studio_contract() -> None:
     assert by_id["pick-and-place"]["record_hint"]
     assert "WASD" in by_id["pick-and-place"]["record_hint"]
     assert set(catalog["ready"]) == {"cartpole-balance", "g1-stand", "pick-and-place"}
-    assert set(catalog["later"]) == {"g1-walk", "g1-pickplace"}
+    assert set(catalog["later"]) == {"g1-walk", "g1-walk-rough", "g1-pickplace"}
+    assert by_id["g1-walk-rough"]["availability"] == "gpu"
+    assert by_id["g1-walk-rough"]["has_gold"] is False
     assert set(catalog["start_here"]) == {"cartpole-balance", "g1-stand", "pick-and-place"}
     assert by_id["cartpole-balance"]["has_gold"] is True
     assert by_id["g1-stand"]["has_gold"] is True

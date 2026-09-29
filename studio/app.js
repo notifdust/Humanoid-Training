@@ -581,14 +581,22 @@ function renderRecipe() {
       : "Click Train — watch the result in Runs."
     : "Compile only — this task needs a GPU box.";
   const proofBlock =
-    r.id === "g1-walk"
+    r.id === "g1-walk" || r.id === "g1-walk-rough"
       ? `<div class="proof-block" id="proof-preflight">
            <p class="eyebrow">Phase 3c · walk proof</p>
            <p class="lede" id="proof-note">Checking whether this machine can prove a walking clip…</p>
            <p class="meta" id="proof-command"></p>
            <ul class="reasons" id="proof-reasons" hidden></ul>
+           <p class="meta" id="proof-osmo" hidden></p>
          </div>`
-      : "";
+      : r.id === "pick-and-place"
+        ? `<div class="proof-block" id="act-preflight">
+             <p class="eyebrow">Phase 3e · ACT</p>
+             <p class="lede" id="act-note">Checking whether this machine can launch ACT…</p>
+             <p class="meta" id="act-command"></p>
+             <ul class="reasons" id="act-reasons" hidden></ul>
+           </div>`
+        : "";
   main.innerHTML = `
     ${stepsHTML("train", { imitate: Boolean(r.imitate) })}
     <p class="eyebrow">${r.imitate ? "Step 3 · Train" : "Step 2 · Train"}</p>
@@ -658,13 +666,15 @@ function renderRecipe() {
   if (state.recording) startTeleopLoop();
   else stopTeleopLoop();
   bindStepNav();
-  if (r.id === "g1-walk") loadProofPreflight();
+  if (r.id === "g1-walk" || r.id === "g1-walk-rough") loadProofPreflight();
+  if (r.id === "pick-and-place") loadActPreflight();
 }
 
 async function loadProofPreflight() {
   const note = document.getElementById("proof-note");
   const cmd = document.getElementById("proof-command");
   const reasonsEl = document.getElementById("proof-reasons");
+  const osmoEl = document.getElementById("proof-osmo");
   if (!note) return;
   try {
     const report = await api("/api/proof/walk");
@@ -692,8 +702,51 @@ async function loadProofPreflight() {
         reasonsEl.innerHTML = "";
       }
     }
+    if (osmoEl) {
+      try {
+        const osmo = await api("/api/proof/osmo");
+        osmoEl.hidden = false;
+        osmoEl.textContent = osmo.ok
+          ? `OSMO harvest ready: ${osmo.command}`
+          : `OSMO harvest later: ${osmo.note || "need osmo CLI + pool"}`;
+      } catch {
+        osmoEl.hidden = true;
+      }
+    }
   } catch (error) {
     note.textContent = error.message || "Could not check walk-proof readiness.";
+  }
+}
+
+async function loadActPreflight() {
+  const note = document.getElementById("act-note");
+  const cmd = document.getElementById("act-command");
+  const reasonsEl = document.getElementById("act-reasons");
+  if (!note) return;
+  try {
+    const report = await api("/api/proof/act");
+    note.textContent =
+      report.note ||
+      (report.ok
+        ? "This machine can launch LeRobot ACT on demos."
+        : "ACT needs a GPU + LeRobot — CPU keeps linear-BC.");
+    if (cmd && report.command) {
+      cmd.textContent = report.ok
+        ? `On this box: ${report.command}`
+        : `On a GPU box: ${report.command}`;
+    }
+    if (reasonsEl) {
+      const reasons = Array.isArray(report.reasons) ? report.reasons : [];
+      if (reasons.length) {
+        reasonsEl.hidden = false;
+        reasonsEl.innerHTML = reasons.map((r) => `<li>${escapeHtml(r)}</li>`).join("");
+      } else {
+        reasonsEl.hidden = true;
+        reasonsEl.innerHTML = "";
+      }
+    }
+  } catch (error) {
+    note.textContent = error.message || "Could not check ACT readiness.";
   }
 }
 
