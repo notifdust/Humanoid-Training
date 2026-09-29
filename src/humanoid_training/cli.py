@@ -74,14 +74,14 @@ def main(argv: list[str] | None = None) -> int:
 
     p_proof = sub.add_parser(
         "proof",
-        help="Phase 3c: run a short G1 walk on this GPU and require eval.mp4",
+        help="Phase proofs: walk trains on GPU; act/osmo are readiness checks only",
     )
     p_proof.add_argument(
         "what",
         nargs="?",
         default="walk",
         choices=["walk", "act", "osmo"],
-        help="What to prove: walk (3c), act (3e check), osmo (3d check)",
+        help="walk = short GPU train+judge; act/osmo = readiness check only (no train)",
     )
     p_proof.add_argument(
         "--prefer",

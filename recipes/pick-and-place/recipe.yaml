@@ -66,6 +66,7 @@ gold:
 studio:
   availability: cpu
   start_here: true
+  proof: act
   promise: Mustard slides into the bowl. The arm follows. Not finger grasping.
   train_hint: On CPU you see mustard move into the bowl with linear-BC. On a GPU box with LeRobot, Train launches ACT on the same demos. Neither is finger grasping.
   scene_hint: Top-down kitchen counter. Drag mustard if you want. Train still works if you do not.

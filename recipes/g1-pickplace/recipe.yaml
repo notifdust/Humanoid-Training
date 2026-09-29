@@ -47,6 +47,7 @@ studio:
   availability: gpu
   start_here: false
   imitate: false
+  proof: none
   promise: Isaac G1 PickPlace is not available on this computer.
   ready_promise: GPU + Isaac Lab can launch Robomimic BC on the pinned PickPlace task when HT_ISAAC_DATASET points at a Mimic hdf5.
   train_hint: Walking is separate (g1-walk). This task needs Isaac Lab Mimic demos — set HT_ISAAC_DATASET, then Train. CPU mustard→bowl stays on Pick and place.
