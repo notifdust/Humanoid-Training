@@ -2,6 +2,7 @@ const state = {
   view: "tasks",
   recipes: [],
   robots: [],
+  health: null,
   robot: null,
   selected: null,
   starter: null,
@@ -77,10 +78,19 @@ function englishList(items) {
 
 function pill(recipe) {
   if (worksHere(recipe) && recipe.availability === "gpu") {
-    return `<span class="pill live">works on this GPU</span>`;
+    // Prefer catalog launch_path (local_gpu vs osmo) over bare health.gpu.
+    if (recipe.launch_path === "osmo") {
+      return `<span class="pill live">works via OSMO harvest</span>`;
+    }
+    if (recipe.launch_path === "local_gpu") {
+      return `<span class="pill live">works on this GPU</span>`;
+    }
+    return `<span class="pill live">can launch here</span>`;
   }
   if (worksHere(recipe)) return `<span class="pill live">works on this computer</span>`;
-  if (recipe.availability === "gpu") return `<span class="pill blocked">needs a GPU — skip for now</span>`;
+  if (recipe.availability === "gpu") {
+    return `<span class="pill blocked">needs a GPU — skip for now</span>`;
+  }
   return `<span class="pill blocked">later</span>`;
 }
 
@@ -580,6 +590,24 @@ function renderRecipe() {
       ? "Save demos if you want them, then click Train."
       : "Click Train — watch the result in Runs."
     : "Compile only — this task needs a GPU box.";
+  const proofKind = r.proof || "";
+  const proofBlock =
+    proofKind === "walk"
+      ? `<div class="proof-block" id="proof-preflight">
+           <p class="eyebrow">Phase 3c · walk proof</p>
+           <p class="lede" id="proof-note">Checking whether this machine can prove a walking clip…</p>
+           <p class="meta" id="proof-command"></p>
+           <ul class="reasons" id="proof-reasons" hidden></ul>
+           <p class="meta" id="proof-osmo" hidden></p>
+         </div>`
+      : proofKind === "act"
+        ? `<div class="proof-block" id="act-preflight">
+             <p class="eyebrow">Phase 3e · ACT readiness</p>
+             <p class="lede" id="act-note">Checking whether this machine can launch ACT…</p>
+             <p class="meta" id="act-command"></p>
+             <ul class="reasons" id="act-reasons" hidden></ul>
+           </div>`
+        : "";
   main.innerHTML = `
     ${stepsHTML("train", { imitate: Boolean(r.imitate) })}
     <p class="eyebrow">${r.imitate ? "Step 3 · Train" : "Step 2 · Train"}</p>
@@ -597,6 +625,7 @@ function renderRecipe() {
         <p class="status" id="train-status"></p>
         <p class="error" id="train-error"></p>
         ${trainHint}
+        ${proofBlock}
         ${r.has_gold
           ? `<div class="gold-block">
                <p class="eyebrow">What success looks like</p>
@@ -648,6 +677,88 @@ function renderRecipe() {
   if (state.recording) startTeleopLoop();
   else stopTeleopLoop();
   bindStepNav();
+  if (proofKind === "walk") loadProofPreflight();
+  if (proofKind === "act") loadActPreflight();
+}
+
+async function loadProofPreflight() {
+  const note = document.getElementById("proof-note");
+  const cmd = document.getElementById("proof-command");
+  const reasonsEl = document.getElementById("proof-reasons");
+  const osmoEl = document.getElementById("proof-osmo");
+  if (!note) return;
+  try {
+    const report = await api("/api/proof/walk");
+    if (report.ok) {
+      note.textContent =
+        report.note ||
+        `This machine can run the Phase 3c walk proof via ${report.engine}.`;
+    } else {
+      note.textContent =
+        report.note ||
+        "This machine cannot complete Phase 3c — need an NVIDIA GPU and a walk engine.";
+    }
+    if (cmd && report.command) {
+      cmd.textContent = report.ok
+        ? `On this box: ${report.command}`
+        : `On a GPU box: ${report.command}`;
+    }
+    if (reasonsEl) {
+      const reasons = Array.isArray(report.reasons) ? report.reasons : [];
+      if (reasons.length) {
+        reasonsEl.hidden = false;
+        reasonsEl.innerHTML = reasons.map((r) => `<li>${escapeHtml(r)}</li>`).join("");
+      } else {
+        reasonsEl.hidden = true;
+        reasonsEl.innerHTML = "";
+      }
+    }
+    if (osmoEl) {
+      try {
+        const osmo = await api("/api/proof/osmo");
+        osmoEl.hidden = false;
+        osmoEl.textContent = osmo.ok
+          ? `OSMO harvest ready: ${osmo.command}`
+          : `OSMO harvest later: ${osmo.note || "need osmo CLI + pool"}`;
+      } catch {
+        osmoEl.hidden = true;
+      }
+    }
+  } catch (error) {
+    note.textContent = error.message || "Could not check walk-proof readiness.";
+  }
+}
+
+async function loadActPreflight() {
+  const note = document.getElementById("act-note");
+  const cmd = document.getElementById("act-command");
+  const reasonsEl = document.getElementById("act-reasons");
+  if (!note) return;
+  try {
+    const report = await api("/api/proof/act");
+    note.textContent =
+      report.note ||
+      (report.ok
+        ? "This machine can launch LeRobot ACT — Train pick-and-place (ht proof act only checks)."
+        : "ACT needs a GPU + LeRobot — CPU keeps linear-BC.");
+    if (cmd && report.command) {
+      cmd.textContent = report.ok
+        ? `To train ACT: ${report.command}`
+        : `On a GPU box: ${report.command}`;
+    }
+    if (reasonsEl) {
+      const reasons = Array.isArray(report.reasons) ? report.reasons : [];
+      if (reasons.length) {
+        reasonsEl.hidden = false;
+        reasonsEl.innerHTML = reasons.map((r) => `<li>${escapeHtml(r)}</li>`).join("");
+      } else {
+        reasonsEl.hidden = true;
+        reasonsEl.innerHTML = "";
+      }
+    }
+  } catch (error) {
+    note.textContent = error.message || "Could not check ACT readiness.";
+  }
 }
 
 async function applySpecEditor() {
@@ -1438,6 +1549,56 @@ function factsListHTML(facts) {
   return `<div class="facts-list">${rows}</div>`;
 }
 
+function englishFromFacts(facts, run) {
+  // Fallback when API omitted `run.english` (older server). Prefer runEnglish().
+  const kind = String((facts && facts.kind) || "");
+  const engine = String((facts && facts.engine) || "");
+  const policy = String((facts && facts.policy) || "");
+  const status = String((run && run.status) || "").toLowerCase();
+  const err = (run && (run.error || run.message)) || "";
+  if ((status === "blocked" || status === "queued") && err) {
+    return String(err).split("\n")[0].slice(0, 200);
+  }
+  if (status === "failed" || status === "error") {
+    return err ? `Run broke: ${String(err).split("\n")[0].slice(0, 180)}` : "Run finished but did not pass.";
+  }
+  if (facts && facts.video === "missing") {
+    return "Engine finished but wrote no eval.mp4 — not a headless skip, not a stand substitute.";
+  }
+  const sim = facts && facts.sim_only === true ? " Still sim-only — not cleared for hardware." : "";
+  if (kind === "hold") {
+    return `Held a pinned pose${engine ? ` via ${engine}` : ""} — not walking.${sim}`.trim();
+  }
+  if (kind === "scene_preview") {
+    return `Scene preview${engine ? ` via ${engine}` : ""} — not a trained policy.${sim}`.trim();
+  }
+  if (kind === "rl") {
+    let bit = `${engine || "engine"} RL`;
+    if (policy) bit += ` (${policy})`;
+    if (facts.device === "remote") bit += " on remote GPU";
+    else if (facts.device === "gpu") bit += " on GPU";
+    return `Locomotion / RL rollout from ${bit}.${sim}`.trim();
+  }
+  if (kind === "imitation") {
+    const label = { act: "ACT", "linear-bc": "linear-BC", bc: "BC" }[policy] || policy || "imitation";
+    return `Imitation (${label}) via ${engine || "local"} — demos, not finger grasping.${sim}`.trim();
+  }
+  if (kind === "gym" || engine === "gymnasium") {
+    return `Gymnasium rollout${policy ? ` (${policy})` : ""}.${sim}`.trim();
+  }
+  if (status === "passed" || status === "completed") {
+    return `Finished${engine ? ` on ${engine}` : ""}.${sim}`.trim();
+  }
+  return "";
+}
+
+function runEnglish(run) {
+  if (run && typeof run.english === "string" && run.english.trim()) {
+    return run.english.trim();
+  }
+  return englishFromFacts(runFacts(run), run);
+}
+
 function paintCompareColumn(run) {
   const facts = runFacts(run);
   const statusClass = runStatusClass(run);
@@ -1453,11 +1614,13 @@ function paintCompareColumn(run) {
     isSimOnly(facts)
       ? `<p class="meta">sim-only — not cleared for hardware</p>`
       : "";
+  const english = runEnglish(run);
   return `
     <section class="compare-col" data-compare-run="${escapeHtml(run.run_id)}">
       <h2>${escapeHtml(prettyRecipe(run.recipe))}</h2>
       <p class="meta">${escapeHtml(run.run_id)}</p>
       <p class="status-chip ${statusClass}">${escapeHtml(englishRunStatus(run))}</p>
+      ${english ? `<p class="lede">${escapeHtml(english)}</p>` : ""}
       ${metrics}
       ${simOnly}
       ${backendBadge(facts)}
@@ -1663,6 +1826,7 @@ function paintRun(run, logText) {
       ? `<p class="meta" id="sim-only-badge">sim-only — not cleared for hardware</p>`
       : "";
   const headline = englishRunStatus(run);
+  const factsEnglish = runEnglish(run);
   const readyTitles = readyRecipes(state.recipes).map((r) => r.title);
   const laterTitles = laterRecipes(state.recipes).map((r) => r.title);
   const blockedHelp =
@@ -1678,7 +1842,9 @@ function paintRun(run, logText) {
       ? "No video — this task cannot train on this computer."
       : ["queued", "running"].includes(run.status)
         ? "Video appears when training finishes."
-        : hasMetrics && (run.metrics.passed === true || run.status === "passed")
+        : facts.video === "missing"
+          ? "No eval.mp4 — the engine finished but play wrote no clip (not a headless skip). Not a stand substitute."
+          : hasMetrics && (run.metrics.passed === true || run.status === "passed")
           ? "No eval.mp4 — training scored success but rendering was skipped (headless / HT_NO_RENDER). Use a display or xvfb for a clip."
           : "No eval video. On a machine without a display, Train may still score success but skip the clip.";
   const video = run.artifacts && run.artifacts["eval.mp4"]
@@ -1697,6 +1863,7 @@ function paintRun(run, logText) {
     <p class="eyebrow">Step ${imitateRun ? "4" : "3"} · Video</p>
     <h1>${escapeHtml(prettyRecipe(run.recipe))}</h1>
     <p class="status-chip ${statusClass}">${escapeHtml(headline)}</p>
+    ${factsEnglish ? `<p class="lede" id="facts-english">${escapeHtml(factsEnglish)}</p>` : ""}
     ${nextCueHTML(videoCue)}
     ${metrics}
     ${simOnly}
@@ -1851,6 +2018,7 @@ async function showRun(runId) {
       run.artifacts = msg.artifacts || run.artifacts;
       if (msg.notes) run.notes = msg.notes;
       if (msg.facts) run.facts = msg.facts;
+      if (typeof msg.english === "string") run.english = msg.english;
       const logEl = document.getElementById("run-log");
       if (logEl) {
         logEl.textContent = logText;
@@ -1958,6 +2126,7 @@ function formatHealthStrip(health) {
 async function boot() {
   try {
     const health = await api("/api/health");
+    state.health = health;
     document.getElementById("health").textContent = formatHealthStrip(health);
     const [recipes, robots] = await Promise.all([
       api("/api/recipes"),

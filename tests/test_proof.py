@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -83,6 +84,34 @@ def test_proof_walk_passes_with_fake_playground(
     assert report["video"]
     assert Path(report["video"]).read_bytes() == b"fake-walk-proof-mp4"
     assert report["facts"].get("kind") == "rl"
+    assert report.get("live_clip") is True
+    assert report.get("report_path")
+    proof_path = Path(report["report_path"])
+    assert proof_path.is_file()
+    assert proof_path.name == "proof_3c.json"
+    saved = json.loads(proof_path.read_text(encoding="utf-8"))
+    assert saved["ok"] is True
+    assert saved["engine"] == "playground"
+
+
+def test_assess_walk_proof_host_blocked_on_cpu() -> None:
+    from humanoid_training.proof import assess_walk_proof_host
+
+    report = assess_walk_proof_host()
+    assert report["ok"] is False
+    assert report["phase"] == "3c"
+    assert report["live_clip"] is False
+    assert "ht proof walk" in report["command"]
+    assert report["reasons"]
+
+
+def test_cli_proof_walk_check_blocked(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["proof", "walk", "--check"]) == 12
+    out = capsys.readouterr().out
+    assert '"ok": false' in out or '"ok": false' in out.replace("False", "false")
+    data = json.loads(out)
+    assert data["ok"] is False
+    assert data["phase"] == "3c"
 
 
 def test_proof_walk_prefer_mjlab(

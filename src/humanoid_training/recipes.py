@@ -40,13 +40,28 @@ class Recipe:
         start_here = studio.get("start_here")
         if start_here is None:
             start_here = availability == "cpu"
-        launch_here = _launch_here(self, availability)
+        launch_path = _launch_path(self, availability)
+        launch_here = launch_path != "blocked"
         if launch_here:
-            promise = str(studio.get("ready_promise") or studio.get("promise") or self.summary)
-            train_hint = str(studio.get("ready_hint") or studio.get("train_hint") or "")
+            if launch_path == "osmo":
+                promise = str(
+                    studio.get("osmo_promise")
+                    or "Can harvest a remote walk clip via OSMO — not a local GPU train."
+                )
+                train_hint = str(
+                    studio.get("osmo_hint")
+                    or studio.get("ready_hint")
+                    or "OSMO harvest: submit → poll → rsync eval.mp4. Not a local GPU proof."
+                )
+            else:
+                promise = str(studio.get("ready_promise") or studio.get("promise") or self.summary)
+                train_hint = str(studio.get("ready_hint") or studio.get("train_hint") or "")
         else:
             promise = str(studio.get("promise") or self.summary)
             train_hint = str(studio.get("train_hint") or "")
+        proof = str(studio.get("proof") or "").strip().lower()
+        if proof not in {"walk", "act", "osmo", "none", ""}:
+            proof = ""
         return {
             "id": self.id,
             "title": self.title,
@@ -57,6 +72,8 @@ class Recipe:
             "runnable": runnable,
             "availability": availability,
             "launch_here": launch_here,
+            "launch_path": launch_path,
+            "proof": None if proof in {"", "none"} else proof,
             "start_here": bool(start_here),
             "promise": promise,
             "train_hint": train_hint,
@@ -68,7 +85,11 @@ class Recipe:
             "scene_preview": bool(
                 ((self.data.get("adapters") or {}).get("mujoco") or {}).get("scene_preview")
             ),
-            "imitate": (self.data.get("train") or {}).get("method") == "imitation",
+            "imitate": (
+                bool(studio["imitate"])
+                if "imitate" in studio
+                else (self.data.get("train") or {}).get("method") == "imitation"
+            ),
             "method": str((self.data.get("train") or {}).get("method") or ""),
             "adapters": sorted((self.data.get("adapters") or {}).keys()),
         }
@@ -114,20 +135,58 @@ def _gpu_engine_configured(data: dict[str, Any], name: str) -> bool:
     return False
 
 
-def _launch_here(recipe: Recipe, availability: str) -> bool:
-    """True when Train on this machine will launch, not merely compile-and-block.
+def _isaac_workflow(data: dict[str, Any]) -> str:
+    cfg = ((data.get("adapters") or {}).get("isaaclab") or {})
+    raw = str(cfg.get("workflow") or "rsl_rl").strip().lower()
+    if raw in {"imitation", "mimic", "bc", "robomimic"}:
+        return "robomimic"
+    return "rsl_rl"
 
-    CPU recipes always launch. GPU recipes launch when any configured engine
-    (playground / mjlab / isaaclab) is launch-ready on this host.
+
+def _robomimic_dataset_ready(data: dict[str, Any] | None = None) -> bool:
+    """True when a Mimic/robomimic hdf5 is resolvable without a run dir."""
+    from humanoid_training.adapters.isaaclab import resolve_isaac_dataset
+
+    spec: dict[str, Any] = {"data": (data or {}).get("data") or {}}
+    return resolve_isaac_dataset(spec) is not None
+
+
+def _launch_path(recipe: Recipe, availability: str) -> str:
+    """How Train would run here: local | local_gpu | osmo | blocked.
+
+    Robomimic Isaac needs local Isaac + HT_ISAAC_DATASET (no OSMO yaml).
     """
     if availability == "cpu":
-        return True
-    from humanoid_training.hardware import adapter_launch_ready
+        return "local"
+    from humanoid_training.hardware import (
+        isaac_local_ready,
+        mjlab_ready,
+        osmo_ready,
+        playground_ready,
+    )
 
-    for name in ("playground", "mjlab", "isaaclab"):
-        if _gpu_engine_configured(recipe.data, name) and adapter_launch_ready(name):
-            return True
-    return False
+    data = recipe.data
+    # Local GPU engines first (honest "on this machine").
+    if _gpu_engine_configured(data, "playground") and playground_ready():
+        return "local_gpu"
+    if _gpu_engine_configured(data, "mjlab") and mjlab_ready():
+        return "local_gpu"
+    if _gpu_engine_configured(data, "isaaclab"):
+        if _isaac_workflow(data) == "robomimic":
+            if isaac_local_ready() and _robomimic_dataset_ready(data):
+                return "local_gpu"
+            return "blocked"
+        if isaac_local_ready():
+            return "local_gpu"
+        # rsl_rl Isaac can harvest via OSMO without a local GPU.
+        if osmo_ready():
+            return "osmo"
+    return "blocked"
+
+
+def _launch_here(recipe: Recipe, availability: str) -> bool:
+    """True when Train on this machine will launch, not merely compile-and-block."""
+    return _launch_path(recipe, availability) != "blocked"
 
 
 def public_catalog() -> dict[str, Any]:

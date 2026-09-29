@@ -51,9 +51,9 @@ adapters:
   playground:
     unsupported: "Playground has no mustard-in-bowl env yet. CPU imitation uses mujoco + a LeRobot dataset."
   isaaclab:
-    unsupported: "No confirmed Isaac G1 PickPlace task id in-repo yet. CPU imitation stays mujoco; pin a real env id before claiming Isaac."
+    unsupported: "CPU mustard→bowl stays mujoco/LeRobot. For Isaac Lab G1 PickPlace use recipe g1-pickplace (Isaac-PickPlace-Locomanipulation-G1-Abs-v0 / Robomimic)."
   mjlab:
-    unsupported: "No confirmed mjlab pick-and-place task id in-repo yet. CPU imitation stays mujoco."
+    unsupported: "No confirmed mjlab pick-and-place task id in-repo yet. CPU imitation stays mujoco. Isaac G1 PickPlace is recipe g1-pickplace."
   lerobot:
     policy: act
 gold:
@@ -66,6 +66,7 @@ gold:
 studio:
   availability: cpu
   start_here: true
+  proof: act
   promise: Mustard slides into the bowl. The arm follows. Not finger grasping.
   train_hint: On CPU you see mustard move into the bowl with linear-BC. On a GPU box with LeRobot, Train launches ACT on the same demos. Neither is finger grasping.
   scene_hint: Top-down kitchen counter. Drag mustard if you want. Train still works if you do not.
