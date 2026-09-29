@@ -1550,6 +1550,7 @@ function factsListHTML(facts) {
 }
 
 function englishFromFacts(facts, run) {
+  // Fallback when API omitted `run.english` (older server). Prefer runEnglish().
   const kind = String((facts && facts.kind) || "");
   const engine = String((facts && facts.engine) || "");
   const policy = String((facts && facts.policy) || "");
@@ -1561,9 +1562,15 @@ function englishFromFacts(facts, run) {
   if (status === "failed" || status === "error") {
     return err ? `Run broke: ${String(err).split("\n")[0].slice(0, 180)}` : "Run finished but did not pass.";
   }
+  if (facts && facts.video === "missing") {
+    return "Engine finished but wrote no eval.mp4 — not a headless skip, not a stand substitute.";
+  }
   const sim = facts && facts.sim_only === true ? " Still sim-only — not cleared for hardware." : "";
   if (kind === "hold") {
     return `Held a pinned pose${engine ? ` via ${engine}` : ""} — not walking.${sim}`.trim();
+  }
+  if (kind === "scene_preview") {
+    return `Scene preview${engine ? ` via ${engine}` : ""} — not a trained policy.${sim}`.trim();
   }
   if (kind === "rl") {
     let bit = `${engine || "engine"} RL`;
@@ -1576,10 +1583,20 @@ function englishFromFacts(facts, run) {
     const label = { act: "ACT", "linear-bc": "linear-BC", bc: "BC" }[policy] || policy || "imitation";
     return `Imitation (${label}) via ${engine || "local"} — demos, not finger grasping.${sim}`.trim();
   }
+  if (kind === "gym" || engine === "gymnasium") {
+    return `Gymnasium rollout${policy ? ` (${policy})` : ""}.${sim}`.trim();
+  }
   if (status === "passed" || status === "completed") {
     return `Finished${engine ? ` on ${engine}` : ""}.${sim}`.trim();
   }
   return "";
+}
+
+function runEnglish(run) {
+  if (run && typeof run.english === "string" && run.english.trim()) {
+    return run.english.trim();
+  }
+  return englishFromFacts(runFacts(run), run);
 }
 
 function paintCompareColumn(run) {
@@ -1597,7 +1614,7 @@ function paintCompareColumn(run) {
     isSimOnly(facts)
       ? `<p class="meta">sim-only — not cleared for hardware</p>`
       : "";
-  const english = englishFromFacts(facts, run);
+  const english = runEnglish(run);
   return `
     <section class="compare-col" data-compare-run="${escapeHtml(run.run_id)}">
       <h2>${escapeHtml(prettyRecipe(run.recipe))}</h2>
@@ -1809,7 +1826,7 @@ function paintRun(run, logText) {
       ? `<p class="meta" id="sim-only-badge">sim-only — not cleared for hardware</p>`
       : "";
   const headline = englishRunStatus(run);
-  const factsEnglish = englishFromFacts(facts, run);
+  const factsEnglish = runEnglish(run);
   const readyTitles = readyRecipes(state.recipes).map((r) => r.title);
   const laterTitles = laterRecipes(state.recipes).map((r) => r.title);
   const blockedHelp =
@@ -2001,6 +2018,7 @@ async function showRun(runId) {
       run.artifacts = msg.artifacts || run.artifacts;
       if (msg.notes) run.notes = msg.notes;
       if (msg.facts) run.facts = msg.facts;
+      if (typeof msg.english === "string") run.english = msg.english;
       const logEl = document.getElementById("run-log");
       if (logEl) {
         logEl.textContent = logText;

@@ -7,7 +7,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from humanoid_training.adapters import select_adapter, write_payload_files
+from humanoid_training.adapters import adapter_can_launch, select_adapter, write_payload_files
 from humanoid_training.errors import AdapterUnavailable
 from humanoid_training.recipes import expand_spec
 from humanoid_training.runner import default_runs_dir, load_manifest
@@ -22,12 +22,24 @@ def export_spec_to(spec: dict[str, Any], dest: Path) -> dict[str, Any]:
     adapter = select_adapter(expanded)
     payload = adapter.compile(expanded)
     write_payload_files(dest, payload)
+    runnable_here = adapter_can_launch(adapter.name, expanded)
+    next_step = _next_step(adapter.name, runnable_here, expanded)
+    public = {k: v for k, v in expanded.items() if not str(k).startswith("_")}
     (dest / "expanded_spec.json").write_text(
-        json.dumps({k: v for k, v in expanded.items() if not str(k).startswith("_")}, indent=2)
-        + "\n",
+        json.dumps(public, indent=2) + "\n",
         encoding="utf-8",
     )
-    readme = _readme(expanded, adapter.name, payload)
+    meta = {
+        "adapter": adapter.name,
+        "env_name": payload.env_name,
+        "runnable_here": runnable_here,
+        "next_step": next_step,
+    }
+    (dest / "export_meta.json").write_text(
+        json.dumps(meta, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    readme = _readme(expanded, adapter.name, payload, runnable_here=runnable_here, next_step=next_step)
     (dest / "README.md").write_text(readme, encoding="utf-8")
     return {
         "ok": True,
@@ -35,6 +47,8 @@ def export_spec_to(spec: dict[str, Any], dest: Path) -> dict[str, Any]:
         "adapter": adapter.name,
         "files": sorted(p.name for p in dest.iterdir() if p.is_file()),
         "env_name": payload.env_name,
+        "runnable_here": runnable_here,
+        "next_step": next_step,
     }
 
 
@@ -76,6 +90,35 @@ def export_run(run_id: str, dest: Path, *, runs_dir: Path | None = None) -> dict
         )
     recipe = manifest.get("recipe") or ""
     adapter = (manifest.get("facts") or {}).get("engine") or manifest.get("adapter") or ""
+    runnable_here = False
+    next_step = "Open the studio and Train, or re-export from the recipe spec for a fresh compile."
+    spec_path = dest / "spec.json"
+    if spec_path.is_file():
+        try:
+            expanded = expand_spec(json.loads(spec_path.read_text(encoding="utf-8")))
+            selected = select_adapter(expanded)
+            adapter = selected.name or adapter
+            runnable_here = adapter_can_launch(selected.name, expanded)
+            next_step = _next_step(selected.name, runnable_here, expanded)
+        except Exception:
+            pass
+    meta = {
+        "run_id": run_id,
+        "recipe": recipe,
+        "adapter": adapter,
+        "status": manifest.get("status"),
+        "runnable_here": runnable_here,
+        "next_step": next_step,
+    }
+    (dest / "export_meta.json").write_text(
+        json.dumps(meta, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    honesty = (
+        "Yes — Train can launch this adapter on this machine."
+        if runnable_here
+        else f"No — compiled artifacts only. {next_step}"
+    )
     (dest / "README.md").write_text(
         "\n".join(
             [
@@ -84,6 +127,9 @@ def export_run(run_id: str, dest: Path, *, runs_dir: Path | None = None) -> dict
                 f"- recipe: `{recipe}`",
                 f"- adapter/engine: `{adapter}`",
                 f"- status: `{manifest.get('status')}`",
+                f"- runnable_here: `{str(runnable_here).lower()}`",
+                "",
+                f"**Runnable here:** {honesty}",
                 "",
                 "Payload files were copied from the run directory.",
                 "This is an escape hatch for researchers — not a new cluster product.",
@@ -98,19 +144,58 @@ def export_run(run_id: str, dest: Path, *, runs_dir: Path | None = None) -> dict
         "run_id": run_id,
         "adapter": adapter,
         "files": sorted(p.name for p in dest.iterdir() if p.is_file()),
+        "runnable_here": runnable_here,
+        "next_step": next_step,
     }
 
 
-def _readme(expanded: dict[str, Any], adapter: str, payload: Any) -> str:
+def _next_step(adapter: str, runnable_here: bool, expanded: dict[str, Any]) -> str:
+    if runnable_here:
+        return "Train from the studio, or run the compiled command in the engine."
+    if adapter in {"playground", "mjlab", "isaaclab"}:
+        from humanoid_training.hardware import osmo_ready
+
+        if adapter == "isaaclab":
+            from humanoid_training.adapters.common import recipe_adapter_config
+
+            workflow = str(recipe_adapter_config(expanded, "isaaclab").get("workflow") or "rsl_rl")
+            if workflow.lower() in {"imitation", "mimic", "bc", "robomimic"}:
+                return (
+                    "Need local Isaac Lab + GPU and HT_ISAAC_DATASET pointing at a Mimic hdf5."
+                )
+            if osmo_ready():
+                return "Need a local GPU engine, or keep OSMO logged in for remote harvest."
+        return f"Need a GPU box with `{adapter}` installed (or OSMO for rsl_rl Isaac harvest)."
+    if adapter == "lerobot":
+        return "Need GPU + `lerobot[training]` for ACT; CPU linear-BC stays on mustard demos."
+    return "Install the engine this adapter wraps, then Train again."
+
+
+def _readme(
+    expanded: dict[str, Any],
+    adapter: str,
+    payload: Any,
+    *,
+    runnable_here: bool,
+    next_step: str,
+) -> str:
     recipe = (expanded.get("task") or {}).get("recipe") or expanded.get("name") or ""
     notes = "\n".join(f"- {n}" for n in (payload.notes or [])[:8])
     cmd = " ".join(str(c) for c in (payload.command or [])[:12])
+    honesty = (
+        "Yes — Train can launch this adapter on this machine."
+        if runnable_here
+        else f"No — export compiled, but Train would block here. {next_step}"
+    )
     return "\n".join(
         [
             f"# Exported job: `{recipe}`",
             "",
             f"Adapter: `{adapter}`",
             f"Env / task: `{payload.env_name}`",
+            f"runnable_here: `{str(runnable_here).lower()}`",
+            "",
+            f"**Runnable here:** {honesty}",
             "",
             "## Command (compiled)",
             "",

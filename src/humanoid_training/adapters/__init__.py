@@ -27,11 +27,22 @@ def registry() -> dict[str, Adapter]:
     return {a.name: a for a in adapters}
 
 
-def select_adapter(spec: dict) -> Adapter:
-    """First launch-ready preferred engine, else first compile-ok (block later)."""
+def adapter_can_launch(name: str, spec: dict) -> bool:
+    """True when this adapter can launch the spec here (not compile-and-block)."""
     from humanoid_training.adapters.isaaclab import resolve_isaac_dataset
     from humanoid_training.hardware import adapter_launch_ready, isaac_local_ready
 
+    if name == "isaaclab":
+        cfg = recipe_adapter_config(spec, name)
+        workflow = str(cfg.get("workflow") or "rsl_rl").strip().lower()
+        if workflow in {"imitation", "mimic", "bc", "robomimic"}:
+            # Robomimic has no OSMO yaml — local Isaac + dataset only.
+            return isaac_local_ready() and resolve_isaac_dataset(spec) is not None
+    return adapter_launch_ready(name)
+
+
+def select_adapter(spec: dict) -> Adapter:
+    """First launch-ready preferred engine, else first compile-ok (block later)."""
     preferred = list((spec.get("backend") or {}).get("prefer") or [])
     adapters = registry()
     if not preferred:
@@ -52,13 +63,7 @@ def select_adapter(spec: dict) -> Adapter:
         if not support.ok:
             failures.append(f"{name}: {support.reason}")
             continue
-        launch_ready = adapter_launch_ready(name)
-        if name == "isaaclab":
-            workflow = str(cfg.get("workflow") or "rsl_rl").strip().lower()
-            if workflow in {"imitation", "mimic", "bc", "robomimic"}:
-                # Robomimic has no OSMO yaml — local Isaac + dataset only.
-                launch_ready = isaac_local_ready() and resolve_isaac_dataset(spec) is not None
-        if launch_ready:
+        if adapter_can_launch(name, spec):
             return adapter
         compile_ok.append(adapter)
         failures.append(f"{name}: compiles here but is not launch-ready")
@@ -72,6 +77,7 @@ def select_adapter(spec: dict) -> Adapter:
 
 
 __all__ = [
+    "adapter_can_launch",
     "ignored_scene_fields",
     "recipe_adapter_config",
     "registry",

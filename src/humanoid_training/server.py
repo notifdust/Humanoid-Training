@@ -21,9 +21,17 @@ from humanoid_training.demos import (
 from humanoid_training.errors import AdapterUnavailable, RecipeError, SpecError, repo_root
 from humanoid_training.artifacts import SERVED_ARTIFACTS
 from humanoid_training.deploy import assess_deploy, deploy_run
+from humanoid_training.english import english_for_manifest
 from humanoid_training.recipes import default_user_spec, expand_spec, load_recipe, public_catalog
 from humanoid_training.runner import default_runs_dir, load_manifest, new_run_id, run_job, write_manifest
 from humanoid_training.spec import validate_spec
+
+
+def _with_english(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Project beginner English onto a run manifest (Runs UI contract)."""
+    out = dict(manifest)
+    out["english"] = english_for_manifest(out)
+    return out
 
 app = FastAPI(title="Humanoid Training Studio", version="0.1.0")
 
@@ -213,7 +221,7 @@ def list_runs() -> dict[str, Any]:
         manifest_path = child / "manifest.json"
         if manifest_path.is_file():
             try:
-                items.append(load_manifest(child))
+                items.append(_with_english(load_manifest(child)))
             except Exception:
                 continue
     return {"runs": items}
@@ -222,7 +230,7 @@ def list_runs() -> dict[str, Any]:
 @app.get("/api/runs/{run_id}")
 def get_run(run_id: str) -> dict[str, Any]:
     path = _find_run(run_id)
-    manifest = load_manifest(path)
+    manifest = _with_english(load_manifest(path))
     log_path = path / "run.log"
     manifest["log"] = log_path.read_text(encoding="utf-8") if log_path.is_file() else ""
     return manifest
@@ -256,6 +264,7 @@ def run_events(run_id: str):
                 "artifacts": man.get("artifacts") or {},
                 "notes": man.get("notes") or [],
                 "facts": man.get("facts") or {},
+                "english": english_for_manifest(man),
             }
             yield f"data: {json.dumps(payload)}\n\n"
             if man.get("status") not in {None, "queued", "running"}:

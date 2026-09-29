@@ -9,6 +9,24 @@ from fastapi.testclient import TestClient
 from humanoid_training.server import app
 
 
+def test_api_run_includes_english(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HT_RUNS_DIR", str(tmp_path))
+    run_dir = tmp_path / "demo-1"
+    run_dir.mkdir()
+    (run_dir / "manifest.json").write_text(
+        '{"run_id":"demo-1","status":"passed","recipe":"g1-stand",'
+        '"facts":{"kind":"hold","engine":"mujoco","sim_only":true},"artifacts":{}}\n',
+        encoding="utf-8",
+    )
+    client = TestClient(app)
+    one = client.get("/api/runs/demo-1").json()
+    assert "english" in one
+    assert "not walking" in one["english"]
+    listed = client.get("/api/runs").json()["runs"]
+    assert listed and "english" in listed[0]
+    assert "not walking" in listed[0]["english"]
+
+
 def test_health_and_recipes() -> None:
     client = TestClient(app)
     health = client.get("/api/health").json()
@@ -348,6 +366,8 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "/api/proof/act" in js
     assert "/api/proof/osmo" in js
     assert "function englishFromFacts" in js
+    assert "function runEnglish" in js
+    assert "run.english" in js
     assert "facts.video === \"missing\"" in js or "facts.video === 'missing'" in js
     assert "launch_path" in js
     assert 'run.recipe !== "g1-walk"' not in js

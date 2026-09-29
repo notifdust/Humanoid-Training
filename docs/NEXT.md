@@ -205,6 +205,8 @@ Candidates (only with real engines / demos):
 | `ht export <spec\|run_id>` power-user escape hatch | done |
 | English summary from `facts` (Python + studio) | done |
 | Accessibility / motion prefs | done (`prefers-reduced-motion`) |
+| **N7d** API projects `run.english`; studio prefers it | done |
+| **N7e** export reports `runnable_here` + `next_step` | done |
 
 Do **not** start a B6 theme rewrite or fifth room.
 
@@ -239,7 +241,7 @@ Still open (needs hardware): N1b live walk, N2b OSMO live, N3b ACT live, N4b Rob
 | 4 | N4b live Robomimic train for `g1-pickplace` | Isaac Lab + `HT_ISAAC_DATASET` | pin done |
 | 5 | N5 Unitree hardware driver (after N1b) | Robot + live walk | gate only |
 | 6 | N6 more video-backed recipes | After walk proof | `g1-walk-rough` pinned |
-| 7 | N7c further a11y | Optional | `prefers-reduced-motion` done |
+| 7 | N7 further a11y / escape-hatch polish | Optional | N7b–N7e done |
 
 ### Shipped this track (CPU-safe)
 
@@ -249,6 +251,8 @@ Still open (needs hardware): N1b live walk, N2b OSMO live, N3b ACT live, N4b Rob
 | **N3a** | `ht proof act` + `GET /api/proof/act` host preflight |
 | **N6a** | `g1-walk-rough` → `Mjlab-Velocity-Rough-Unitree-G1` / `Isaac-Velocity-Rough-G1-v0` |
 | **N7b** | `prefers-reduced-motion` studio CSS |
+| **N7d** | `GET /api/runs` + `/api/runs/{id}` (+ SSE) attach `english` from facts; studio `runEnglish()` |
+| **N7e** | `ht export` returns `runnable_here` / `next_step`; writes `export_meta.json` + honest README |
 
 `GET /api/proof` bundles walk + osmo + act readiness.
 
