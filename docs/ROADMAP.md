@@ -127,6 +127,7 @@ pass. ACT is **not** that exit test.
 | `g1-stand` | yes (CPU) | mujoco + Menagerie G1 | Stand + both-arm wave, pelvis pinned. Gold clip. |
 | `pick-and-place` | yes (CPU linear-BC; ACT on GPU+LeRobot) | lerobot / mujoco | Same demos. `facts.policy=act` or `linear-bc`. Gold clip is CPU linear-BC. |
 | `g1-walk` | yes on GPU + Playground, mjlab, or Isaac Lab; blocked on CPU | playground / mjlab / isaaclab | Walking eval from the engine that launched. No gold clip. |
+| `g1-walk-rough` | yes on GPU + mjlab or Isaac Lab; blocked on CPU | mjlab / isaaclab | Rough terrain walk. No gold clip. |
 | `g1-pickplace` | yes on GPU + Isaac Lab + `HT_ISAAC_DATASET`; blocked on CPU | isaaclab (Robomimic BC) | Pinned `Isaac-PickPlace-Locomanipulation-G1-Abs-v0`. No gold clip. |
 | Unitree H1 | catalog only | — | No recipe. Do not add one until G1 walk trains for real. |
 

@@ -71,7 +71,7 @@ do not ship theater.
 | **No live ACT train** (Phase 3e) | **high** | Imitation path is still linear-BC for anyone without LeRobot+GPU. |
 | **No honest G1 loco-manipulation recipe** (Isaac PickPlace pin) | **partial** | `g1-pickplace` pinned; live Robomimic train still needs Isaac + dataset |
 | **No Unitree driver / hardware eval** (Phase 4 live) | **expected later** | Correctly gated; must follow live walk. |
-| **Thin recipe library** (4 recipes, 1 GPU) | **med** | Vision asked for 5–10 video-backed tasks. Library *is* the product. |
+| **Thin recipe library** (4 recipes, 1 GPU) | **improving** | CPU trio + `g1-walk`, `g1-walk-rough`, `g1-pickplace` — still thin vs 5–10 video-backed |
 | **Power-user escape hatch still thin** | **low** | Spec JSON under Advanced exists; export runnable script / pin engine versions is light. |
 | **NL / rich scene authoring** | **low / later** | Vision listed sentence + 3D rearrange as optional inputs — not the wedge exit. |
 
@@ -210,17 +210,28 @@ Do **not** start a B6 theme rewrite or fifth room.
 
 ---
 
-## Further roadmap after this track (N4 pin + N7 partial)
+## Further roadmap (operator order)
 
-| Priority | Item | Needs |
-|---|---|---|
-| **1** | **N1b** live `ht proof walk` on a GPU box | NVIDIA GPU + Playground/mjlab/Isaac |
-| 2 | N2 live OSMO harvest from a laptop | OSMO credentials + pool |
-| 3 | N3 live ACT on pick-and-place demos | GPU + `lerobot[training]` |
-| 4 | N4b live Robomimic train for `g1-pickplace` | Isaac Lab + `HT_ISAAC_DATASET` |
-| 5 | N5 Unitree hardware driver (after N1b) | Robot + live walk |
-| 6 | N6 more video-backed recipes | After walk proof |
-| 7 | N7b a11y / motion prefs | Optional |
+| Priority | Item | Needs | Status |
+|---|---|---|---|
+| **1** | **N1b** live `ht proof walk` on a GPU box | NVIDIA GPU + Playground/mjlab/Isaac | **next** |
+| 2 | **N2b** live OSMO harvest from a laptop | OSMO credentials + pool | harness ready (`ht proof osmo`) |
+| 3 | **N3b** live ACT on pick-and-place demos | GPU + `lerobot[training]` | harness ready (`ht proof act`) |
+| 4 | N4b live Robomimic train for `g1-pickplace` | Isaac Lab + `HT_ISAAC_DATASET` | pin done |
+| 5 | N5 Unitree hardware driver (after N1b) | Robot + live walk | gate only |
+| 6 | N6 more video-backed recipes | After walk proof | `g1-walk-rough` pinned |
+| 7 | N7c further a11y | Optional | `prefers-reduced-motion` done |
+
+### Shipped this track (CPU-safe)
+
+| Track | What |
+|---|---|
+| **N2a** | `ht proof osmo` + `GET /api/proof/osmo` host preflight |
+| **N3a** | `ht proof act` + `GET /api/proof/act` host preflight |
+| **N6a** | `g1-walk-rough` → `Mjlab-Velocity-Rough-Unitree-G1` / `Isaac-Velocity-Rough-G1-v0` |
+| **N7b** | `prefers-reduced-motion` studio CSS |
+
+`GET /api/proof` bundles walk + osmo + act readiness.
 
 ---
 

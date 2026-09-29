@@ -92,6 +92,30 @@ def assess_walk_proof_api() -> dict[str, Any]:
     return assess_walk_proof_host()
 
 
+@app.get("/api/proof/act")
+def assess_act_proof_api() -> dict[str, Any]:
+    """Phase 3e preflight: can this host launch LeRobot ACT? Does not train."""
+    from humanoid_training.readiness import assess_act_host
+
+    return assess_act_host()
+
+
+@app.get("/api/proof/osmo")
+def assess_osmo_proof_api() -> dict[str, Any]:
+    """Phase 3d preflight: can this host OSMO-harvest a walk? Does not train."""
+    from humanoid_training.readiness import assess_osmo_host
+
+    return assess_osmo_host()
+
+
+@app.get("/api/proof")
+def assess_all_proof_api() -> dict[str, Any]:
+    """Bundle walk / OSMO / ACT host readiness."""
+    from humanoid_training.readiness import assess_all
+
+    return assess_all()
+
+
 @app.get("/api/robots")
 def robots() -> dict[str, Any]:
     return {"robots": load_robot_catalog()}

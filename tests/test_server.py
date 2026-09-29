@@ -23,6 +23,7 @@ def test_health_and_recipes() -> None:
     assert "cartpole-balance" in catalog["ready"]
     assert "g1-walk" in catalog["later"]
     assert "g1-pickplace" in catalog["later"]
+    assert "g1-walk-rough" in catalog["later"]
     by_id = {r["id"]: r for r in recipes}
     assert by_id["cartpole-balance"]["has_gold"] is True
     assert by_id["g1-walk"]["has_gold"] is False
@@ -30,6 +31,7 @@ def test_health_and_recipes() -> None:
     assert by_id["g1-pickplace"]["has_gold"] is False
     assert by_id["g1-pickplace"]["launch_here"] is False
     assert by_id["g1-pickplace"]["imitate"] is False
+    assert by_id["g1-walk-rough"]["has_gold"] is False
     assert "g1-reach" not in by_id
     assert by_id["cartpole-balance"]["launch_here"] is True
     assert health.get("engines")
@@ -41,6 +43,14 @@ def test_health_and_recipes() -> None:
     assert proof["ok"] is False
     assert proof["live_clip"] is False
     assert "ht proof walk" in proof["command"]
+    act = client.get("/api/proof/act").json()
+    assert act["phase"] == "3e"
+    assert act["ok"] is False
+    osmo = client.get("/api/proof/osmo").json()
+    assert osmo["phase"] == "3d"
+    assert osmo["ok"] is False
+    bundle = client.get("/api/proof").json()
+    assert "walk" in bundle and "act" in bundle and "osmo" in bundle
     gold = client.get("/api/recipes/cartpole-balance/gold/eval.mp4")
     assert gold.status_code == 200
     assert gold.headers["content-type"].startswith("video/")
@@ -330,8 +340,11 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert '<span class="robot-mark">G1</span>' not in js
     assert "function loadDeployPreflight" in js
     assert "function loadProofPreflight" in js
+    assert "function loadActPreflight" in js
     assert 'id="proof-preflight"' in js or "id=\"proof-preflight\"" in js
     assert "/api/proof/walk" in js
+    assert "/api/proof/act" in js
+    assert "/api/proof/osmo" in js
     assert "function englishFromFacts" in js
     assert 'run.recipe !== "g1-walk"' not in js
     assert "Stays sim-only" in js or "why below" in js
@@ -388,6 +401,7 @@ def test_studio_css_disabled_cursor() -> None:
     assert ".status-legend" in css
     assert ".rail-hint" in css
     assert "main-in" in css
+    assert "prefers-reduced-motion" in css
     assert ".hint-callout" in css
     assert ".empty-state" in css
     assert "--accent:" in css
