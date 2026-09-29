@@ -13,7 +13,10 @@ from humanoid_training.proof import assess_walk_proof_host
 
 
 def assess_act_host() -> dict[str, Any]:
-    """Phase 3e preflight: can this host launch LeRobot ACT? Does not train."""
+    """Phase 3e preflight: can this host launch LeRobot ACT? Does not train.
+
+    `ht proof act` is check-only — live ACT is `ht train` on pick-and-place.
+    """
     status = hardware.engine_status()
     ready = hardware.lerobot_ready()
     reasons: list[str] = []
@@ -23,36 +26,38 @@ def assess_act_host() -> dict[str, Any]:
         reasons.append("LeRobot CLI missing (pip install 'lerobot[training]').")
     elif not status.get("lerobot_ready"):
         reasons.append("LeRobot present but not ready (needs GPU).")
-    cmd = "ht proof act"
+    train_cmd = "ht train spec/examples/g1-mustard-in-bowl.json"
     return {
         "ok": ready,
         "phase": "3e",
         "ready": {"lerobot": ready, "gpu": bool(status.get("gpu"))},
         "engines": status,
-        "command": cmd if ready else "pip install 'lerobot[training]' && ht proof act",
+        "command": train_cmd if ready else "pip install 'lerobot[training]' && " + train_cmd,
+        "check_command": "ht proof act",
         "reasons": reasons,
         "next_step": None
         if ready
         else "\n".join(
             [
-                "Phase 3e ACT proof is blocked on this machine — not a silent failure.",
+                "Phase 3e ACT readiness check failed — not a silent failure.",
                 "Need an NVIDIA GPU and LeRobot:",
                 f"  gpu={status.get('gpu')} lerobot_ready={status.get('lerobot_ready')}",
                 "",
                 "On a GPU box:",
                 "  pip install 'lerobot[training]'",
-                "  ht train spec/examples/g1-mustard-in-bowl.json",
-                "  # or: ht proof act",
+                f"  {train_cmd}",
                 "",
+                "`ht proof act` only checks readiness — it does not train.",
                 "CPU studio keeps linear-BC on pick-and-place.",
             ]
         ),
-        "error": None if ready else "ACT proof blocked — need LeRobot + GPU.",
+        "error": None if ready else "ACT readiness blocked — need LeRobot + GPU.",
         "live_clip": False,
         "note": (
-            "Host can launch LeRobot ACT on local demos."
+            "Host can launch LeRobot ACT — run ht train on pick-and-place demos "
+            "(ht proof act only checks readiness)."
             if ready
-            else "Host cannot complete Phase 3e ACT here — use a GPU box."
+            else "Host cannot launch ACT here — use a GPU box. ht proof act is check-only."
         ),
     }
 

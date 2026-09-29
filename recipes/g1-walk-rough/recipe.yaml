@@ -41,8 +41,11 @@ gold:
 studio:
   availability: gpu
   start_here: false
+  proof: none
   promise: Rough-terrain walking is not available on this computer.
   ready_promise: GPU rough walk on this machine (mjlab or Isaac Lab). Eval video should show terrain walking — not a stand clip.
+  osmo_promise: Can harvest a remote rough-walk clip via OSMO — not a local GPU train. Phase 3c proof is flat g1-walk only.
   train_hint: Rough walk needs a GPU box. Clicking Train writes job files and stops here. Start with G1 walk (flat) or G1 stand on this computer.
   ready_hint: This computer can launch a rough G1 walk engine (mjlab or Isaac Lab). Train should write a walking eval.mp4 — not a stand clip.
-  blocked_hint: Needs mjlab or Isaac Lab on a GPU box. Not a frozen walk clip.
+  osmo_hint: OSMO can harvest rough Isaac walk. Local Phase 3c proof (`ht proof walk`) is flat g1-walk only.
+  blocked_hint: Needs mjlab or Isaac Lab on a GPU box (or OSMO harvest). Not a frozen walk clip.

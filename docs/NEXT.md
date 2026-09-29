@@ -210,7 +210,15 @@ Do **not** start a B6 theme rewrite or fifth room.
 
 ---
 
-## Logic audit (2026-09-29) — honesty holes closed
+## Fallacy fixes (2026-09-29)
+
+| Fallacy | Fix |
+|---|---|
+| PickPlace `launch_here` without `HT_ISAAC_DATASET` | Require resolvable Mimic hdf5 |
+| Pill "works on this GPU" when path is OSMO | Catalog `launch_path` + OSMO promise copy |
+| Rough showed Phase 3c flat-proof UI | `studio.proof` catalog field (`walk` only on flat) |
+| `ht proof act` looked like a live train | Check-only; command points at `ht train` mustard |
+| Robomimic no-mp4 blamed on headless | Studio branches on `facts.video=missing` |
 
 | Bug | Fix |
 |---|---|

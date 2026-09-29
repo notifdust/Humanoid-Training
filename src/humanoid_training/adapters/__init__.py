@@ -29,7 +29,8 @@ def registry() -> dict[str, Adapter]:
 
 def select_adapter(spec: dict) -> Adapter:
     """First launch-ready preferred engine, else first compile-ok (block later)."""
-    from humanoid_training.hardware import adapter_launch_ready
+    from humanoid_training.adapters.isaaclab import resolve_isaac_dataset
+    from humanoid_training.hardware import adapter_launch_ready, isaac_local_ready
 
     preferred = list((spec.get("backend") or {}).get("prefer") or [])
     adapters = registry()
@@ -51,7 +52,13 @@ def select_adapter(spec: dict) -> Adapter:
         if not support.ok:
             failures.append(f"{name}: {support.reason}")
             continue
-        if adapter_launch_ready(name):
+        launch_ready = adapter_launch_ready(name)
+        if name == "isaaclab":
+            workflow = str(cfg.get("workflow") or "rsl_rl").strip().lower()
+            if workflow in {"imitation", "mimic", "bc", "robomimic"}:
+                # Robomimic has no OSMO yaml — local Isaac + dataset only.
+                launch_ready = isaac_local_ready() and resolve_isaac_dataset(spec) is not None
+        if launch_ready:
             return adapter
         compile_ok.append(adapter)
         failures.append(f"{name}: compiles here but is not launch-ready")

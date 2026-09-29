@@ -78,10 +78,13 @@ function englishList(items) {
 
 function pill(recipe) {
   if (worksHere(recipe) && recipe.availability === "gpu") {
-    // OSMO-only hosts can launch walk without a local GPU — don't overclaim.
-    const engines = (state.health && state.health.engines) || {};
-    if (engines.gpu) return `<span class="pill live">works on this GPU</span>`;
-    if (engines.osmo_ready) return `<span class="pill live">works via OSMO harvest</span>`;
+    // Prefer catalog launch_path (local_gpu vs osmo) over bare health.gpu.
+    if (recipe.launch_path === "osmo") {
+      return `<span class="pill live">works via OSMO harvest</span>`;
+    }
+    if (recipe.launch_path === "local_gpu") {
+      return `<span class="pill live">works on this GPU</span>`;
+    }
     return `<span class="pill live">can launch here</span>`;
   }
   if (worksHere(recipe)) return `<span class="pill live">works on this computer</span>`;
@@ -587,8 +590,9 @@ function renderRecipe() {
       ? "Save demos if you want them, then click Train."
       : "Click Train — watch the result in Runs."
     : "Compile only — this task needs a GPU box.";
+  const proofKind = r.proof || "";
   const proofBlock =
-    r.id === "g1-walk" || r.id === "g1-walk-rough"
+    proofKind === "walk"
       ? `<div class="proof-block" id="proof-preflight">
            <p class="eyebrow">Phase 3c · walk proof</p>
            <p class="lede" id="proof-note">Checking whether this machine can prove a walking clip…</p>
@@ -596,9 +600,9 @@ function renderRecipe() {
            <ul class="reasons" id="proof-reasons" hidden></ul>
            <p class="meta" id="proof-osmo" hidden></p>
          </div>`
-      : r.id === "pick-and-place"
+      : proofKind === "act"
         ? `<div class="proof-block" id="act-preflight">
-             <p class="eyebrow">Phase 3e · ACT</p>
+             <p class="eyebrow">Phase 3e · ACT readiness</p>
              <p class="lede" id="act-note">Checking whether this machine can launch ACT…</p>
              <p class="meta" id="act-command"></p>
              <ul class="reasons" id="act-reasons" hidden></ul>
@@ -673,8 +677,8 @@ function renderRecipe() {
   if (state.recording) startTeleopLoop();
   else stopTeleopLoop();
   bindStepNav();
-  if (r.id === "g1-walk" || r.id === "g1-walk-rough") loadProofPreflight();
-  if (r.id === "pick-and-place") loadActPreflight();
+  if (proofKind === "walk") loadProofPreflight();
+  if (proofKind === "act") loadActPreflight();
 }
 
 async function loadProofPreflight() {
@@ -735,11 +739,11 @@ async function loadActPreflight() {
     note.textContent =
       report.note ||
       (report.ok
-        ? "This machine can launch LeRobot ACT on demos."
+        ? "This machine can launch LeRobot ACT — Train pick-and-place (ht proof act only checks)."
         : "ACT needs a GPU + LeRobot — CPU keeps linear-BC.");
     if (cmd && report.command) {
       cmd.textContent = report.ok
-        ? `On this box: ${report.command}`
+        ? `To train ACT: ${report.command}`
         : `On a GPU box: ${report.command}`;
     }
     if (reasonsEl) {
@@ -1821,7 +1825,9 @@ function paintRun(run, logText) {
       ? "No video — this task cannot train on this computer."
       : ["queued", "running"].includes(run.status)
         ? "Video appears when training finishes."
-        : hasMetrics && (run.metrics.passed === true || run.status === "passed")
+        : facts.video === "missing"
+          ? "No eval.mp4 — the engine finished but play wrote no clip (not a headless skip). Not a stand substitute."
+          : hasMetrics && (run.metrics.passed === true || run.status === "passed")
           ? "No eval.mp4 — training scored success but rendering was skipped (headless / HT_NO_RENDER). Use a display or xvfb for a clip."
           : "No eval video. On a machine without a display, Train may still score success but skip the clip.";
   const video = run.artifacts && run.artifacts["eval.mp4"]
