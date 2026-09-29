@@ -104,6 +104,22 @@ def main(argv: list[str] | None = None) -> int:
     p_deploy.add_argument("run_id", help="Run id under the runs directory")
     p_deploy.add_argument("--out", type=Path, default=None, help="Runs directory")
 
+    p_export = sub.add_parser(
+        "export",
+        help="Export a compiled job (spec or run) for power users — not a new orchestrator",
+    )
+    p_export.add_argument(
+        "target",
+        help="Path to a job spec JSON, or a run id under the runs directory",
+    )
+    p_export.add_argument(
+        "--dest",
+        type=Path,
+        default=None,
+        help="Directory to write (default: export/<name>)",
+    )
+    p_export.add_argument("--out", type=Path, default=None, help="Runs directory when target is a run id")
+
     args = parser.parse_args(argv)
     try:
         if args.cmd == "recipes":
@@ -128,6 +144,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_proof(args.what, args.prefer, args.steps, args.out, args.check)
         if args.cmd == "deploy":
             return _cmd_deploy(args.run_id, args.out)
+        if args.cmd == "export":
+            return _cmd_export(args.target, args.dest, args.out)
     except (SpecError, RecipeError, AdapterError, FileNotFoundError) as err:
         print(err, file=sys.stderr)
         return 2
@@ -290,6 +308,27 @@ def _cmd_deploy(run_id: str, out: Path | None) -> int:
         print(err, file=sys.stderr)
         return 12
     return 0
+
+
+def _cmd_export(target: str, dest: Path | None, runs_dir: Path | None) -> int:
+    from humanoid_training.export_job import export_run, export_spec_path
+
+    path = Path(target)
+    if path.is_file():
+        out = dest or Path("export") / path.stem
+        report = export_spec_path(path, out)
+    else:
+        out = dest or Path("export") / target
+        try:
+            report = export_run(target, out, runs_dir=runs_dir or default_runs_dir())
+        except FileNotFoundError as err:
+            print(err, file=sys.stderr)
+            return 2
+        except AdapterUnavailable as err:
+            print(err, file=sys.stderr)
+            return 12
+    print(json.dumps(report, indent=2, default=str))
+    return 0 if report.get("ok") else 1
 
 
 def _cmd_serve(host: str, port: int) -> int:

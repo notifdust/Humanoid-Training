@@ -1485,6 +1485,39 @@ function factsListHTML(facts) {
   return `<div class="facts-list">${rows}</div>`;
 }
 
+function englishFromFacts(facts, run) {
+  const kind = String((facts && facts.kind) || "");
+  const engine = String((facts && facts.engine) || "");
+  const policy = String((facts && facts.policy) || "");
+  const status = String((run && run.status) || "").toLowerCase();
+  const err = (run && (run.error || run.message)) || "";
+  if ((status === "blocked" || status === "queued") && err) {
+    return String(err).split("\n")[0].slice(0, 200);
+  }
+  if (status === "failed" || status === "error") {
+    return err ? `Run broke: ${String(err).split("\n")[0].slice(0, 180)}` : "Run finished but did not pass.";
+  }
+  const sim = facts && facts.sim_only === true ? " Still sim-only — not cleared for hardware." : "";
+  if (kind === "hold") {
+    return `Held a pinned pose${engine ? ` via ${engine}` : ""} — not walking.${sim}`.trim();
+  }
+  if (kind === "rl") {
+    let bit = `${engine || "engine"} RL`;
+    if (policy) bit += ` (${policy})`;
+    if (facts.device === "remote") bit += " on remote GPU";
+    else if (facts.device === "gpu") bit += " on GPU";
+    return `Locomotion / RL rollout from ${bit}.${sim}`.trim();
+  }
+  if (kind === "imitation") {
+    const label = { act: "ACT", "linear-bc": "linear-BC", bc: "BC" }[policy] || policy || "imitation";
+    return `Imitation (${label}) via ${engine || "local"} — demos, not finger grasping.${sim}`.trim();
+  }
+  if (status === "passed" || status === "completed") {
+    return `Finished${engine ? ` on ${engine}` : ""}.${sim}`.trim();
+  }
+  return "";
+}
+
 function paintCompareColumn(run) {
   const facts = runFacts(run);
   const statusClass = runStatusClass(run);
@@ -1500,11 +1533,13 @@ function paintCompareColumn(run) {
     isSimOnly(facts)
       ? `<p class="meta">sim-only — not cleared for hardware</p>`
       : "";
+  const english = englishFromFacts(facts, run);
   return `
     <section class="compare-col" data-compare-run="${escapeHtml(run.run_id)}">
       <h2>${escapeHtml(prettyRecipe(run.recipe))}</h2>
       <p class="meta">${escapeHtml(run.run_id)}</p>
       <p class="status-chip ${statusClass}">${escapeHtml(englishRunStatus(run))}</p>
+      ${english ? `<p class="lede">${escapeHtml(english)}</p>` : ""}
       ${metrics}
       ${simOnly}
       ${backendBadge(facts)}
@@ -1710,6 +1745,7 @@ function paintRun(run, logText) {
       ? `<p class="meta" id="sim-only-badge">sim-only — not cleared for hardware</p>`
       : "";
   const headline = englishRunStatus(run);
+  const factsEnglish = englishFromFacts(facts, run);
   const readyTitles = readyRecipes(state.recipes).map((r) => r.title);
   const laterTitles = laterRecipes(state.recipes).map((r) => r.title);
   const blockedHelp =
@@ -1744,6 +1780,7 @@ function paintRun(run, logText) {
     <p class="eyebrow">Step ${imitateRun ? "4" : "3"} · Video</p>
     <h1>${escapeHtml(prettyRecipe(run.recipe))}</h1>
     <p class="status-chip ${statusClass}">${escapeHtml(headline)}</p>
+    ${factsEnglish ? `<p class="lede" id="facts-english">${escapeHtml(factsEnglish)}</p>` : ""}
     ${nextCueHTML(videoCue)}
     ${metrics}
     ${simOnly}

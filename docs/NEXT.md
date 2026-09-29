@@ -69,7 +69,7 @@ do not ship theater.
 | **No live walking `eval.mp4` from a real GPU** (Phase 3c) | **critical** | The wedge is humanoid locomotion. Without this, G1 walk is a compiler demo, not the product. |
 | **No live OSMO / hosted-GPU harvest** (Phase 3d) | **high** | Beginners were promised “compute is someone else’s problem.” Laptop still cannot finish walk. |
 | **No live ACT train** (Phase 3e) | **high** | Imitation path is still linear-BC for anyone without LeRobot+GPU. |
-| **No honest G1 loco-manipulation recipe** (Isaac PickPlace pin) | **med** | Vision’s “canned loco-manipulation” is still stand / mustard / blocked walk. |
+| **No honest G1 loco-manipulation recipe** (Isaac PickPlace pin) | **partial** | `g1-pickplace` pinned; live Robomimic train still needs Isaac + dataset |
 | **No Unitree driver / hardware eval** (Phase 4 live) | **expected later** | Correctly gated; must follow live walk. |
 | **Thin recipe library** (4 recipes, 1 GPU) | **med** | Vision asked for 5–10 video-backed tasks. Library *is* the product. |
 | **Power-user escape hatch still thin** | **low** | Spec JSON under Advanced exists; export runnable script / pin engine versions is light. |
@@ -160,24 +160,22 @@ This is how the beginner bar (“no CUDA install”) reconnects to the wedge.
 | Studio badge / Runs facts show `policy=act` | Already projected when stamped |
 | Keep mustard-in-bowl success criterion | Do not widen to grasping |
 
-### N4 — Honest G1 manipulation recipe (only with a real upstream id)
+### N4 — Honest G1 manipulation recipe (done pin; live train still needs Isaac)
 
-**Exit test.** Pin a **confirmed** Isaac Lab / mjlab G1 PickPlace (or
-equivalent) task string under an honest recipe name. No invented env ids.
+**Exit test (pin met).** Recipe `g1-pickplace` pins
+`Isaac-PickPlace-Locomanipulation-G1-Abs-v0` with `workflow: robomimic`
+(not rsl_rl). Compiles Robomimic train script; launch fail-closes without
+`HT_ISAAC_DATASET`. CPU mustard stays `pick-and-place`.
 
-Upstream candidates already documented by Isaac Lab (confirm on a GPU box
-before pinning): `Isaac-PickPlace-Locomanipulation-G1-Abs-v0`,
-`Isaac-PickPlace-FixedBaseUpperBodyIK-G1-Abs-v0`,
-`Isaac-PickPlace-G1-InspireFTP-Abs-v0`.
-
-| Work | Notes |
+| Work | Status |
 |---|---|
-| Confirm upstream task id on a GPU box | Write it down in recipe + ROADMAP |
-| New recipe + adapter pin + studio catalog card | Fail closed without engine |
-| Gold only if `availability: cpu` | GPU recipes: no fake success clip |
+| Confirm upstream task id from Isaac docs | done |
+| New recipe + adapter robomimic workflow + catalog card | done |
+| No gold clip | done |
+| Live Robomimic train on GPU + Mimic hdf5 | **not done** (needs Isaac + dataset) |
 
-If no upstream id is confirmable, **skip** — keep `pick-and-place` as the
-arm demo. Deleting `g1-reach` already satisfied honesty.
+Fixed-base alternative not pinned:
+`Isaac-PickPlace-FixedBaseUpperBodyIK-G1-Abs-v0`.
 
 ### N5 — Phase 4: live hardware (only after N1b)
 
@@ -200,30 +198,29 @@ Candidates (only with real engines / demos):
 - One more imitation recipe on the same teleop stack
 - H1 recipe **only after** G1 walk has a live clip
 
-### N7 — Optional studio polish (only if it serves the loop)
+### N7 — Studio polish that serves the loop (partial)
 
-Betterment B0–B5 are done. Further UI work is **optional** and must not
-block N1–N5. Acceptable later:
-
-- Spec inspector / export script for power users
-- Stronger English failure modes from `facts` (“fell at 1.2s”)
-- Accessibility / motion prefs
+| Work | Status |
+|---|---|
+| `ht export <spec\|run_id>` power-user escape hatch | done |
+| English summary from `facts` (Python + studio) | done |
+| Accessibility / motion prefs | not started |
 
 Do **not** start a B6 theme rewrite or fifth room.
 
 ---
 
-## Further roadmap after this track (N1a)
+## Further roadmap after this track (N4 pin + N7 partial)
 
 | Priority | Item | Needs |
 |---|---|---|
 | **1** | **N1b** live `ht proof walk` on a GPU box | NVIDIA GPU + Playground/mjlab/Isaac |
 | 2 | N2 live OSMO harvest from a laptop | OSMO credentials + pool |
 | 3 | N3 live ACT on pick-and-place demos | GPU + `lerobot[training]` |
-| 4 | N4 pin confirmed Isaac G1 PickPlace recipe | GPU to confirm task id |
+| 4 | N4b live Robomimic train for `g1-pickplace` | Isaac Lab + `HT_ISAAC_DATASET` |
 | 5 | N5 Unitree hardware driver (after N1b) | Robot + live walk |
 | 6 | N6 more video-backed recipes | After walk proof |
-| 7 | N7 power-user export / English failure modes | Optional |
+| 7 | N7b a11y / motion prefs | Optional |
 
 ---
 

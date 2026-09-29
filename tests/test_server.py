@@ -19,12 +19,17 @@ def test_health_and_recipes() -> None:
     ids = {r["id"] for r in recipes}
     assert "cartpole-balance" in ids
     assert "g1-walk" in ids
+    assert "g1-pickplace" in ids
     assert "cartpole-balance" in catalog["ready"]
     assert "g1-walk" in catalog["later"]
+    assert "g1-pickplace" in catalog["later"]
     by_id = {r["id"]: r for r in recipes}
     assert by_id["cartpole-balance"]["has_gold"] is True
     assert by_id["g1-walk"]["has_gold"] is False
     assert by_id["g1-walk"]["launch_here"] is False
+    assert by_id["g1-pickplace"]["has_gold"] is False
+    assert by_id["g1-pickplace"]["launch_here"] is False
+    assert by_id["g1-pickplace"]["imitate"] is False
     assert "g1-reach" not in by_id
     assert by_id["cartpole-balance"]["launch_here"] is True
     assert health.get("engines")
@@ -327,6 +332,7 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "function loadProofPreflight" in js
     assert 'id="proof-preflight"' in js or "id=\"proof-preflight\"" in js
     assert "/api/proof/walk" in js
+    assert "function englishFromFacts" in js
     assert 'run.recipe !== "g1-walk"' not in js
     assert "Stays sim-only" in js or "why below" in js
     assert "id=\"deploy-preflight\"" in js

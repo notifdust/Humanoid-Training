@@ -68,7 +68,11 @@ class Recipe:
             "scene_preview": bool(
                 ((self.data.get("adapters") or {}).get("mujoco") or {}).get("scene_preview")
             ),
-            "imitate": (self.data.get("train") or {}).get("method") == "imitation",
+            "imitate": (
+                bool(studio["imitate"])
+                if "imitate" in studio
+                else (self.data.get("train") or {}).get("method") == "imitation"
+            ),
             "method": str((self.data.get("train") or {}).get("method") or ""),
             "adapters": sorted((self.data.get("adapters") or {}).keys()),
         }
