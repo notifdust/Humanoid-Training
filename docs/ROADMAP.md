@@ -14,7 +14,7 @@ Phase 3b  mjlab / Isaac G1 walk + OSMO       ← launch path done (no G1 reach e
 Phase 3c  GPU-box walk proof                 ← next live clip (`ht proof walk`; harness + preflight done)
 Phase 3d  remote harvest (OSMO / GPU queue)  ← launch path done (needs OSMO pool for live proof)
 Phase 3e  ACT on the same demos                 ← launch path done (needs GPU for live ACT)
-Phase 3f  honest G1 manipulation recipe     ← done (deleted dishonest g1-reach)
+Phase 3f  honest G1 manipulation recipe     ← done (deleted g1-reach; pinned `g1-pickplace` Isaac Robomimic)
 Phase 3g  compare two runs in Runs           ← done (side-by-side in Runs room)
 Phase 4   real G1/H1 deploy with safety gates ← gate done (live torque **not** wired)
 Phase 4b  proof/deploy honesty + Runs projects gate ← done
@@ -127,11 +127,12 @@ pass. ACT is **not** that exit test.
 | `g1-stand` | yes (CPU) | mujoco + Menagerie G1 | Stand + both-arm wave, pelvis pinned. Gold clip. |
 | `pick-and-place` | yes (CPU linear-BC; ACT on GPU+LeRobot) | lerobot / mujoco | Same demos. `facts.policy=act` or `linear-bc`. Gold clip is CPU linear-BC. |
 | `g1-walk` | yes on GPU + Playground, mjlab, or Isaac Lab; blocked on CPU | playground / mjlab / isaaclab | Walking eval from the engine that launched. No gold clip. |
+| `g1-pickplace` | yes on GPU + Isaac Lab + `HT_ISAAC_DATASET`; blocked on CPU | isaaclab (Robomimic BC) | Pinned `Isaac-PickPlace-Locomanipulation-G1-Abs-v0`. No gold clip. |
 | Unitree H1 | catalog only | — | No recipe. Do not add one until G1 walk trains for real. |
 
 `g1-reach` was deleted in Phase 3f. There is no upstream G1 reach env
 to pin; do not invent `G1Reach-v0` / `Isaac-Reach-G1-v0`. CPU arm motion
-is `pick-and-place`.
+is `pick-and-place`. Isaac G1 PickPlace is `g1-pickplace`.
 
 Gold notes live in each `recipe.yaml`. CPU recipes also ship
 `gold/eval.mp4` + `gold/notes.md`. CI’s `gold` job retrains those recipes
@@ -374,10 +375,11 @@ task id under an honest name. No invented env ids.
 | Catalog `later` is only `g1-walk` on CPU | done |
 | Unknown `g1-reach` recipe id fails closed (`RecipeError`) | done |
 | Do not invent `G1Reach-v0` / `Isaac-Reach-G1-v0` | done |
-| Pin Isaac G1 PickPlace under a new honest recipe | **not done** (no confirmed upstream task id in-repo) |
+| Pin Isaac G1 PickPlace under a new honest recipe | done (`g1-pickplace` → `Isaac-PickPlace-Locomanipulation-G1-Abs-v0`, Robomimic workflow) |
 
-CPU arm motion stays `pick-and-place`. Add a PickPlace recipe only after
-confirming a real Isaac/mjlab task string on a GPU box.
+CPU arm motion stays `pick-and-place`. Isaac G1 PickPlace is
+`g1-pickplace` (Robomimic BC, needs `HT_ISAAC_DATASET`). Do not invent
+reach env ids.
 
 ### Phase 3g — Compare two runs (Evaluate in Runs)
 
