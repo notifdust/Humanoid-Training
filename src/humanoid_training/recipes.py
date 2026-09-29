@@ -118,18 +118,38 @@ def _gpu_engine_configured(data: dict[str, Any], name: str) -> bool:
     return False
 
 
+def _isaac_workflow(data: dict[str, Any]) -> str:
+    cfg = ((data.get("adapters") or {}).get("isaaclab") or {})
+    raw = str(cfg.get("workflow") or "rsl_rl").strip().lower()
+    if raw in {"imitation", "mimic", "bc", "robomimic"}:
+        return "robomimic"
+    return "rsl_rl"
+
+
 def _launch_here(recipe: Recipe, availability: str) -> bool:
     """True when Train on this machine will launch, not merely compile-and-block.
 
     CPU recipes always launch. GPU recipes launch when any configured engine
     (playground / mjlab / isaaclab) is launch-ready on this host.
+
+    Robomimic Isaac recipes cannot use OSMO harvest (no workflow yaml) — only
+    local Isaac CLI / GPU Docker counts for those.
     """
     if availability == "cpu":
         return True
-    from humanoid_training.hardware import adapter_launch_ready
+    from humanoid_training.hardware import (
+        adapter_launch_ready,
+        isaac_local_ready,
+    )
 
     for name in ("playground", "mjlab", "isaaclab"):
-        if _gpu_engine_configured(recipe.data, name) and adapter_launch_ready(name):
+        if not _gpu_engine_configured(recipe.data, name):
+            continue
+        if name == "isaaclab" and _isaac_workflow(recipe.data) == "robomimic":
+            if isaac_local_ready():
+                return True
+            continue
+        if adapter_launch_ready(name):
             return True
     return False
 

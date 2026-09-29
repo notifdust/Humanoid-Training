@@ -373,7 +373,7 @@ task id under an honest name. No invented env ids.
 | Deliverable | Status |
 |---|---|
 | Delete `recipes/g1-reach` + `spec/examples/g1-reach.json` | done |
-| Catalog `later` is only `g1-walk` on CPU | done |
+| Catalog `later` is only GPU recipes on CPU hosts | done (`g1-walk`, `g1-walk-rough`, `g1-pickplace`) |
 | Unknown `g1-reach` recipe id fails closed (`RecipeError`) | done |
 | Do not invent `G1Reach-v0` / `Isaac-Reach-G1-v0` | done |
 | Pin Isaac G1 PickPlace under a new honest recipe | done (`g1-pickplace` → `Isaac-PickPlace-Locomanipulation-G1-Abs-v0`, Robomimic workflow) |
