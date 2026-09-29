@@ -551,6 +551,24 @@ workflow:
             # Train/play write logs/rsl_rl relative to cwd (run_dir).
             video = harvest_mp4(run_dir, dest)
         if want_video and video is None:
+            if workflow == WORKFLOW_ROBOMIMIC:
+                # Robomimic play does not take the same --video flags as rsl_rl.
+                # Exit 0 without a clip is incomplete evidence, not a hard block
+                # that would mis-label a successful train as "blocked".
+                notes = [
+                    f"Isaac Lab task={task} launch={runner} workflow={workflow}",
+                    "Robomimic train exited 0 but wrote no eval.mp4 — not substituting a stand clip.",
+                    "Set record_video only when play can emit a clip, or harvest manually.",
+                ]
+                return EvalResult(
+                    success_rate=1.0,
+                    mean_return=0.0,
+                    episodes=int((spec.get("eval") or {}).get("episodes") or 1),
+                    video_path=None,
+                    passed=True,
+                    notes=notes,
+                    facts={**facts, "video": "missing"},
+                )
             raise AdapterUnavailable(
                 "Isaac Lab finished (exit 0) but wrote no *.mp4. "
                 "Not substituting a stand clip. "

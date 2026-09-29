@@ -204,11 +204,22 @@ Candidates (only with real engines / demos):
 |---|---|
 | `ht export <spec\|run_id>` power-user escape hatch | done |
 | English summary from `facts` (Python + studio) | done |
-| Accessibility / motion prefs | not started |
+| Accessibility / motion prefs | done (`prefers-reduced-motion`) |
 
 Do **not** start a B6 theme rewrite or fifth room.
 
 ---
+
+## Logic audit (2026-09-29) — honesty holes closed
+
+| Bug | Fix |
+|---|---|
+| OSMO-only made `g1-pickplace` `launch_here` | Robomimic recipes require `isaac_local_ready` only |
+| Phase 3c assess `ok:true` via OSMO without GPU | Walk engines for proof use local Isaac; `ok` needs GPU |
+| Robomimic exit 0 + no mp4 → status `blocked` | Pass with `facts.video=missing` + honest note |
+| Pill said "works on this GPU" on OSMO-only | Pill projects GPU vs OSMO from health |
+
+Still open (needs hardware): N1b live walk, N2b OSMO live, N3b ACT live, N4b Robomimic live.
 
 ## Further roadmap (operator order)
 

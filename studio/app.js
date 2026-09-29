@@ -2,6 +2,7 @@ const state = {
   view: "tasks",
   recipes: [],
   robots: [],
+  health: null,
   robot: null,
   selected: null,
   starter: null,
@@ -77,10 +78,16 @@ function englishList(items) {
 
 function pill(recipe) {
   if (worksHere(recipe) && recipe.availability === "gpu") {
-    return `<span class="pill live">works on this GPU</span>`;
+    // OSMO-only hosts can launch walk without a local GPU — don't overclaim.
+    const engines = (state.health && state.health.engines) || {};
+    if (engines.gpu) return `<span class="pill live">works on this GPU</span>`;
+    if (engines.osmo_ready) return `<span class="pill live">works via OSMO harvest</span>`;
+    return `<span class="pill live">can launch here</span>`;
   }
   if (worksHere(recipe)) return `<span class="pill live">works on this computer</span>`;
-  if (recipe.availability === "gpu") return `<span class="pill blocked">needs a GPU — skip for now</span>`;
+  if (recipe.availability === "gpu") {
+    return `<span class="pill blocked">needs a GPU — skip for now</span>`;
+  }
   return `<span class="pill blocked">later</span>`;
 }
 
@@ -2095,6 +2102,7 @@ function formatHealthStrip(health) {
 async function boot() {
   try {
     const health = await api("/api/health");
+    state.health = health;
     document.getElementById("health").textContent = formatHealthStrip(health);
     const [recipes, robots] = await Promise.all([
       api("/api/recipes"),

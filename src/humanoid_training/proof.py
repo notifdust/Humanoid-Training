@@ -27,10 +27,14 @@ PROOF_REPORT_NAME = "proof_3c.json"
 
 
 def walk_engines_ready() -> dict[str, bool]:
+    """Engines that can run a *local* Phase 3c GPU walk proof.
+
+    OSMO harvest is Phase 3d — it must not make Phase 3c assess ok:true.
+    """
     return {
         "playground": hardware.playground_ready(),
         "mjlab": hardware.mjlab_ready(),
-        "isaaclab": hardware.isaac_launch_ready(),
+        "isaaclab": hardware.isaac_local_ready(),
     }
 
 
@@ -59,7 +63,8 @@ def _blocked_message(ready: dict[str, bool]) -> str:
         "Phase 3c walk proof is blocked on this machine — not a silent failure.",
         "Need an NVIDIA GPU and one walk engine:",
         f"  gpu={status.get('gpu')} playground_ready={ready['playground']} "
-        f"mjlab_ready={ready['mjlab']} isaac_launch_ready={ready['isaaclab']}",
+        f"mjlab_ready={ready['mjlab']} isaac_local_ready={ready['isaaclab']} "
+        f"osmo_ready={status.get('osmo_ready')} (OSMO is Phase 3d, not 3c)",
         "",
         "On a GPU box, pick one:",
         "  pip install playground && ht proof walk",
@@ -73,7 +78,11 @@ def _blocked_message(ready: dict[str, bool]) -> str:
 
 
 def assess_walk_proof_host(*, prefer: list[str] | None = None) -> dict[str, Any]:
-    """Phase 3c preflight: can this host run `ht proof walk`? Does not train."""
+    """Phase 3c preflight: can this host run `ht proof walk`? Does not train.
+
+    Requires a local GPU walk engine. OSMO-only readiness is Phase 3d
+    (`ht proof osmo`) — it must not report Phase 3c ok:true.
+    """
     ready = walk_engines_ready()
     status = hardware.engine_status()
     engine = first_ready_engine(prefer)
@@ -82,18 +91,23 @@ def assess_walk_proof_host(*, prefer: list[str] | None = None) -> dict[str, Any]
         reasons.append("No NVIDIA GPU detected on this machine.")
     if not any(ready.values()):
         reasons.append(
-            "No walk engine ready (Playground, mjlab, or Isaac Lab launch path)."
+            "No local walk engine ready (Playground, mjlab, or local Isaac Lab)."
         )
+        if status.get("osmo_ready"):
+            reasons.append(
+                "OSMO is ready for Phase 3d harvest (ht proof osmo) — not Phase 3c local proof."
+            )
     elif engine is None and prefer:
         reasons.append(
             "Preferred engine(s) not ready: " + ", ".join(prefer) + "."
         )
-    ok = engine is not None
+    # Phase 3c is a local GPU proof — never ok without GPU + a local engine.
+    ok = bool(status.get("gpu") and engine is not None)
     cmd = proof_command(prefer=prefer, engine=engine)
     return {
         "ok": ok,
         "phase": "3c",
-        "engine": engine,
+        "engine": engine if ok else None,
         "ready": ready,
         "engines": status,
         "command": cmd,
@@ -102,9 +116,9 @@ def assess_walk_proof_host(*, prefer: list[str] | None = None) -> dict[str, Any]
         "error": None if ok else _blocked_message(ready),
         "live_clip": False,
         "note": (
-            "Host can launch a short walk proof."
+            "Host can launch a short local walk proof."
             if ok
-            else "Host cannot complete Phase 3c here — use a GPU box."
+            else "Host cannot complete Phase 3c here — use a GPU box (OSMO is Phase 3d)."
         ),
     }
 
