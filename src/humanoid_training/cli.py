@@ -74,14 +74,14 @@ def main(argv: list[str] | None = None) -> int:
 
     p_proof = sub.add_parser(
         "proof",
-        help="Phase 3c: run a short G1 walk on this GPU and require eval.mp4",
+        help="Phase proofs: walk trains on GPU; act/osmo are readiness checks only",
     )
     p_proof.add_argument(
         "what",
         nargs="?",
         default="walk",
-        choices=["walk"],
-        help="What to prove (only walk today)",
+        choices=["walk", "act", "osmo"],
+        help="walk = short GPU train+judge; act/osmo = readiness check only (no train)",
     )
     p_proof.add_argument(
         "--prefer",
@@ -91,6 +91,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_proof.add_argument("--steps", type=int, default=None, help="Override train steps (default: short proof)")
     p_proof.add_argument("--out", type=Path, default=None, help="Runs directory")
+    p_proof.add_argument(
+        "--check",
+        action="store_true",
+        help="Only report whether this host can run the walk proof (no train)",
+    )
 
     p_deploy = sub.add_parser(
         "deploy",
@@ -98,6 +103,22 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_deploy.add_argument("run_id", help="Run id under the runs directory")
     p_deploy.add_argument("--out", type=Path, default=None, help="Runs directory")
+
+    p_export = sub.add_parser(
+        "export",
+        help="Export a compiled job (spec or run) for power users — not a new orchestrator",
+    )
+    p_export.add_argument(
+        "target",
+        help="Path to a job spec JSON, or a run id under the runs directory",
+    )
+    p_export.add_argument(
+        "--dest",
+        type=Path,
+        default=None,
+        help="Directory to write (default: export/<name>)",
+    )
+    p_export.add_argument("--out", type=Path, default=None, help="Runs directory when target is a run id")
 
     args = parser.parse_args(argv)
     try:
@@ -120,9 +141,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "gold":
             return _cmd_gold(args.recipe, args.out)
         if args.cmd == "proof":
-            return _cmd_proof(args.what, args.prefer, args.steps, args.out)
+            return _cmd_proof(args.what, args.prefer, args.steps, args.out, args.check)
         if args.cmd == "deploy":
             return _cmd_deploy(args.run_id, args.out)
+        if args.cmd == "export":
+            return _cmd_export(args.target, args.dest, args.out)
     except (SpecError, RecipeError, AdapterError, FileNotFoundError) as err:
         print(err, file=sys.stderr)
         return 2
@@ -245,12 +268,26 @@ def _cmd_proof(
     prefer: list[str] | None,
     steps: int | None,
     out: Path | None,
+    check: bool = False,
 ) -> int:
-    from humanoid_training.proof import PROOF_STEPS, run_walk_proof
+    from humanoid_training.proof import PROOF_STEPS, assess_walk_proof_host, run_walk_proof
+    from humanoid_training.readiness import assess_act_host, assess_osmo_host
 
+    if what == "act":
+        report = assess_act_host()
+        print(json.dumps(report, indent=2, default=str))
+        return 0 if report.get("ok") else 12
+    if what == "osmo":
+        report = assess_osmo_host()
+        print(json.dumps(report, indent=2, default=str))
+        return 0 if report.get("ok") else 12
     if what != "walk":
-        print(f"Unknown proof target {what!r}. Use: ht proof walk", file=sys.stderr)
+        print(f"Unknown proof target {what!r}. Use: ht proof walk|act|osmo", file=sys.stderr)
         return 2
+    if check:
+        report = assess_walk_proof_host(prefer=prefer)
+        print(json.dumps(report, indent=2, default=str))
+        return 0 if report.get("ok") else 12
     try:
         report = run_walk_proof(
             runs_dir=out or default_runs_dir(),
@@ -280,6 +317,27 @@ def _cmd_deploy(run_id: str, out: Path | None) -> int:
         print(err, file=sys.stderr)
         return 12
     return 0
+
+
+def _cmd_export(target: str, dest: Path | None, runs_dir: Path | None) -> int:
+    from humanoid_training.export_job import export_run, export_spec_path
+
+    path = Path(target)
+    if path.is_file():
+        out = dest or Path("export") / path.stem
+        report = export_spec_path(path, out)
+    else:
+        out = dest or Path("export") / target
+        try:
+            report = export_run(target, out, runs_dir=runs_dir or default_runs_dir())
+        except FileNotFoundError as err:
+            print(err, file=sys.stderr)
+            return 2
+        except AdapterUnavailable as err:
+            print(err, file=sys.stderr)
+            return 12
+    print(json.dumps(report, indent=2, default=str))
+    return 0 if report.get("ok") else 1
 
 
 def _cmd_serve(host: str, port: int) -> int:

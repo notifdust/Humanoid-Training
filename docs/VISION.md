@@ -182,7 +182,8 @@ The adapters are replaceable. That is how we stay a platform instead of
 becoming "a thin Isaac Lab tutorial website."
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for the spec shape and adapter
-boundaries, and [ROADMAP.md](./ROADMAP.md) for what is implemented now.
+boundaries, [ROADMAP.md](./ROADMAP.md) for what is implemented now, and
+[NEXT.md](./NEXT.md) for mission alignment and the ordered next steps.
 
 ---
 

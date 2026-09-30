@@ -188,11 +188,18 @@ def docker_gpu_requested() -> bool:
     return _env_bool("HT_DOCKER_GPU") is True
 
 
-def isaac_launch_ready() -> bool:
-    """Isaac can launch here: local GPU CLI/Docker, or OSMO remote harvest."""
+def isaac_local_ready() -> bool:
+    """Local Isaac path only (CLI or GPU Docker) — not OSMO remote harvest."""
     if isaac_cli() and gpu_available():
         return True
     if docker_bin() is not None and docker_gpu_requested() and gpu_available():
+        return True
+    return False
+
+
+def isaac_launch_ready() -> bool:
+    """Isaac can launch here: local GPU CLI/Docker, or OSMO remote harvest."""
+    if isaac_local_ready():
         return True
     return osmo_ready()
 
@@ -226,6 +233,7 @@ def engine_status() -> dict[str, Any]:
         "isaac_cli": isa,
         "osmo_cli": osmo,
         "osmo_ready": osmo_ready(),
+        "isaac_local_ready": isaac_local_ready(),
         "isaac_launch_ready": isaac_launch_ready(),
         "lerobot_cli": lr,
         "lerobot_ready": bool(lr) and gpu_available(),
