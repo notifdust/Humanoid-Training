@@ -594,6 +594,30 @@ button.busy:disabled {
   align-items: start;
 }
 
+.pin-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.pin-item {
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.pin-item:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.pin-item p {
+  margin: 0.35rem 0 0.5rem;
+  color: var(--muted);
+  max-width: 42rem;
+}
+
 .panel {
   background: var(--bg-2);
   border: 1px solid var(--line);

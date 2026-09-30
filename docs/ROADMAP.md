@@ -129,6 +129,8 @@ pass. ACT is **not** that exit test.
 | `g1-walk` | yes on GPU + Playground, mjlab, or Isaac Lab; blocked on CPU | playground / mjlab / isaaclab | Walking eval from the engine that launched. No gold clip. |
 | `g1-walk-rough` | yes on GPU + mjlab or Isaac Lab; blocked on CPU | mjlab / isaaclab | Rough terrain walk. No gold clip. |
 | `g1-pickplace` | yes on GPU + Isaac Lab + `HT_ISAAC_DATASET`; blocked on CPU | isaaclab (Robomimic BC) | Pinned `Isaac-PickPlace-Locomanipulation-G1-Abs-v0`. No gold clip. |
+| `g1-pickplace-fixed` | yes on GPU + Isaac + dataset; blocked on CPU | isaaclab (Robomimic BC) | Fixed-base upper-body PickPlace. No gold clip. |
+| `g1-track` | yes on GPU + mjlab + `HT_MJLAB_MOTION`; blocked on CPU | mjlab Tracking | BeyondMimic-style; LAFAN1 Hub pin (CSV→WandB). No gold clip. |
 | Unitree H1 | catalog only | — | No recipe. Do not add one until G1 walk trains for real. |
 
 `g1-reach` was deleted in Phase 3f. There is no upstream G1 reach env

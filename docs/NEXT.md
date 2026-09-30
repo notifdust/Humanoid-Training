@@ -34,7 +34,31 @@ not just code.
 
 ---
 
-## Mission scorecard (2026-09-28)
+## Conclusion (2026-09-30)
+
+**Can you conclude without a GPU?** Yes — on architecture, honesty, and
+CPU-safe paper wraps. **No** — on the humanoid wedge exit test (live walking
+`eval.mp4`). That remains the only gate that matters for claiming Phase 3c.
+
+| Question | Answer |
+|---|---|
+| Did we stay a studio/compiler over engines? | **Yes** |
+| Did we fake walk / ACT / OSMO / GR00T on CPU? | **No** |
+| Is the laptop Canva loop done? | **Yes** (Cartpole, stand, mustard + gold + CI) |
+| Is G1 walk a product video yet? | **No** — needs `ht proof walk` on NVIDIA GPU |
+| Are SOTA papers “implemented”? | **Pinned / harnessed**, not live-trained: Playground/mjlab walk, BeyondMimic→`g1-track`+LAFAN1 Hub, ACT check, Isaac Mimic pins, GR00T-via-LeRobot check, HF Jobs check |
+| What closes the story? | One GPU operator run of N1b, then N2b OSMO (or HF) harvest |
+
+```
+CPU-safe work:            DONE (harness, pins, Hub, intuition, honesty)
+Live wedge (N1b→N5):      BLOCKED here — no NVIDIA GPU / OSMO / robot
+Mission alignment:        HIGH
+Mission completion:       PARTIAL — stop polishing; run N1b on a GPU box
+```
+
+---
+
+## Mission scorecard (2026-09-30; was 2026-09-28)
 
 ### Still on mission (do not reopen)
 
@@ -71,8 +95,8 @@ do not ship theater.
 | **No live ACT train** (Phase 3e) | **high** | Imitation path is still linear-BC for anyone without LeRobot+GPU. |
 | **No honest G1 loco-manipulation recipe** (Isaac PickPlace pin) | **partial** | `g1-pickplace` pinned; live Robomimic train still needs Isaac + dataset |
 | **No Unitree driver / hardware eval** (Phase 4 live) | **expected later** | Correctly gated; must follow live walk. |
-| **Thin recipe library** (4 recipes, 1 GPU) | **improving** | CPU trio + `g1-walk`, `g1-walk-rough`, `g1-pickplace` — still thin vs 5–10 video-backed |
-| **Power-user escape hatch still thin** | **low** | Spec JSON under Advanced exists; export runnable script / pin engine versions is light. |
+| **Thin recipe library** (few video-backed) | **improving** | CPU trio + walk/rough/track + PickPlace×2 — still thin vs 5–10 **video-backed** |
+| **Power-user escape hatch still thin** | **low** | Export + English + Hub pins done; engine version pins still light. |
 | **NL / rich scene authoring** | **low / later** | Vision listed sentence + 3D rearrange as optional inputs — not the wedge exit. |
 
 ### Process deviation (recent work)
@@ -174,8 +198,7 @@ This is how the beginner bar (“no CUDA install”) reconnects to the wedge.
 | No gold clip | done |
 | Live Robomimic train on GPU + Mimic hdf5 | **not done** (needs Isaac + dataset) |
 
-Fixed-base alternative not pinned:
-`Isaac-PickPlace-FixedBaseUpperBodyIK-G1-Abs-v0`.
+Fixed-base alternative: done pin (`g1-pickplace-fixed`).
 
 ### N5 — Phase 4: live hardware (only after N1b)
 
@@ -209,6 +232,7 @@ Candidates (only with real engines / demos):
 | **N7e** export reports `runnable_here` + `next_step` | done |
 | **N7f** process intuition (OSMO group, Data-first imitate, blocked→ready, ladder) | done |
 | **N7g** GR00T/Arena check-only (`ht proof groot`) | done |
+| **N7h** Hub pins + LAFAN1 motion resolve + Data room | done |
 
 Do **not** start a B6 theme rewrite or fifth room.
 
@@ -243,8 +267,8 @@ Still open (needs hardware): N1b live walk, N2b OSMO live, N3b ACT live, N4b Rob
 | 4 | **N3b** live ACT on pick-and-place demos | GPU + `lerobot[training]` | harness ready (`ht proof act`) |
 | 5 | N4b live Robomimic train for `g1-pickplace` | Isaac Lab + `HT_ISAAC_DATASET` | pin done (+ fixed-base sibling) |
 | 6 | N5 Unitree hardware driver (after N1b) | Robot + live walk | gate only |
-| 7 | N6 more video-backed recipes | After walk proof | rough + track + fixed PickPlace pinned |
-| 8 | N7 polish / GR00T check-only | Optional | N7b–N7f + `ht proof groot` done |
+| 7 | N6 more video-backed recipes | After walk proof | rough + track + fixed PickPlace + LAFAN1 Hub pin |
+| 8 | N7 polish / GR00T / Hub pins | Optional | N7b–N7h done on CPU |
 
 ### Shipped this track (CPU-safe)
 
@@ -261,6 +285,7 @@ Still open (needs hardware): N1b live walk, N2b OSMO live, N3b ACT live, N4b Rob
 | **N6b** | Recipes `g1-track` (mjlab Tracking + `HT_MJLAB_MOTION`), `g1-pickplace-fixed` (Isaac fixed-base Mimic) |
 | **N6c** | Hub `hf:user/dataset` → inspect/cache (`huggingface_hub`); Data room accepts Hub ids |
 | **N7g** | `ht proof groot` + `GET /api/proof/groot` (check-only; fine-tune stays NVIDIA course) |
+| **N6d / N7h** | Hub pins (`ht datasets pins`, `GET /api/datasets/pins`): LAFAN1 G1 CSV/NPZ, LeRobot PushT example, GR00T-via-LeRobot path; `ht datasets motion` / `POST /api/datasets/motion` caches motion without claiming ACT |
 
 `GET /api/proof` bundles walk + osmo + act + hf_jobs + groot readiness.
 

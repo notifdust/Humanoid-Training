@@ -12,7 +12,8 @@ from pydantic import BaseModel, Field
 
 from humanoid_training import __version__
 from humanoid_training.catalog import load_robot_catalog
-from humanoid_training.datasets import inspect_lerobot_dataset
+from humanoid_training.datasets import inspect_lerobot_dataset, resolve_hub_motion
+from humanoid_training.hub_pins import public_hub_pins
 from humanoid_training.demos import (
     dataset_cache_dir,
     record_object_trajectories,
@@ -145,9 +146,32 @@ def robots() -> dict[str, Any]:
     return {"robots": load_robot_catalog()}
 
 
+@app.get("/api/datasets/pins")
+def api_dataset_pins() -> dict[str, Any]:
+    """Curated Hub pins (LAFAN1 motion, LeRobot example, GR00T-via-LeRobot path)."""
+    return public_hub_pins()
+
+
 @app.post("/api/datasets/inspect")
 def api_inspect_dataset(body: DatasetBody) -> dict[str, Any]:
     return inspect_lerobot_dataset(body.uri)
+
+
+@app.post("/api/datasets/motion")
+def api_resolve_motion(body: DatasetBody) -> dict[str, Any]:
+    """Resolve a Hub motion pin (CSV/NPZ). Never claims ACT/LeRobot train-ready."""
+    from humanoid_training.hub_pins import curated_hub_pins
+
+    uri = (body.uri or "").strip()
+    include = None
+    for pin in curated_hub_pins():
+        if pin.get("kind") != "motion":
+            continue
+        if uri in {pin.get("uri"), pin.get("id"), f"hf:{pin.get('repo_id')}"}:
+            uri = str(pin.get("uri") or uri)
+            include = pin.get("include")
+            break
+    return resolve_hub_motion(uri, include=include)
 
 
 @app.post("/api/datasets/record")

@@ -37,12 +37,13 @@ def parse_hub_dataset_uri(uri: str) -> tuple[str, str | None] | None:
     return repo, sub or None
 
 
-def resolve_hub_dataset(uri: str) -> dict[str, Any]:
-    """Download (or reuse cache of) a Hub LeRobot dataset. Does not invent a format."""
-    parsed = parse_hub_dataset_uri(uri)
-    if parsed is None:
-        return {"ok": False, "uri": uri, "error": "Not a Hugging Face Hub dataset URI."}
-    repo_id, sub = parsed
+def _hub_snapshot(
+    repo_id: str,
+    *,
+    uri: str,
+    allow_patterns: list[str] | None = None,
+) -> dict[str, Any]:
+    """Shared Hub download helper. Does not invent a format."""
     cache = dataset_cache_root() / repo_id.replace("/", "__")
     try:
         from huggingface_hub import snapshot_download
@@ -57,12 +58,15 @@ def resolve_hub_dataset(uri: str) -> dict[str, Any]:
                 f"  huggingface-cli download {repo_id} --repo-type dataset --local-dir {cache}"
             ),
         }
+    kwargs: dict[str, Any] = {
+        "repo_id": repo_id,
+        "repo_type": "dataset",
+        "local_dir": str(cache),
+    }
+    if allow_patterns:
+        kwargs["allow_patterns"] = allow_patterns
     try:
-        local = snapshot_download(
-            repo_id=repo_id,
-            repo_type="dataset",
-            local_dir=str(cache),
-        )
+        local = snapshot_download(**kwargs)
     except Exception as err:  # noqa: BLE001 — surface Hub errors to the studio
         return {
             "ok": False,
@@ -73,7 +77,19 @@ def resolve_hub_dataset(uri: str) -> dict[str, Any]:
                 "Set HF_TOKEN if the dataset is gated, or download locally."
             ),
         }
-    path = Path(local)
+    return {"ok": True, "uri": uri, "repo_id": repo_id, "path": str(Path(local).resolve())}
+
+
+def resolve_hub_dataset(uri: str) -> dict[str, Any]:
+    """Download (or reuse cache of) a Hub LeRobot dataset. Does not invent a format."""
+    parsed = parse_hub_dataset_uri(uri)
+    if parsed is None:
+        return {"ok": False, "uri": uri, "error": "Not a Hugging Face Hub dataset URI."}
+    repo_id, sub = parsed
+    snapped = _hub_snapshot(repo_id, uri=uri)
+    if not snapped.get("ok"):
+        return snapped
+    path = Path(str(snapped["path"]))
     if sub:
         path = path / sub
     info_path = path / "meta" / "info.json"
@@ -91,10 +107,64 @@ def resolve_hub_dataset(uri: str) -> dict[str, Any]:
             "path": str(path),
             "error": (
                 f"Downloaded {repo_id} but found no meta/info.json under {path}. "
-                "Expected a LeRobot v2 dataset layout."
+                "Expected a LeRobot v2 dataset layout. "
+                "For LAFAN1 G1 motion CSVs use GET /api/datasets/pins and "
+                "ht datasets motion — not ACT Train."
             ),
         }
     return {"ok": True, "uri": uri, "repo_id": repo_id, "path": str(path.resolve())}
+
+
+def resolve_hub_motion(uri: str, *, include: str | None = None) -> dict[str, Any]:
+    """Download a Hub motion artifact (CSV/NPZ). Not a LeRobot dataset.
+
+    Counts CSV/NPZ files so operators can confirm the pin without claiming
+    mjlab Tracking is ready (that still needs csv_to_npz + WandB registry).
+    """
+    parsed = parse_hub_dataset_uri(uri)
+    if parsed is None:
+        return {"ok": False, "uri": uri, "error": "Not a Hugging Face Hub dataset URI."}
+    repo_id, sub = parsed
+    patterns = None
+    if include:
+        patterns = [include]
+    elif sub:
+        patterns = [f"{sub.rstrip('/')}/**"]
+    snapped = _hub_snapshot(repo_id, uri=uri, allow_patterns=patterns)
+    if not snapped.get("ok"):
+        return snapped
+    path = Path(str(snapped["path"]))
+    if sub:
+        path = path / sub
+    csvs = sorted(path.rglob("*.csv"))
+    npzs = sorted(path.rglob("*.npz"))
+    if not csvs and not npzs:
+        return {
+            "ok": False,
+            "uri": uri,
+            "repo_id": repo_id,
+            "path": str(path),
+            "format": "motion",
+            "error": (
+                f"Downloaded {repo_id} but found no .csv/.npz under {path}. "
+                "Expected Unitree-retargeted LAFAN1 motion files."
+            ),
+        }
+    return {
+        "ok": True,
+        "uri": uri,
+        "repo_id": repo_id,
+        "path": str(path.resolve()),
+        "format": "motion",
+        "trainable_here": False,
+        "csv_count": len(csvs),
+        "npz_count": len(npzs),
+        "sample_files": [str(p.relative_to(path)) for p in (csvs + npzs)[:8]],
+        "note": (
+            "Motion files only — not LeRobot ACT. Convert CSVs with "
+            "mjlab.scripts.csv_to_npz, set HT_MJLAB_MOTION, Train g1-track on GPU."
+        ),
+    }
 
 
 def inspect_lerobot_dataset(uri: str) -> dict[str, Any]:

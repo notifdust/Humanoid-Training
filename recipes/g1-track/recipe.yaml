@@ -34,10 +34,16 @@ adapters:
     unsupported: "CPU hold stays on g1-stand. Motion tracking needs mjlab + GPU + HT_MJLAB_MOTION."
   lerobot:
     unsupported: "LeRobot ACT stays on pick-and-place. Motion tracking is an mjlab RL pin."
+data:
+  # Hub pin is documentation for operators — not auto-downloaded at expand time.
+  hub_motion: hf:lvhaidong/LAFAN1_Retargeting_Dataset
 gold:
   notes: |
-    Needs NVIDIA GPU + mjlab motion imitation setup:
+    Needs NVIDIA GPU + mjlab motion imitation (BeyondMimic-style Tracking):
     Mjlab-Tracking-Flat-Unitree-G1 with --registry-name from WandB.
+    Motions: Hub pin hf:lvhaidong/LAFAN1_Retargeting_Dataset (g1/** CSVs).
+    Convert with mjlab.scripts.csv_to_npz (Isaac BeyondMimic NPZs have
+    different body order — do not reuse them for mjlab).
     Set HT_MJLAB_MOTION=<org/motions/name>. Do not check in gold/eval.mp4.
 studio:
   availability: gpu
@@ -45,6 +51,6 @@ studio:
   proof: none
   promise: Motion tracking is not available on this computer.
   ready_promise: GPU + mjlab can launch motion tracking when HT_MJLAB_MOTION points at a WandB motion registry.
-  train_hint: Needs mjlab + GPU + HT_MJLAB_MOTION. Velocity walk stays on g1-walk. CPU preview stays on g1-stand.
-  ready_hint: This computer can reach mjlab. Set HT_MJLAB_MOTION, then Train — eval video should track a reference motion, not stand still.
-  blocked_hint: Needs mjlab + GPU + HT_MJLAB_MOTION (WandB motion registry). Not a frozen walk clip.
+  train_hint: Needs mjlab + GPU + HT_MJLAB_MOTION. LAFAN1 CSVs via Data → Hub pins. Velocity walk stays on g1-walk.
+  ready_hint: This computer can reach mjlab. Convert LAFAN1 → WandB, set HT_MJLAB_MOTION, then Train — track a reference motion, not stand still.
+  blocked_hint: Needs mjlab + GPU + HT_MJLAB_MOTION (WandB). LAFAN1 Hub pin is CSV only until you convert. Not a frozen walk clip.
