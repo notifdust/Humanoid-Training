@@ -120,6 +120,24 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_export.add_argument("--out", type=Path, default=None, help="Runs directory when target is a run id")
 
+    p_datasets = sub.add_parser(
+        "datasets",
+        help="Hub dataset pins and motion resolve (not a new format)",
+    )
+    p_datasets.add_argument(
+        "what",
+        nargs="?",
+        default="pins",
+        choices=["pins", "motion"],
+        help="pins = curated Hub shortcuts; motion = download/inspect LAFAN1-style CSVs",
+    )
+    p_datasets.add_argument(
+        "uri",
+        nargs="?",
+        default=None,
+        help="For motion: Hub uri or pin id (default: lafan1-g1-csv)",
+    )
+
     args = parser.parse_args(argv)
     try:
         if args.cmd == "recipes":
@@ -146,6 +164,8 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_deploy(args.run_id, args.out)
         if args.cmd == "export":
             return _cmd_export(args.target, args.dest, args.out)
+        if args.cmd == "datasets":
+            return _cmd_datasets(args.what, args.uri)
     except (SpecError, RecipeError, AdapterError, FileNotFoundError) as err:
         print(err, file=sys.stderr)
         return 2
@@ -169,6 +189,31 @@ def _cmd_robots() -> int:
     for robot in load_robot_catalog():
         print(f"{robot['id']:24}  {robot.get('name')} ({robot.get('kind')})")
     return 0
+
+
+def _cmd_datasets(what: str, uri: str | None) -> int:
+    from humanoid_training.datasets import resolve_hub_motion
+    from humanoid_training.hub_pins import curated_hub_pins, public_hub_pins
+
+    if what == "pins":
+        print(json.dumps(public_hub_pins(), indent=2))
+        return 0
+    if what != "motion":
+        print(f"Unknown datasets target {what!r}. Use: ht datasets pins|motion", file=sys.stderr)
+        return 2
+    target = (uri or "lafan1-g1-csv").strip()
+    include = None
+    resolved_uri = target
+    for pin in curated_hub_pins():
+        if pin.get("kind") != "motion":
+            continue
+        if target in {pin.get("id"), pin.get("uri"), f"hf:{pin.get('repo_id')}"}:
+            resolved_uri = str(pin.get("uri") or target)
+            include = pin.get("include")
+            break
+    report = resolve_hub_motion(resolved_uri, include=include)
+    print(json.dumps(report, indent=2, default=str))
+    return 0 if report.get("ok") else 12
 
 
 def _cmd_validate(path: str) -> int:

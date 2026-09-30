@@ -189,6 +189,7 @@ def assess_groot_host() -> dict[str, Any]:
             "Humanoid Training does not train GR00T itself."
         ),
         "check_command": "ht proof groot",
+        "wrap": "lerobot",
         "reasons": reasons,
         "next_step": None
         if ok
@@ -198,8 +199,9 @@ def assess_groot_host() -> dict[str, Any]:
                 f"  gpu={hints.get('gpu')} isaac_local_ready={hints.get('isaac_local_ready')} "
                 f"lerobot_ready={hints.get('lerobot_ready')}",
                 "",
-                "This product pins Isaac Mimic PickPlace (`g1-pickplace`) and wraps engines.",
-                "GR00T VLA fine-tune stays on NVIDIA's course — we do not invent a VLA policy.",
+                "Honest wrap (paper-aligned): Arena teleop → LeRobot dataset → NVIDIA GR00T "
+                "post-training. We already inspect LeRobot v2; we do not invent a VLA policy.",
+                "See ht datasets pins (groot-lerobot-path) and GET /api/datasets/pins.",
                 "",
                 "On a GPU box with Isaac Lab + LeRobot:",
                 "  ht proof groot   # should report ok:true when stack is local-ready",
@@ -209,10 +211,13 @@ def assess_groot_host() -> dict[str, Any]:
         "error": None if ok else "GR00T path blocked — need GPU + local Isaac + LeRobot.",
         "live_clip": False,
         "note": (
-            "Host looks ready for NVIDIA's GR00T/Arena G1 path — "
+            "Host looks ready for NVIDIA's GR00T/Arena G1 path via LeRobot wrap — "
             "ht proof groot only checks readiness; fine-tune stays upstream."
             if ok
-            else "Host cannot run GR00T/Arena here. Use CPU pick-and-place or pin g1-pickplace on Isaac."
+            else (
+                "Host cannot run GR00T/Arena here. CPU keeps pick-and-place (linear-BC); "
+                "ACT when LeRobot+GPU; GR00T fine-tune stays on NVIDIA's course."
+            )
         ),
     }
 

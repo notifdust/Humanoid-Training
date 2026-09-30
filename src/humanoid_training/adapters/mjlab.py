@@ -119,6 +119,11 @@ class MJLabAdapter:
                     "Motion tracking needs HT_MJLAB_MOTION=<wandb-org/motions/name> "
                     "(or adapters.mjlab.registry_name)."
                 )
+                notes.append(
+                    "LAFAN1 G1 CSVs: hf:lvhaidong/LAFAN1_Retargeting_Dataset (g1/**). "
+                    "Convert with mjlab.scripts.csv_to_npz (not Isaac NPZs), "
+                    "then WandB registry. See ht datasets pins / GET /api/datasets/pins."
+                )
         if motion and "Tracking" in task and "--registry-name" not in " ".join(portable):
             portable.extend(["--registry-name", motion])
         payload = EnginePayload(

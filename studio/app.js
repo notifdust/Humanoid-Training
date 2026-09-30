@@ -1465,6 +1465,11 @@ function renderData() {
       <p class="error" id="record-error"></p>
     </section>
     <section class="panel section-gap">
+      <h2>Hub pins</h2>
+      <p class="lede">Curated Hugging Face shortcuts. Motion pins are LAFAN1 CSVs for <code>g1-track</code> — not ACT inputs. GR00T stays on NVIDIA’s course via LeRobot.</p>
+      <div id="hub-pins-body"><p class="meta">Loading pins…</p></div>
+    </section>
+    <section class="panel section-gap">
       <h2>Inspect local dataset</h2>
       <p class="lede">Local path with <code>meta/info.json</code>, or a Hub id like <code>hf:user/dataset</code> (caches under <code>~/.cache/humanoid-training/datasets</code>).</p>
       <div class="actions">
@@ -1475,6 +1480,7 @@ function renderData() {
     </section>
   `;
   document.getElementById("inspect-ds").addEventListener("click", inspectDataset);
+  loadHubPins();
   document.getElementById("record-ds")?.addEventListener("click", recordDemos);
   document.getElementById("open-imitate")?.addEventListener("click", () => {
     const imitate = firstImitateRecipe();
@@ -1569,6 +1575,74 @@ async function recordDemos() {
   } catch (error) {
     err.textContent = error.message;
     status.textContent = "";
+  }
+}
+
+async function loadHubPins() {
+  const host = document.getElementById("hub-pins-body");
+  if (!host) return;
+  try {
+    const data = await api("/api/datasets/pins");
+    const pins = data.pins || [];
+    if (!pins.length) {
+      host.innerHTML = `<p class="meta">No curated Hub pins.</p>`;
+      return;
+    }
+    host.innerHTML = `
+      <ul class="pin-list">
+        ${pins
+          .map((p) => {
+            const uri = p.uri ? `<code>${escapeHtml(p.uri)}</code>` : "<em>upstream course</em>";
+            const kind = escapeHtml(p.kind || "");
+            const useBtn =
+              p.format === "lerobot_v2" && p.uri
+                ? `<button type="button" class="ghost" data-pin-uri="${escapeHtml(p.uri)}">Use in inspect</button>`
+                : p.kind === "motion" && p.uri
+                  ? `<button type="button" class="ghost" data-motion-pin="${escapeHtml(p.id)}">Check motion cache</button>`
+                  : "";
+            return `<li class="pin-item">
+              <strong>${escapeHtml(p.title || p.id)}</strong>
+              <span class="meta"> · ${kind}${p.recipe_hint ? ` → ${escapeHtml(p.recipe_hint)}` : ""}</span>
+              <div class="meta">${uri}</div>
+              <p>${escapeHtml(p.summary || "")}</p>
+              ${useBtn}
+            </li>`;
+          })
+          .join("")}
+      </ul>
+      <p class="meta">${escapeHtml(data.note || "")}</p>
+      <p class="status" id="motion-pin-status"></p>
+    `;
+    host.querySelectorAll("[data-pin-uri]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const input = document.getElementById("dataset-uri");
+        if (input) input.value = btn.getAttribute("data-pin-uri") || "";
+        inspectDataset();
+      });
+    });
+    host.querySelectorAll("[data-motion-pin]").forEach((btn) => {
+      btn.addEventListener("click", () => checkMotionPin(btn.getAttribute("data-motion-pin")));
+    });
+  } catch (error) {
+    host.innerHTML = `<p class="error">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function checkMotionPin(pinId) {
+  const status = document.getElementById("motion-pin-status");
+  if (status) status.textContent = "Resolving Hub motion…";
+  try {
+    const out = await api("/api/datasets/motion", {
+      method: "POST",
+      body: JSON.stringify({ uri: pinId || "" }),
+    });
+    if (status) {
+      status.textContent = out.ok
+        ? `Cached ${out.csv_count || 0} CSV / ${out.npz_count || 0} NPZ under ${out.path || "cache"} — still need mjlab convert + HT_MJLAB_MOTION.`
+        : out.error || "Motion resolve failed.";
+    }
+  } catch (error) {
+    if (status) status.textContent = error.message;
   }
 }
 

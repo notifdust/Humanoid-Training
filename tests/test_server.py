@@ -81,6 +81,12 @@ def test_health_and_recipes() -> None:
     groot = client.get("/api/proof/groot").json()
     assert groot["phase"] == "groot"
     assert groot["ok"] is False
+    assert groot.get("wrap") == "lerobot"
+    pins = client.get("/api/datasets/pins").json()
+    assert any(p["id"] == "lafan1-g1-csv" for p in pins["pins"])
+    assert "lafan1-g1-csv" in pins["motion"]
+    motion = client.post("/api/datasets/motion", json={"uri": "/tmp/not-hub"}).json()
+    assert motion["ok"] is False
     bundle = client.get("/api/proof").json()
     assert "walk" in bundle and "act" in bundle and "osmo" in bundle
     assert "hf_jobs" in bundle and "groot" in bundle
@@ -388,6 +394,9 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "/api/proof/osmo" in js
     assert "hf:user/dataset" in js
     assert "HF:ready" in js
+    assert "/api/datasets/pins" in js
+    assert "function loadHubPins" in js
+    assert "Hub pins" in js
     assert "function englishFromFacts" in js
     assert "function runEnglish" in js
     assert "run.english" in js
