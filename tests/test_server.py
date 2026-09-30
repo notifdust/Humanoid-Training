@@ -302,8 +302,14 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     """The browser must group and fall back from GET /api/recipes, not baked-in ids."""
     js = (Path(__file__).resolve().parents[1] / "studio" / "app.js").read_text(encoding="utf-8")
     assert "function worksHere" in js
+    assert "function harvestHere" in js
+    assert "function groupRecipes" in js
     assert "function firstReadyRecipe" in js
     assert "function firstImitateRecipe" in js
+    assert "Can harvest remotely" in js
+    assert "Demos →" in js
+    assert "block_save_first" in js
+    assert "open-ready" in js
     assert "/api/recipes/pick-and-place" not in js
     assert '"cartpole-balance"' not in js
     assert "run.recipe === \"pick-and-place\"" not in js

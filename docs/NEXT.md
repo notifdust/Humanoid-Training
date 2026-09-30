@@ -207,6 +207,7 @@ Candidates (only with real engines / demos):
 | Accessibility / motion prefs | done (`prefers-reduced-motion`) |
 | **N7d** API projects `run.english`; studio prefers it | done |
 | **N7e** export reports `runnable_here` + `next_step` | done |
+| **N7f** process intuition (OSMO group, Data-first imitate, blocked→ready, ladder) | done |
 
 Do **not** start a B6 theme rewrite or fifth room.
 
@@ -253,6 +254,7 @@ Still open (needs hardware): N1b live walk, N2b OSMO live, N3b ACT live, N4b Rob
 | **N7b** | `prefers-reduced-motion` studio CSS |
 | **N7d** | `GET /api/runs` + `/api/runs/{id}` (+ SSE) attach `english` from facts; studio `runEnglish()` |
 | **N7e** | `ht export` returns `runnable_here` / `next_step`; writes `export_meta.json` + honest README |
+| **N7f** | Tasks: OSMO≠local ready; imitate opens Data; blocked primary→ready task; post-pass ladder; unsaved→block Save |
 
 `GET /api/proof` bundles walk + osmo + act readiness.
 

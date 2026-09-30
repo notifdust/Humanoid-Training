@@ -986,6 +986,12 @@ textarea.spec {
   background: rgba(26, 154, 92, 0.08);
 }
 
+.steps li.skipped {
+  color: var(--muted);
+  border-style: dashed;
+  opacity: 0.85;
+}
+
 .steps li.done::after {
   content: "";
   display: inline-block;
