@@ -2,10 +2,15 @@
 
 Fake-CLI unit tests are not the exit test. This module is the operator
 command to run on a machine with an NVIDIA GPU and a walk engine.
+
+Host readiness (`assess_walk_proof_host`) and a durable `proof_3c.json`
+are part of the operator harness. A live walking clip on a real GPU is
+still the phase exit test — do not claim Phase 3c done from CPU CI.
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, Callable
 
@@ -18,13 +23,18 @@ LogFn = Callable[[str], None]
 
 PROOF_STEPS = 2_048
 WALK_ENGINES = ("playground", "mjlab", "isaaclab")
+PROOF_REPORT_NAME = "proof_3c.json"
 
 
 def walk_engines_ready() -> dict[str, bool]:
+    """Engines that can run a *local* Phase 3c GPU walk proof.
+
+    OSMO harvest is Phase 3d — it must not make Phase 3c assess ok:true.
+    """
     return {
         "playground": hardware.playground_ready(),
         "mjlab": hardware.mjlab_ready(),
-        "isaaclab": hardware.isaac_launch_ready(),
+        "isaaclab": hardware.isaac_local_ready(),
     }
 
 
@@ -37,13 +47,24 @@ def first_ready_engine(prefer: list[str] | None = None) -> str | None:
     return None
 
 
+def proof_command(*, prefer: list[str] | None = None, engine: str | None = None) -> str:
+    """CLI a beginner/operator can paste on a GPU box."""
+    chosen = engine or (prefer[0] if prefer else None)
+    if chosen and chosen in WALK_ENGINES and chosen != "playground":
+        return f"ht proof walk --prefer {chosen}"
+    if prefer and prefer != list(WALK_ENGINES):
+        return "ht proof walk --prefer " + " ".join(prefer)
+    return "ht proof walk"
+
+
 def _blocked_message(ready: dict[str, bool]) -> str:
     status = hardware.engine_status()
     lines = [
         "Phase 3c walk proof is blocked on this machine — not a silent failure.",
         "Need an NVIDIA GPU and one walk engine:",
         f"  gpu={status.get('gpu')} playground_ready={ready['playground']} "
-        f"mjlab_ready={ready['mjlab']} isaac_launch_ready={ready['isaaclab']}",
+        f"mjlab_ready={ready['mjlab']} isaac_local_ready={ready['isaaclab']} "
+        f"osmo_ready={status.get('osmo_ready')} (OSMO is Phase 3d, not 3c)",
         "",
         "On a GPU box, pick one:",
         "  pip install playground && ht proof walk",
@@ -54,6 +75,65 @@ def _blocked_message(ready: dict[str, bool]) -> str:
         "CPU studio: use g1-stand / pick-and-place, or ht train --compile-only.",
     ]
     return "\n".join(lines)
+
+
+def assess_walk_proof_host(*, prefer: list[str] | None = None) -> dict[str, Any]:
+    """Phase 3c preflight: can this host run `ht proof walk`? Does not train.
+
+    Requires a local GPU walk engine. OSMO-only readiness is Phase 3d
+    (`ht proof osmo`) — it must not report Phase 3c ok:true.
+    """
+    ready = walk_engines_ready()
+    status = hardware.engine_status()
+    engine = first_ready_engine(prefer)
+    reasons: list[str] = []
+    if not status.get("gpu"):
+        reasons.append("No NVIDIA GPU detected on this machine.")
+    if not any(ready.values()):
+        reasons.append(
+            "No local walk engine ready (Playground, mjlab, or local Isaac Lab)."
+        )
+        if status.get("osmo_ready"):
+            reasons.append(
+                "OSMO is ready for Phase 3d harvest (ht proof osmo) — not Phase 3c local proof."
+            )
+    elif engine is None and prefer:
+        reasons.append(
+            "Preferred engine(s) not ready: " + ", ".join(prefer) + "."
+        )
+    # Phase 3c is a local GPU proof — never ok without GPU + a local engine.
+    ok = bool(status.get("gpu") and engine is not None)
+    cmd = proof_command(prefer=prefer, engine=engine)
+    return {
+        "ok": ok,
+        "phase": "3c",
+        "engine": engine if ok else None,
+        "ready": ready,
+        "engines": status,
+        "command": cmd,
+        "reasons": reasons,
+        "next_step": None if ok else _blocked_message(ready),
+        "error": None if ok else _blocked_message(ready),
+        "live_clip": False,
+        "note": (
+            "Host can launch a short local walk proof."
+            if ok
+            else "Host cannot complete Phase 3c here — use a GPU box (OSMO is Phase 3d)."
+        ),
+    }
+
+
+def write_proof_report(report: dict[str, Any], run_dir: Path | None) -> Path | None:
+    """Persist the Phase 3c judge report next to the run artifacts."""
+    if run_dir is None:
+        return None
+    path = Path(run_dir)
+    if not path.is_dir():
+        return None
+    dest = path / PROOF_REPORT_NAME
+    payload = {**report, "report_file": PROOF_REPORT_NAME}
+    dest.write_text(json.dumps(payload, indent=2, default=str) + "\n", encoding="utf-8")
+    return dest
 
 
 def proof_walk_spec(
@@ -87,15 +167,21 @@ def run_walk_proof(
     log: LogFn | None = None,
 ) -> dict[str, Any]:
     """Launch a short G1 walk and require a real eval.mp4 + facts.engine."""
-    ready = walk_engines_ready()
-    engine = first_ready_engine(prefer)
-    if not engine:
-        raise AdapterUnavailable(_blocked_message(ready))
+    host = assess_walk_proof_host(prefer=prefer)
+    engine = host.get("engine")
+    if not host.get("ok") or not engine:
+        raise AdapterUnavailable(host.get("error") or _blocked_message(walk_engines_ready()))
     if log:
         log(f"proof walk via {engine} steps={steps}")
-    spec = proof_walk_spec(prefer=prefer, steps=steps, engine=engine)
+    spec = proof_walk_spec(prefer=prefer, steps=steps, engine=str(engine))
     manifest = run_job(spec, runs_dir=runs_dir or default_runs_dir(), log=log)
-    report = summarize_walk_proof(manifest, expected_engine=engine)
+    report = summarize_walk_proof(manifest, expected_engine=str(engine))
+    run_dir = Path(manifest.get("run_dir") or "")
+    written = write_proof_report(report, run_dir if run_dir.is_dir() else None)
+    if written is not None:
+        report["report_path"] = str(written)
+        if log:
+            log(f"wrote {written.name}")
     if not report["ok"]:
         raise AdapterUnavailable(report["error"] or "Walk proof failed.")
     return report
@@ -143,4 +229,5 @@ def summarize_walk_proof(manifest: dict[str, Any], *, expected_engine: str | Non
         "video": str(video) if video is not None else None,
         "facts": facts,
         "error": "; ".join(errors) if errors else None,
+        "live_clip": bool(ok and video is not None),
     }

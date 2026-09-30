@@ -22,9 +22,12 @@ def test_inspect_local_lerobot_fixture() -> None:
 
 
 def test_inspect_hf_is_closed() -> None:
+    """Hub ids fail closed until download succeeds (missing package or missing repo)."""
     result = inspect_lerobot_dataset("hf:example/g1-mustard-demos")
     assert result["ok"] is False
-    assert "Hugging Face" in result["error"]
+    err = result.get("error") or ""
+    assert "huggingface" in err.lower() or "hub" in err.lower()
+    assert "download" in err.lower() or "install" in err.lower()
 
 
 def test_inspect_missing_info() -> None:

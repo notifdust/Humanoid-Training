@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -10,24 +12,111 @@ OBS_DIM = 4
 ACT_DIM = 2
 FPS = 30
 
+_HF_URI_RE = re.compile(
+    r"^(?:hf:|https://huggingface\.co/(?:datasets/)?)(?P<repo>[^/\s]+/[^/\s#?]+)(?:/(?P<sub>.+))?$"
+)
+
+
+def dataset_cache_root() -> Path:
+    raw = os.environ.get("HT_DATASET_CACHE")
+    if raw and raw.strip():
+        return Path(raw.strip()).expanduser().resolve()
+    return (Path.home() / ".cache" / "humanoid-training" / "datasets").resolve()
+
+
+def parse_hub_dataset_uri(uri: str) -> tuple[str, str | None] | None:
+    """Return (repo_id, optional_subdir) for hf: / Hub dataset URIs, else None."""
+    raw = (uri or "").strip()
+    match = _HF_URI_RE.match(raw)
+    if not match:
+        return None
+    repo = match.group("repo").rstrip("/")
+    sub = match.group("sub")
+    if sub:
+        sub = sub.strip("/")
+    return repo, sub or None
+
+
+def resolve_hub_dataset(uri: str) -> dict[str, Any]:
+    """Download (or reuse cache of) a Hub LeRobot dataset. Does not invent a format."""
+    parsed = parse_hub_dataset_uri(uri)
+    if parsed is None:
+        return {"ok": False, "uri": uri, "error": "Not a Hugging Face Hub dataset URI."}
+    repo_id, sub = parsed
+    cache = dataset_cache_root() / repo_id.replace("/", "__")
+    try:
+        from huggingface_hub import snapshot_download
+    except ImportError:
+        return {
+            "ok": False,
+            "uri": uri,
+            "repo_id": repo_id,
+            "error": (
+                "huggingface_hub is not installed. "
+                "pip install huggingface_hub  then retry, or download manually:\n"
+                f"  huggingface-cli download {repo_id} --repo-type dataset --local-dir {cache}"
+            ),
+        }
+    try:
+        local = snapshot_download(
+            repo_id=repo_id,
+            repo_type="dataset",
+            local_dir=str(cache),
+        )
+    except Exception as err:  # noqa: BLE001 — surface Hub errors to the studio
+        return {
+            "ok": False,
+            "uri": uri,
+            "repo_id": repo_id,
+            "error": (
+                f"Hub download failed for {repo_id}: {err}. "
+                "Set HF_TOKEN if the dataset is gated, or download locally."
+            ),
+        }
+    path = Path(local)
+    if sub:
+        path = path / sub
+    info_path = path / "meta" / "info.json"
+    if not info_path.is_file():
+        # Some Hub layouts nest the LeRobot root one level down.
+        candidates = list(path.glob("**/meta/info.json"))
+        if candidates:
+            path = candidates[0].parent.parent
+            info_path = path / "meta" / "info.json"
+    if not info_path.is_file():
+        return {
+            "ok": False,
+            "uri": uri,
+            "repo_id": repo_id,
+            "path": str(path),
+            "error": (
+                f"Downloaded {repo_id} but found no meta/info.json under {path}. "
+                "Expected a LeRobot v2 dataset layout."
+            ),
+        }
+    return {"ok": True, "uri": uri, "repo_id": repo_id, "path": str(path.resolve())}
+
 
 def inspect_lerobot_dataset(uri: str) -> dict[str, Any]:
-    """Read a local LeRobot dataset (v2 meta/info.json). Does not invent a format."""
+    """Read a local or Hub LeRobot dataset (v2 meta/info.json). Does not invent a format."""
     raw = (uri or "").strip()
     if not raw:
         return {
             "ok": False,
-            "error": "Pass a file: path to a LeRobot dataset directory.",
+            "error": "Pass a file: path or hf:user/dataset to a LeRobot dataset.",
         }
-    if raw.startswith("hf:") or raw.startswith("https://huggingface.co/"):
-        return {
-            "ok": False,
-            "uri": raw,
-            "error": (
-                "Hugging Face Hub import is not wired yet. Download the dataset "
-                "locally and inspect a directory that contains meta/info.json."
-            ),
-        }
+    if parse_hub_dataset_uri(raw) is not None:
+        resolved = resolve_hub_dataset(raw)
+        if not resolved.get("ok"):
+            return resolved
+        path = Path(str(resolved["path"]))
+        local_uri = str(path)
+        inspected = inspect_lerobot_dataset(local_uri)
+        if inspected.get("ok"):
+            inspected["uri"] = raw
+            inspected["hub_repo"] = resolved.get("repo_id")
+            inspected["source"] = "huggingface_hub"
+        return inspected
     path = _as_path(raw)
     info_path = path / "meta" / "info.json"
     if not info_path.is_file():
@@ -37,7 +126,8 @@ def inspect_lerobot_dataset(uri: str) -> dict[str, Any]:
             "path": str(path),
             "error": (
                 f"Not a LeRobot dataset: missing {info_path}. "
-                "Expected the Hugging Face LeRobot layout (meta/info.json)."
+                "Expected the Hugging Face LeRobot layout (meta/info.json), "
+                "or a Hub id like hf:user/dataset."
             ),
         }
     try:
