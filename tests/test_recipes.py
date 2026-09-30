@@ -87,9 +87,18 @@ def test_recipe_catalog_is_the_studio_contract() -> None:
     assert by_id["pick-and-place"]["record_hint"]
     assert "WASD" in by_id["pick-and-place"]["record_hint"]
     assert set(catalog["ready"]) == {"cartpole-balance", "g1-stand", "pick-and-place"}
-    assert set(catalog["later"]) == {"g1-walk", "g1-walk-rough", "g1-pickplace"}
+    assert set(catalog["later"]) == {
+        "g1-walk",
+        "g1-walk-rough",
+        "g1-pickplace",
+        "g1-pickplace-fixed",
+        "g1-track",
+    }
     assert by_id["g1-walk-rough"]["availability"] == "gpu"
     assert by_id["g1-walk-rough"]["has_gold"] is False
+    assert by_id["g1-track"]["availability"] == "gpu"
+    assert by_id["g1-pickplace-fixed"]["availability"] == "gpu"
+    assert by_id["g1-pickplace-fixed"]["imitate"] is False
     assert set(catalog["start_here"]) == {"cartpole-balance", "g1-stand", "pick-and-place"}
     assert by_id["cartpole-balance"]["has_gold"] is True
     assert by_id["g1-stand"]["has_gold"] is True
