@@ -116,9 +116,25 @@ def assess_osmo_proof_api() -> dict[str, Any]:
     return assess_osmo_host()
 
 
+@app.get("/api/proof/hf-jobs")
+def assess_hf_jobs_proof_api() -> dict[str, Any]:
+    """HF Jobs readiness — check-only; live harvest not wired yet."""
+    from humanoid_training.readiness import assess_hf_jobs_host
+
+    return assess_hf_jobs_host()
+
+
+@app.get("/api/proof/groot")
+def assess_groot_proof_api() -> dict[str, Any]:
+    """GR00T / Arena readiness — check-only; fine-tune stays upstream."""
+    from humanoid_training.readiness import assess_groot_host
+
+    return assess_groot_host()
+
+
 @app.get("/api/proof")
 def assess_all_proof_api() -> dict[str, Any]:
-    """Bundle walk / OSMO / ACT host readiness."""
+    """Bundle walk / OSMO / ACT / HF Jobs / GR00T host readiness."""
     from humanoid_training.readiness import assess_all
 
     return assess_all()

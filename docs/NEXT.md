@@ -208,6 +208,7 @@ Candidates (only with real engines / demos):
 | **N7d** API projects `run.english`; studio prefers it | done |
 | **N7e** export reports `runnable_here` + `next_step` | done |
 | **N7f** process intuition (OSMO group, Data-first imitate, blocked→ready, ladder) | done |
+| **N7g** GR00T/Arena check-only (`ht proof groot`) | done |
 
 Do **not** start a B6 theme rewrite or fifth room.
 
@@ -238,11 +239,12 @@ Still open (needs hardware): N1b live walk, N2b OSMO live, N3b ACT live, N4b Rob
 |---|---|---|---|
 | **1** | **N1b** live `ht proof walk` on a GPU box | NVIDIA GPU + Playground/mjlab/Isaac | **next** |
 | 2 | **N2b** live OSMO harvest from a laptop | OSMO credentials + pool | harness ready (`ht proof osmo`) |
-| 3 | **N3b** live ACT on pick-and-place demos | GPU + `lerobot[training]` | harness ready (`ht proof act`) |
-| 4 | N4b live Robomimic train for `g1-pickplace` | Isaac Lab + `HT_ISAAC_DATASET` | pin done |
-| 5 | N5 Unitree hardware driver (after N1b) | Robot + live walk | gate only |
-| 6 | N6 more video-backed recipes | After walk proof | `g1-walk-rough` pinned |
-| 7 | N7 further a11y / escape-hatch polish | Optional | N7b–N7e done |
+| 3 | **N2c** live HF Jobs harvest (same contract) | HF_TOKEN + `hf` CLI | harness ready (`ht proof hf-jobs`); live harvest TODO |
+| 4 | **N3b** live ACT on pick-and-place demos | GPU + `lerobot[training]` | harness ready (`ht proof act`) |
+| 5 | N4b live Robomimic train for `g1-pickplace` | Isaac Lab + `HT_ISAAC_DATASET` | pin done (+ fixed-base sibling) |
+| 6 | N5 Unitree hardware driver (after N1b) | Robot + live walk | gate only |
+| 7 | N6 more video-backed recipes | After walk proof | rough + track + fixed PickPlace pinned |
+| 8 | N7 polish / GR00T check-only | Optional | N7b–N7f + `ht proof groot` done |
 
 ### Shipped this track (CPU-safe)
 
@@ -255,8 +257,12 @@ Still open (needs hardware): N1b live walk, N2b OSMO live, N3b ACT live, N4b Rob
 | **N7d** | `GET /api/runs` + `/api/runs/{id}` (+ SSE) attach `english` from facts; studio `runEnglish()` |
 | **N7e** | `ht export` returns `runnable_here` / `next_step`; writes `export_meta.json` + honest README |
 | **N7f** | Tasks: OSMO≠local ready; imitate opens Data; blocked primary→ready task; post-pass ladder; unsaved→block Save |
+| **N2c** | `ht proof hf-jobs` + `GET /api/proof/hf-jobs` (CLI+token; live harvest not wired) |
+| **N6b** | Recipes `g1-track` (mjlab Tracking + `HT_MJLAB_MOTION`), `g1-pickplace-fixed` (Isaac fixed-base Mimic) |
+| **N6c** | Hub `hf:user/dataset` → inspect/cache (`huggingface_hub`); Data room accepts Hub ids |
+| **N7g** | `ht proof groot` + `GET /api/proof/groot` (check-only; fine-tune stays NVIDIA course) |
 
-`GET /api/proof` bundles walk + osmo + act readiness.
+`GET /api/proof` bundles walk + osmo + act + hf_jobs + groot readiness.
 
 ---
 

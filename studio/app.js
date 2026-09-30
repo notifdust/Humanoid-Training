@@ -1466,9 +1466,9 @@ function renderData() {
     </section>
     <section class="panel section-gap">
       <h2>Inspect local dataset</h2>
-      <p class="lede">Path to a directory that contains <code>meta/info.json</code>.</p>
+      <p class="lede">Local path with <code>meta/info.json</code>, or a Hub id like <code>hf:user/dataset</code> (caches under <code>~/.cache/humanoid-training/datasets</code>).</p>
       <div class="actions">
-        <input class="path-input" id="dataset-uri" placeholder="file:/path/to/lerobot_dataset" value="${escapeHtml(state.datasetUri)}" />
+        <input class="path-input" id="dataset-uri" placeholder="file:/path/to/lerobot_dataset or hf:user/dataset" value="${escapeHtml(state.datasetUri)}" />
         <button class="primary" id="inspect-ds">Inspect</button>
       </div>
       <div id="dataset-body">${body}</div>
@@ -2330,6 +2330,7 @@ function formatHealthStrip(health) {
   if (e.osmo_ready) walk.push("osmo");
   bits.push(walk.length ? `walk:${walk.join("+")}` : "walk:later");
   if (e.lerobot_ready) bits.push("ACT:ready");
+  if (e.hf_jobs_ready) bits.push("HF:ready");
   return bits.join(" · ");
 }
 

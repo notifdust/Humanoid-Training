@@ -5,7 +5,13 @@ from pathlib import Path
 from humanoid_training.adapters import select_adapter
 from humanoid_training.cli import main
 from humanoid_training.recipes import expand_spec, list_recipes, public_catalog
-from humanoid_training.readiness import assess_act_host, assess_all, assess_osmo_host
+from humanoid_training.readiness import (
+    assess_act_host,
+    assess_all,
+    assess_groot_host,
+    assess_hf_jobs_host,
+    assess_osmo_host,
+)
 from humanoid_training.spec import load_spec
 
 
@@ -17,8 +23,11 @@ def test_assess_act_and_osmo_blocked_on_cpu() -> None:
     osmo = assess_osmo_host()
     assert osmo["ok"] is False
     assert osmo["phase"] == "3d"
+    assert assess_hf_jobs_host()["ok"] is False
+    assert assess_groot_host()["ok"] is False
     bundle = assess_all()
     assert bundle["walk"]["phase"] == "3c"
+    assert "hf_jobs" in bundle and "groot" in bundle
     assert bundle["any_ok"] is False
 
 

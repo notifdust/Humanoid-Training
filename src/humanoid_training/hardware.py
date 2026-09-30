@@ -180,6 +180,50 @@ def osmo_ready() -> bool:
     return osmo_cli() is not None
 
 
+def hf_cli() -> str | None:
+    """Hugging Face CLI (`hf` or `huggingface-cli`)."""
+    override = _cli_from_env("HT_HF_CLI")
+    if os.environ.get("HT_HF_CLI") is not None:
+        return override
+    return shutil.which("hf") or shutil.which("huggingface-cli")
+
+
+def hf_token_present() -> bool:
+    """True when HF_TOKEN / HUGGING_FACE_HUB_TOKEN is set (non-empty)."""
+    for name in ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"):
+        raw = os.environ.get(name)
+        if raw is not None and raw.strip() and raw.strip().lower() not in _FALSE:
+            return True
+    return False
+
+
+def hf_jobs_ready() -> bool:
+    """Host can attempt HF Jobs submit (CLI + token). Live harvest still separate."""
+    if _env_bool("HT_HF_JOBS") is False:
+        return False
+    return hf_cli() is not None and hf_token_present()
+
+
+def mjlab_motion_ready() -> bool:
+    """Motion-imitation mjlab tasks need a WandB registry / motion pin."""
+    for name in ("HT_MJLAB_MOTION", "WANDB_MOTION_REGISTRY"):
+        raw = os.environ.get(name)
+        if raw is not None and raw.strip() and raw.strip().lower() not in _FALSE:
+            return True
+    return False
+
+
+def groot_stack_hint() -> dict[str, Any]:
+    """Cheap probes for NVIDIA GR00T / Arena path — not a live train."""
+    return {
+        "gpu": gpu_available(),
+        "isaac_local_ready": isaac_local_ready(),
+        "isaac_cli": isaac_cli(),
+        "lerobot_ready": lerobot_ready(),
+        "hf_token": hf_token_present(),
+    }
+
+
 def docker_bin() -> str | None:
     return shutil.which("docker")
 
@@ -223,6 +267,7 @@ def engine_status() -> dict[str, Any]:
     isa = isaac_cli()
     osmo = osmo_cli()
     lr = lerobot_cli()
+    hf = hf_cli()
     return {
         "gpu": gpu_available(),
         "playground": playground_installed(),
@@ -230,6 +275,7 @@ def engine_status() -> dict[str, Any]:
         "playground_ready": bool(pg) and gpu_available(),
         "mjlab_cli": mj,
         "mjlab_ready": bool(mj) and gpu_available(),
+        "mjlab_motion_ready": mjlab_motion_ready(),
         "isaac_cli": isa,
         "osmo_cli": osmo,
         "osmo_ready": osmo_ready(),
@@ -237,4 +283,7 @@ def engine_status() -> dict[str, Any]:
         "isaac_launch_ready": isaac_launch_ready(),
         "lerobot_cli": lr,
         "lerobot_ready": bool(lr) and gpu_available(),
+        "hf_cli": hf,
+        "hf_token": hf_token_present(),
+        "hf_jobs_ready": hf_jobs_ready(),
     }

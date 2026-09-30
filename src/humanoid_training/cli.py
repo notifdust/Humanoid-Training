@@ -74,14 +74,14 @@ def main(argv: list[str] | None = None) -> int:
 
     p_proof = sub.add_parser(
         "proof",
-        help="Phase proofs: walk trains on GPU; act/osmo are readiness checks only",
+        help="Phase proofs: walk trains on GPU; act/osmo/hf-jobs/groot are readiness checks only",
     )
     p_proof.add_argument(
         "what",
         nargs="?",
         default="walk",
-        choices=["walk", "act", "osmo"],
-        help="walk = short GPU train+judge; act/osmo = readiness check only (no train)",
+        choices=["walk", "act", "osmo", "hf-jobs", "groot"],
+        help="walk = short GPU train+judge; others = readiness check only (no train)",
     )
     p_proof.add_argument(
         "--prefer",
@@ -271,7 +271,12 @@ def _cmd_proof(
     check: bool = False,
 ) -> int:
     from humanoid_training.proof import PROOF_STEPS, assess_walk_proof_host, run_walk_proof
-    from humanoid_training.readiness import assess_act_host, assess_osmo_host
+    from humanoid_training.readiness import (
+        assess_act_host,
+        assess_groot_host,
+        assess_hf_jobs_host,
+        assess_osmo_host,
+    )
 
     if what == "act":
         report = assess_act_host()
@@ -281,8 +286,19 @@ def _cmd_proof(
         report = assess_osmo_host()
         print(json.dumps(report, indent=2, default=str))
         return 0 if report.get("ok") else 12
+    if what == "hf-jobs":
+        report = assess_hf_jobs_host()
+        print(json.dumps(report, indent=2, default=str))
+        return 0 if report.get("ok") else 12
+    if what == "groot":
+        report = assess_groot_host()
+        print(json.dumps(report, indent=2, default=str))
+        return 0 if report.get("ok") else 12
     if what != "walk":
-        print(f"Unknown proof target {what!r}. Use: ht proof walk|act|osmo", file=sys.stderr)
+        print(
+            f"Unknown proof target {what!r}. Use: ht proof walk|act|osmo|hf-jobs|groot",
+            file=sys.stderr,
+        )
         return 2
     if check:
         report = assess_walk_proof_host(prefer=prefer)

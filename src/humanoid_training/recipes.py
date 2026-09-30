@@ -60,7 +60,7 @@ class Recipe:
             promise = str(studio.get("promise") or self.summary)
             train_hint = str(studio.get("train_hint") or "")
         proof = str(studio.get("proof") or "").strip().lower()
-        if proof not in {"walk", "act", "osmo", "none", ""}:
+        if proof not in {"walk", "act", "osmo", "hf-jobs", "groot", "none", ""}:
             proof = ""
         return {
             "id": self.id,
@@ -151,15 +151,31 @@ def _robomimic_dataset_ready(data: dict[str, Any] | None = None) -> bool:
     return resolve_isaac_dataset(spec) is not None
 
 
+def _mjlab_task(data: dict[str, Any]) -> str:
+    cfg = (data.get("adapters") or {}).get("mjlab") or {}
+    return str(cfg.get("task") or "")
+
+
+def _mjlab_needs_motion(data: dict[str, Any]) -> bool:
+    """Motion-imitation mjlab tasks need HT_MJLAB_MOTION / WandB registry."""
+    task = _mjlab_task(data).lower()
+    if "tracking" in task:
+        return True
+    cfg = (data.get("adapters") or {}).get("mjlab") or {}
+    return bool(cfg.get("requires_motion"))
+
+
 def _launch_path(recipe: Recipe, availability: str) -> str:
     """How Train would run here: local | local_gpu | osmo | blocked.
 
     Robomimic Isaac needs local Isaac + HT_ISAAC_DATASET (no OSMO yaml).
+    Motion-tracking mjlab needs HT_MJLAB_MOTION.
     """
     if availability == "cpu":
         return "local"
     from humanoid_training.hardware import (
         isaac_local_ready,
+        mjlab_motion_ready,
         mjlab_ready,
         osmo_ready,
         playground_ready,
@@ -170,6 +186,8 @@ def _launch_path(recipe: Recipe, availability: str) -> str:
     if _gpu_engine_configured(data, "playground") and playground_ready():
         return "local_gpu"
     if _gpu_engine_configured(data, "mjlab") and mjlab_ready():
+        if _mjlab_needs_motion(data) and not mjlab_motion_ready():
+            return "blocked"
         return "local_gpu"
     if _gpu_engine_configured(data, "isaaclab"):
         if _isaac_workflow(data) == "robomimic":
