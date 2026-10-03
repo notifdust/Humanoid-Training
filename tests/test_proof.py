@@ -95,7 +95,7 @@ def test_proof_walk_passes_with_fake_playground(
 
 
 def test_assess_walk_proof_host_blocked_on_cpu() -> None:
-    from humanoid_training.proof import assess_walk_proof_host
+    from humanoid_training.proof import assess_walk_proof_host, n1b_operator_handoff
 
     report = assess_walk_proof_host()
     assert report["ok"] is False
@@ -103,6 +103,13 @@ def test_assess_walk_proof_host_blocked_on_cpu() -> None:
     assert report["live_clip"] is False
     assert "ht proof walk" in report["command"]
     assert report["reasons"]
+    handoff = report.get("handoff")
+    assert handoff is not None
+    assert handoff["locked"] is True
+    assert {p["id"] for p in handoff["paths"]} == {"A", "B", "C"}
+    locked = n1b_operator_handoff()
+    assert locked["paths"][0]["id"] == "A"
+    assert "ht proof walk" in " ".join(locked["paths"][0]["commands"])
 
 
 def test_cli_proof_walk_check_blocked(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -112,6 +119,8 @@ def test_cli_proof_walk_check_blocked(tmp_path: Path, capsys: pytest.CaptureFixt
     data = json.loads(out)
     assert data["ok"] is False
     assert data["phase"] == "3c"
+    assert data["handoff"]["locked"] is True
+    assert len(data["handoff"]["paths"]) == 3
 
 
 def test_proof_walk_prefer_mjlab(

@@ -68,6 +68,8 @@ def test_health_and_recipes() -> None:
     assert proof["phase"] == "3c"
     assert proof["ok"] is False
     assert proof["live_clip"] is False
+    assert proof["handoff"]["locked"] is True
+    assert {p["id"] for p in proof["handoff"]["paths"]} == {"A", "B", "C"}
     assert "ht proof walk" in proof["command"]
     act = client.get("/api/proof/act").json()
     assert act["phase"] == "3e"

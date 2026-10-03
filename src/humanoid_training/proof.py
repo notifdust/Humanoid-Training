@@ -26,6 +26,55 @@ WALK_ENGINES = ("playground", "mjlab", "isaaclab")
 PROOF_REPORT_NAME = "proof_3c.json"
 
 
+def n1b_operator_handoff() -> dict[str, Any]:
+    """Locked A/B/C paths to close Phase 3c. Not a live train.
+
+    CPU Cloud Agents surface this so operators know what to do next —
+    permissions do not create a GPU.
+    """
+    return {
+        "locked": True,
+        "phase": "3c",
+        "goal": "Live walking eval.mp4 + proof_3c.json from a real GPU engine",
+        "paths": [
+            {
+                "id": "A",
+                "title": "Local NVIDIA GPU box",
+                "commands": [
+                    "pip install -e .",
+                    "pip install playground",
+                    "ht proof walk --check",
+                    "ht proof walk",
+                ],
+                "done_when": "proof_3c.json with live_clip:true and a walking eval.mp4",
+            },
+            {
+                "id": "B",
+                "title": "Self-hosted Cursor worker on a GPU machine",
+                "commands": [
+                    "cursor worker start",
+                    "# start Cloud Agent on that worker → ht proof walk",
+                ],
+                "done_when": "Same as path A, harvested by the agent on the worker",
+            },
+            {
+                "id": "C",
+                "title": "No local GPU — Phase 3d remote harvest",
+                "commands": [
+                    "# add OSMO credentials, or HF_TOKEN + hf CLI",
+                    "ht proof osmo   # or: ht proof hf-jobs",
+                ],
+                "done_when": "Remote eval.mp4 with facts.launch=osmo (or HF Jobs harvest)",
+            },
+        ],
+        "refuse": [
+            "Do not check in a stand clip as walk gold",
+            "Do not mark Phase 3c done from CPU CI or fake-CLI unit tests",
+            "Do not open B6 / more Hub pins until N1b lands",
+        ],
+    }
+
+
 def walk_engines_ready() -> dict[str, bool]:
     """Engines that can run a *local* Phase 3c GPU walk proof.
 
@@ -104,6 +153,7 @@ def assess_walk_proof_host(*, prefer: list[str] | None = None) -> dict[str, Any]
     # Phase 3c is a local GPU proof — never ok without GPU + a local engine.
     ok = bool(status.get("gpu") and engine is not None)
     cmd = proof_command(prefer=prefer, engine=engine)
+    handoff = None if ok else n1b_operator_handoff()
     return {
         "ok": ok,
         "phase": "3c",
@@ -114,11 +164,12 @@ def assess_walk_proof_host(*, prefer: list[str] | None = None) -> dict[str, Any]
         "reasons": reasons,
         "next_step": None if ok else _blocked_message(ready),
         "error": None if ok else _blocked_message(ready),
+        "handoff": handoff,
         "live_clip": False,
         "note": (
             "Host can launch a short local walk proof."
             if ok
-            else "Host cannot complete Phase 3c here — use a GPU box (OSMO is Phase 3d)."
+            else "Host cannot complete Phase 3c here — use handoff path A/B (GPU) or C (OSMO/HF)."
         ),
     }
 

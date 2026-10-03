@@ -295,7 +295,11 @@ an mp4. A live walking video is still the GPU-box proof.
 Do not skip ahead to ACT, grasping, or hardware while the walk path
 is still unproven on a real GPU. Each phase has an exit test.
 
-### Phase 3c — GPU-box walk proof (next: live clip)
+### Phase 3c — GPU-box walk proof (locked: awaiting live clip)
+
+**Status.** Operator harness is **done**. Live walking `eval.mp4` is
+**not done**. CPU Cloud Agents cannot close this phase — see
+[NEXT.md](./NEXT.md) operator handoff (paths A / B / C).
 
 **Exit test.** On a machine with an NVIDIA GPU:
 
@@ -319,11 +323,13 @@ a CPU laptop (exit 12) with the next step — that is expected.
 | Host preflight (`assess_walk_proof_host`, `ht proof walk --check`, `GET /api/proof/walk`) | done |
 | Durable `proof_3c.json` on the run | done |
 | Studio G1 walk page projects proof readiness | done |
-| Live walk clip from a real GPU box | **not done** (needs GPU) |
+| Operator handoff A/B/C in NEXT.md | done |
+| Live walk clip from a real GPU box | **not done** (needs GPU — path A or B) |
 | Still no gold walk clip checked into the repo | keep |
 
 Do **not** declare Phase 3c complete from fake-CLI unit tests alone.
 Do **not** check in a stand clip as walk gold.
+Do **not** open more CPU polish tracks while this live clip is open.
 
 ### Phase 3d — Remote harvest (OSMO / hosted GPU)
 

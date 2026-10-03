@@ -34,7 +34,7 @@ not just code.
 
 ---
 
-## Conclusion (2026-09-30)
+## Conclusion (2026-09-30) — **LOCKED**
 
 **Can you conclude without a GPU?** Yes — on architecture, honesty, and
 CPU-safe paper wraps. **No** — on the humanoid wedge exit test (live walking
@@ -50,11 +50,41 @@ CPU-safe paper wraps. **No** — on the humanoid wedge exit test (live walking
 | What closes the story? | One GPU operator run of N1b, then N2b OSMO (or HF) harvest |
 
 ```
-CPU-safe work:            DONE (harness, pins, Hub, intuition, honesty)
+CPU-safe work:            DONE (harness, pins, Hub, intuition, honesty) — LOCKED
 Live wedge (N1b→N5):      BLOCKED here — no NVIDIA GPU / OSMO / robot
 Mission alignment:        HIGH
 Mission completion:       PARTIAL — stop polishing; run N1b on a GPU box
+Do not reopen:            B6 theme, more Hub pins, or fifth room until N1b lands
 ```
+
+### Operator handoff — close N1b (pick one)
+
+**A — Local NVIDIA GPU box**
+
+```bash
+git clone https://github.com/notifdust/Humanoid-Training && cd Humanoid-Training
+pip install -e .
+pip install playground          # or mjlab / Isaac Lab
+ht proof walk --check           # want ok:true
+ht proof walk                   # walking eval.mp4 + proof_3c.json
+```
+
+Paste the run id (or `proof_3c.json`) back into the agent/PR thread so
+ROADMAP Phase 3c can flip to done.
+
+**B — Cloud Agent on a self-hosted GPU worker**
+
+On the GPU machine: `cursor worker start`. Start a Cloud Agent on that
+worker and tell it to run `ht proof walk`.
+
+**C — No local GPU (Phase 3d instead)**
+
+Add OSMO credentials, or `HF_TOKEN` + Hugging Face CLI, to the Cloud
+Agent environment. Ask the agent for **N2** live harvest — not a fake
+local Phase 3c.
+
+Until A, B, or C finishes: do not mark Phase 3c done; do not check in a
+stand clip as walk gold.
 
 ---
 
