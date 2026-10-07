@@ -707,6 +707,7 @@ function renderRecipe() {
            <p class="lede" id="proof-note">Checking whether this machine can prove a walking clip…</p>
            <p class="meta" id="proof-command"></p>
            <ul class="reasons" id="proof-reasons" hidden></ul>
+           <div id="proof-handoff" hidden></div>
            <p class="meta" id="proof-osmo" hidden></p>
          </div>`
       : proofKind === "act"
@@ -806,6 +807,41 @@ function renderRecipe() {
   if (proofKind === "act") loadActPreflight();
 }
 
+function renderProofHandoff(report) {
+  const host = document.getElementById("proof-handoff");
+  if (!host) return;
+  const handoff = report && report.handoff;
+  const paths = handoff && Array.isArray(handoff.paths) ? handoff.paths : [];
+  if (report.ok || !paths.length) {
+    host.hidden = true;
+    host.innerHTML = "";
+    return;
+  }
+  host.hidden = false;
+  host.innerHTML = `
+    <p class="eyebrow">How to close Phase 3c</p>
+    <ol class="handoff-list">
+      ${paths
+        .map((p) => {
+          const cmds = Array.isArray(p.commands)
+            ? p.commands.filter((c) => c && !String(c).startsWith("#"))
+            : [];
+          const cmdLine = cmds.length ? `<code>${escapeHtml(cmds.join(" && "))}</code>` : "";
+          return `<li>
+            <strong>${escapeHtml(p.id)}. ${escapeHtml(p.title || "")}</strong>
+            ${cmdLine ? `<div class="meta">${cmdLine}</div>` : ""}
+            <div class="meta">${escapeHtml(p.done_when || "")}</div>
+          </li>`;
+        })
+        .join("")}
+    </ol>
+    ${(handoff.refuse || [])
+      .slice(0, 2)
+      .map((r) => `<p class="meta">${escapeHtml(r)}</p>`)
+      .join("")}
+  `;
+}
+
 async function loadProofPreflight() {
   const note = document.getElementById("proof-note");
   const cmd = document.getElementById("proof-command");
@@ -838,19 +874,21 @@ async function loadProofPreflight() {
         reasonsEl.innerHTML = "";
       }
     }
+    renderProofHandoff(report);
     if (osmoEl) {
       try {
         const osmo = await api("/api/proof/osmo");
         osmoEl.hidden = false;
         osmoEl.textContent = osmo.ok
-          ? `OSMO harvest ready: ${osmo.command}`
-          : `OSMO harvest later: ${osmo.note || "need osmo CLI + pool"}`;
+          ? `OSMO harvest ready (path C): ${osmo.command}`
+          : `Path C later: ${osmo.note || "need osmo CLI + pool (or HF_TOKEN)"}`;
       } catch {
         osmoEl.hidden = true;
       }
     }
   } catch (error) {
     note.textContent = error.message || "Could not check walk-proof readiness.";
+    renderProofHandoff({ ok: false, handoff: null });
   }
 }
 

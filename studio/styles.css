@@ -461,6 +461,24 @@ h2 {
   font-size: 0.92rem;
 }
 
+.proof-block .handoff-list {
+  margin: 8px 0 0;
+  padding-left: 1.2em;
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+.proof-block .handoff-list li {
+  margin: 0.55rem 0;
+}
+
+.proof-block .handoff-list code {
+  display: inline-block;
+  margin-top: 0.2rem;
+  font-size: 0.82rem;
+  word-break: break-word;
+}
+
 .status-chip {
   font-family: var(--mono);
   font-size: 12px;

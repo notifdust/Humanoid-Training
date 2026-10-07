@@ -316,6 +316,7 @@ Still open (needs hardware): N1b live walk, N2b OSMO live, N3b ACT live, N4b Rob
 | **N6c** | Hub `hf:user/dataset` → inspect/cache (`huggingface_hub`); Data room accepts Hub ids |
 | **N7g** | `ht proof groot` + `GET /api/proof/groot` (check-only; fine-tune stays NVIDIA course) |
 | **N6d / N7h** | Hub pins (`ht datasets pins`, `GET /api/datasets/pins`): LAFAN1 G1 CSV/NPZ, LeRobot PushT example, GR00T-via-LeRobot path; `ht datasets motion` / `POST /api/datasets/motion` caches motion without claiming ACT |
+| **N1b lock** | Operator handoff A/B/C in NEXT/ROADMAP/README; `assess_walk_proof_host.handoff`; studio G1 walk Train shows the same paths when blocked |
 
 `GET /api/proof` bundles walk + osmo + act + hf_jobs + groot readiness.
 

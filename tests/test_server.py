@@ -388,7 +388,10 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "function loadDeployPreflight" in js
     assert "function loadProofPreflight" in js
     assert "function loadActPreflight" in js
+    assert "function renderProofHandoff" in js
     assert 'id="proof-preflight"' in js or "id=\"proof-preflight\"" in js
+    assert 'id="proof-handoff"' in js or "id=\"proof-handoff\"" in js
+    assert "How to close Phase 3c" in js
     assert "r.proof" in js or "proofKind" in js
     assert 'r.id === "g1-walk-rough"' not in js
     assert "/api/proof/walk" in js
