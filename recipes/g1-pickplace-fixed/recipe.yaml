@@ -1,0 +1,54 @@
+id: g1-pickplace-fixed
+version: 0.1.0
+phase: 3
+runnable: true
+title: G1 pick and place (fixed base)
+summary: Unitree G1 fixed-base upper-body PickPlace via Isaac Lab Mimic / Robomimic BC. Pins Isaac-PickPlace-FixedBaseUpperBodyIK-G1-Abs-v0. Needs Isaac + GPU + Mimic hdf5 — not loco-manipulation, not CPU mustard.
+language: Pick up the object and put it in the basket (Isaac G1 fixed-base upper body).
+robot: unitree-g1-29dof
+success:
+  type: custom
+  note: Engine eval clip / robomimic play — not an independent mustard-in-bowl score.
+train:
+  method: imitation
+  policy: bc
+  steps: 1
+  seed: 1
+eval:
+  episodes: 1
+  record_video: true
+backend:
+  prefer: [isaaclab]
+  compute: local-docker
+adapters:
+  isaaclab:
+    task: Isaac-PickPlace-FixedBaseUpperBodyIK-G1-Abs-v0
+    workflow: robomimic
+    algo: bc
+    image: nvcr.io/nvidia/isaac-lab:2.2.0
+  playground:
+    unsupported: "Playground has no G1 PickPlace env. Use g1-pickplace-fixed on Isaac Lab, or pick-and-place on CPU."
+  mjlab:
+    unsupported: "No confirmed mjlab G1 PickPlace task id. Isaac pin is Isaac-PickPlace-FixedBaseUpperBodyIK-G1-Abs-v0."
+  gymnasium:
+    unsupported: "G1 PickPlace is not a Gymnasium environment."
+  mujoco:
+    unsupported: "CPU mustard→bowl stays on pick-and-place. This recipe is the Isaac Lab fixed-base pin."
+  lerobot:
+    unsupported: "LeRobot ACT stays on pick-and-place. This recipe trains Robomimic BC inside Isaac Lab."
+gold:
+  notes: |
+    GPU / Isaac only. Upstream task:
+    Isaac-PickPlace-FixedBaseUpperBodyIK-G1-Abs-v0 (fixed-base upper-body IK).
+    Locomanipulation sibling is g1-pickplace
+    (Isaac-PickPlace-Locomanipulation-G1-Abs-v0). Do not check in gold/eval.mp4.
+studio:
+  availability: gpu
+  start_here: false
+  imitate: false
+  proof: none
+  promise: Isaac G1 fixed-base PickPlace is not available on this computer.
+  ready_promise: GPU + Isaac Lab can launch Robomimic BC on the fixed-base PickPlace task when HT_ISAAC_DATASET points at a Mimic hdf5.
+  train_hint: Fixed-base upper body — no walking. Needs Isaac Lab Mimic demos (HT_ISAAC_DATASET). Locomanipulation stays on g1-pickplace. CPU mustard stays on Pick and place.
+  ready_hint: This computer can reach Isaac Lab. Train launches Robomimic BC when HT_ISAAC_DATASET is a Mimic hdf5.
+  blocked_hint: Needs Isaac Lab + GPU + HT_ISAAC_DATASET (Mimic hdf5). Not the CPU pick-and-place recipe.

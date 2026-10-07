@@ -9,6 +9,24 @@ from fastapi.testclient import TestClient
 from humanoid_training.server import app
 
 
+def test_api_run_includes_english(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HT_RUNS_DIR", str(tmp_path))
+    run_dir = tmp_path / "demo-1"
+    run_dir.mkdir()
+    (run_dir / "manifest.json").write_text(
+        '{"run_id":"demo-1","status":"passed","recipe":"g1-stand",'
+        '"facts":{"kind":"hold","engine":"mujoco","sim_only":true},"artifacts":{}}\n',
+        encoding="utf-8",
+    )
+    client = TestClient(app)
+    one = client.get("/api/runs/demo-1").json()
+    assert "english" in one
+    assert "not walking" in one["english"]
+    listed = client.get("/api/runs").json()["runs"]
+    assert listed and "english" in listed[0]
+    assert "not walking" in listed[0]["english"]
+
+
 def test_health_and_recipes() -> None:
     client = TestClient(app)
     health = client.get("/api/health").json()
@@ -19,18 +37,61 @@ def test_health_and_recipes() -> None:
     ids = {r["id"] for r in recipes}
     assert "cartpole-balance" in ids
     assert "g1-walk" in ids
+    assert "g1-pickplace" in ids
+    assert "g1-track" in ids
+    assert "g1-pickplace-fixed" in ids
     assert "cartpole-balance" in catalog["ready"]
     assert "g1-walk" in catalog["later"]
+    assert "g1-pickplace" in catalog["later"]
+    assert "g1-walk-rough" in catalog["later"]
+    assert "g1-track" in catalog["later"]
+    assert "g1-pickplace-fixed" in catalog["later"]
     by_id = {r["id"]: r for r in recipes}
     assert by_id["cartpole-balance"]["has_gold"] is True
     assert by_id["g1-walk"]["has_gold"] is False
     assert by_id["g1-walk"]["launch_here"] is False
+    assert by_id["g1-pickplace"]["has_gold"] is False
+    assert by_id["g1-pickplace"]["launch_here"] is False
+    assert by_id["g1-pickplace"]["imitate"] is False
+    assert by_id["g1-walk-rough"]["has_gold"] is False
+    assert by_id["g1-track"]["has_gold"] is False
+    assert by_id["g1-track"]["launch_here"] is False
+    assert by_id["g1-pickplace-fixed"]["has_gold"] is False
+    assert by_id["g1-pickplace-fixed"]["launch_here"] is False
     assert "g1-reach" not in by_id
     assert by_id["cartpole-balance"]["launch_here"] is True
     assert health.get("engines")
     assert "playground_ready" in health["engines"]
     assert "mjlab_ready" in health["engines"]
     assert "isaac_launch_ready" in health["engines"]
+    proof = client.get("/api/proof/walk").json()
+    assert proof["phase"] == "3c"
+    assert proof["ok"] is False
+    assert proof["live_clip"] is False
+    assert proof["handoff"]["locked"] is True
+    assert {p["id"] for p in proof["handoff"]["paths"]} == {"A", "B", "C"}
+    assert "ht proof walk" in proof["command"]
+    act = client.get("/api/proof/act").json()
+    assert act["phase"] == "3e"
+    assert act["ok"] is False
+    osmo = client.get("/api/proof/osmo").json()
+    assert osmo["phase"] == "3d"
+    assert osmo["ok"] is False
+    hf_jobs = client.get("/api/proof/hf-jobs").json()
+    assert hf_jobs["phase"] == "3d-hf"
+    assert hf_jobs["ok"] is False
+    groot = client.get("/api/proof/groot").json()
+    assert groot["phase"] == "groot"
+    assert groot["ok"] is False
+    assert groot.get("wrap") == "lerobot"
+    pins = client.get("/api/datasets/pins").json()
+    assert any(p["id"] == "lafan1-g1-csv" for p in pins["pins"])
+    assert "lafan1-g1-csv" in pins["motion"]
+    motion = client.post("/api/datasets/motion", json={"uri": "/tmp/not-hub"}).json()
+    assert motion["ok"] is False
+    bundle = client.get("/api/proof").json()
+    assert "walk" in bundle and "act" in bundle and "osmo" in bundle
+    assert "hf_jobs" in bundle and "groot" in bundle
     gold = client.get("/api/recipes/cartpole-balance/gold/eval.mp4")
     assert gold.status_code == 200
     assert gold.headers["content-type"].startswith("video/")
@@ -264,8 +325,14 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     """The browser must group and fall back from GET /api/recipes, not baked-in ids."""
     js = (Path(__file__).resolve().parents[1] / "studio" / "app.js").read_text(encoding="utf-8")
     assert "function worksHere" in js
+    assert "function harvestHere" in js
+    assert "function groupRecipes" in js
     assert "function firstReadyRecipe" in js
     assert "function firstImitateRecipe" in js
+    assert "Can harvest remotely" in js
+    assert "Demos →" in js
+    assert "block_save_first" in js
+    assert "open-ready" in js
     assert "/api/recipes/pick-and-place" not in js
     assert '"cartpole-balance"' not in js
     assert "run.recipe === \"pick-and-place\"" not in js
@@ -319,6 +386,27 @@ def test_studio_js_projects_catalog_not_recipe_ids() -> None:
     assert "Start with the Unitree G1" not in js
     assert '<span class="robot-mark">G1</span>' not in js
     assert "function loadDeployPreflight" in js
+    assert "function loadProofPreflight" in js
+    assert "function loadActPreflight" in js
+    assert "function renderProofHandoff" in js
+    assert 'id="proof-preflight"' in js or "id=\"proof-preflight\"" in js
+    assert 'id="proof-handoff"' in js or "id=\"proof-handoff\"" in js
+    assert "How to close Phase 3c" in js
+    assert "r.proof" in js or "proofKind" in js
+    assert 'r.id === "g1-walk-rough"' not in js
+    assert "/api/proof/walk" in js
+    assert "/api/proof/act" in js
+    assert "/api/proof/osmo" in js
+    assert "hf:user/dataset" in js
+    assert "HF:ready" in js
+    assert "/api/datasets/pins" in js
+    assert "function loadHubPins" in js
+    assert "Hub pins" in js
+    assert "function englishFromFacts" in js
+    assert "function runEnglish" in js
+    assert "run.english" in js
+    assert "facts.video === \"missing\"" in js or "facts.video === 'missing'" in js
+    assert "launch_path" in js
     assert 'run.recipe !== "g1-walk"' not in js
     assert "Stays sim-only" in js or "why below" in js
     assert "id=\"deploy-preflight\"" in js
@@ -374,6 +462,7 @@ def test_studio_css_disabled_cursor() -> None:
     assert ".status-legend" in css
     assert ".rail-hint" in css
     assert "main-in" in css
+    assert "prefers-reduced-motion" in css
     assert ".hint-callout" in css
     assert ".empty-state" in css
     assert "--accent:" in css

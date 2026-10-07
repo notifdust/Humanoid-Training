@@ -80,9 +80,20 @@ python -m humanoid_training.cli train spec/examples/g1-walk.json
 ```
 
 `ht proof walk` is the Phase 3c exit command: short train, require
-`eval.mp4`, stamp `facts.engine`. Without a GPU it exits 12 with the
-next step. With the OSMO CLI logged in (no local GPU), Train can still
-harvest a remote Isaac walk clip (Phase 3d).
+`eval.mp4`, stamp `facts.engine`, write `proof_3c.json`. Without a GPU
+it exits 12 with the next step. Check readiness only with
+`ht proof walk --check`. With the OSMO CLI logged in (no local GPU),
+Train can still harvest a remote Isaac walk clip (Phase 3d).
+
+### Close Phase 3c (operator)
+
+CPU studio work is locked. To finish the humanoid wedge exit test, pick one:
+
+1. **GPU box:** `pip install playground && ht proof walk` → send back the run id / `proof_3c.json`.
+2. **Self-hosted Cursor worker** on that GPU → Cloud Agent runs the same command.
+3. **No GPU:** add OSMO or `HF_TOKEN` secrets → pursue Phase 3d harvest instead.
+
+Details: [docs/NEXT.md](docs/NEXT.md) (Conclusion → Operator handoff).
 
 `ht deploy <run_id>` is the Phase 4 gate: it always fails closed until a
 passed hardware eval profile exists and a Unitree driver ships. Every
@@ -92,8 +103,9 @@ Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
 
 ## Read this first
 
-- **[Roadmap](docs/ROADMAP.md)** — what is live, what this round verified, what comes next (GPU / hardware)
-- **[Betterment](docs/BETTERMENT.md)** — polish the CPU studio that already ships (B0–B5)
+- **[Next](docs/NEXT.md)** — **LOCKED conclusion** + N1b operator handoff + ordered next steps
+- **[Roadmap](docs/ROADMAP.md)** — what is live, phase exit tests (GPU / hardware)
+- **[Betterment](docs/BETTERMENT.md)** — completed CPU-studio polish (B0–B5 done)
 - **[Product vision](docs/VISION.md)** — landscape and why we compile instead of replacing engines
 - **[Architecture](docs/ARCHITECTURE.md)** — job spec, adapters, runners
 
@@ -104,6 +116,8 @@ Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
 | `cartpole-balance` | Gymnasium RL on CPU, eval video, gold clip |
 | `g1-stand` | MuJoCo G1 from Menagerie, stand + both-arm wave, eval video, gold clip |
 | `g1-walk` | Compile to Playground / mjlab / Isaac Lab. **Launches** the first ready engine (local GPU or OSMO harvest). |
+| `g1-walk-rough` | Rough terrain via mjlab / Isaac Lab. Needs GPU. |
+| `g1-pickplace` | Isaac Lab Mimic / Robomimic BC on `Isaac-PickPlace-Locomanipulation-G1-Abs-v0`. Needs GPU + `HT_ISAAC_DATASET`. |
 | `pick-and-place` | Demos → ACT when LeRobot+GPU; else linear-BC on mujoco. Gold clip is CPU linear-BC. Not finger grasping. |
 
 ## Non-goals (for now)
