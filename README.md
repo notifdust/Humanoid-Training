@@ -36,8 +36,8 @@ fleet ops — we compile a job spec into software that already exists.
 | Horizon | Outcome |
 |---|---|
 | **Now (laptop)** | Cartpole, G1 stand, mustard→bowl with gold videos — the Train → video loop is real |
-| **Next (GPU)** | Live G1 walking eval (`ht proof walk`) — the humanoid wedge, not a stand clip |
-| **Then** | Remote GPU harvest so beginners need not install CUDA; ACT on the same demos |
+| **Now (GPU)** | Live G1 walking eval via `ht proof walk` (Playground) — Phase 3c closed on operator GPU |
+| **Next** | Remote GPU harvest so beginners need not install CUDA; ACT on the same demos |
 | **Later** | Fail-closed deploy to a real G1/H1 at reduced speed, only after sim walk is proven |
 
 The north star is still a person who has never heard of PPO watching a humanoid
