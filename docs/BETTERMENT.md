@@ -4,8 +4,12 @@ Improve what already ships. Do **not** use this file to invent engines,
 policies, recipes, orchestrators, or live GPU / hardware proofs.
 
 The phase roadmap ([ROADMAP.md](./ROADMAP.md)) still owns walk proof,
-OSMO live harvest, ACT-on-GPU, and Unitree torque. This file owns making
+OSMO live harvest, ACT-on-GPU, and Unitree torque. This file owned making
 the **CPU studio loop** clearer, honester, and harder to misuse.
+
+**All tracks B0–B5 are done.** Do not open a B6 theme/polish pass by
+default. Next implementation order and mission audit live in
+[NEXT.md](./NEXT.md) (N1 = Phase 3c live GPU walk proof).
 
 ```
 B0  stop silent wrong trains          ← done
@@ -16,8 +20,8 @@ B4  status, Data, first-run friction  ← done
 B5  interaction tests + small cleanup ← done
 ```
 
-Each track has an **exit test**. If the test fails, the track is not
-done — even if the UI looks nicer.
+Each track had an **exit test**. If the test failed, the track was not
+done — even if the UI looked nicer.
 
 ---
 
@@ -214,8 +218,8 @@ Primary paths: `tests/`, `studio/gates.js`, `studio/app.js`, `studio/styles.css`
 
 ## How to work a betterment track
 
-1. Branch off the latest merged betterment / phase tip:
-   `cursor/betterment-bN-<slug>-197a`.
+1. Branch off the latest merged betterment / phase tip
+   (short descriptive name; keep changes small).
 2. Change the **smallest** surface that fixes the exit test (usually
    studio + one contract test). Prefer projecting server facts over
    hardcoding recipe ids in the browser.
@@ -226,9 +230,8 @@ Primary paths: `tests/`, `studio/gates.js`, `studio/app.js`, `studio/styles.css`
 5. Update this file’s status table when a track’s exit test is met.
 6. Full `pytest` green before claiming done.
 
-Suggested merge order: **B0 → B1 → B2 → B3 → B4 → B5**. Parallelize only
-when tracks do not touch the same Train path (e.g. B2 docs can ride
-beside B0).
+Suggested merge order was **B0 → B1 → B2 → B3 → B4 → B5** (complete).
+Further work: [NEXT.md](./NEXT.md).
 
 ---
 

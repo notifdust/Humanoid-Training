@@ -1,0 +1,56 @@
+id: g1-track
+version: 0.1.0
+phase: 3
+runnable: true
+title: G1 motion track
+summary: Unitree G1 motion imitation via mjlab Tracking. Pins Mjlab-Tracking-Flat-Unitree-G1. Needs GPU + WandB motion registry (HT_MJLAB_MOTION) — not a velocity walk, not a gold clip.
+language: Track a reference motion on flat ground.
+robot: unitree-g1-29dof
+success:
+  type: custom
+  note: Engine rollout / play video — not an independent upright-duration score.
+train:
+  method: rl
+  policy: ppo
+  steps: 100000
+  seed: 1
+eval:
+  episodes: 1
+  record_video: true
+backend:
+  prefer: [mjlab]
+  compute: local-docker
+adapters:
+  mjlab:
+    task: Mjlab-Tracking-Flat-Unitree-G1
+    requires_motion: true
+  playground:
+    unsupported: "Playground has joystick velocity envs (g1-walk), not motion tracking. Use g1-track on mjlab."
+  isaaclab:
+    unsupported: "Stock Isaac Lab tracking lives in BeyondMimic / contrib stacks. This pin is mjlab Mjlab-Tracking-Flat-Unitree-G1."
+  gymnasium:
+    unsupported: "G1 motion tracking is not a Gymnasium environment."
+  mujoco:
+    unsupported: "CPU hold stays on g1-stand. Motion tracking needs mjlab + GPU + HT_MJLAB_MOTION."
+  lerobot:
+    unsupported: "LeRobot ACT stays on pick-and-place. Motion tracking is an mjlab RL pin."
+data:
+  # Hub pin is documentation for operators — not auto-downloaded at expand time.
+  hub_motion: hf:lvhaidong/LAFAN1_Retargeting_Dataset
+gold:
+  notes: |
+    Needs NVIDIA GPU + mjlab motion imitation (BeyondMimic-style Tracking):
+    Mjlab-Tracking-Flat-Unitree-G1 with --registry-name from WandB.
+    Motions: Hub pin hf:lvhaidong/LAFAN1_Retargeting_Dataset (g1/** CSVs).
+    Convert with mjlab.scripts.csv_to_npz (Isaac BeyondMimic NPZs have
+    different body order — do not reuse them for mjlab).
+    Set HT_MJLAB_MOTION=<org/motions/name>. Do not check in gold/eval.mp4.
+studio:
+  availability: gpu
+  start_here: false
+  proof: none
+  promise: Motion tracking is not available on this computer.
+  ready_promise: GPU + mjlab can launch motion tracking when HT_MJLAB_MOTION points at a WandB motion registry.
+  train_hint: Needs mjlab + GPU + HT_MJLAB_MOTION. LAFAN1 CSVs via Data → Hub pins. Velocity walk stays on g1-walk.
+  ready_hint: This computer can reach mjlab. Convert LAFAN1 → WandB, set HT_MJLAB_MOTION, then Train — track a reference motion, not stand still.
+  blocked_hint: Needs mjlab + GPU + HT_MJLAB_MOTION (WandB). LAFAN1 Hub pin is CSV only until you convert. Not a frozen walk clip.

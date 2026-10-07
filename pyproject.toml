@@ -7,7 +7,11 @@ name = "humanoid-training"
 version = "0.1.0"
 description = "Studio and compiler for robot training jobs on MuJoCo, Isaac Lab, and LeRobot."
 readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.11"
+authors = [
+  { name = "Gabriele Sepolvere", email = "145381062+notifdust@users.noreply.github.com" },
+]
 dependencies = [
   "jsonschema>=4.20",
   "PyYAML>=6.0",
@@ -25,6 +29,13 @@ dev = [
 ]
 mujoco = [
   "mujoco>=3.2",
+]
+# Playground / brax 0.14 still needs jax.device_put_replicated (removed in jax 0.10+).
+# After this extra: also install CUDA wheels — pip install "jax[cuda12]==0.9.2"
+playground = [
+  "playground>=0.2,<0.3",
+  "jax==0.9.2",
+  "jaxlib==0.9.2",
 ]
 
 [project.scripts]

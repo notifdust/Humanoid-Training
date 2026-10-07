@@ -89,9 +89,62 @@ def playground_installed() -> bool:
     return True
 
 
+def playground_jax_stack() -> dict[str, Any]:
+    """Detect jax/brax pins that make train-jax-ppo exit 1.
+
+    Playground (brax 0.14) still calls ``jax.device_put_replicated``, removed
+    in jax 0.10+. A bare ``pip install playground`` can pull jax 0.11 and
+    a CPU-only jaxlib even when nvidia-smi sees a GPU.
+    """
+    if os.environ.get("HT_PLAYGROUND_CLI") is not None:
+        # Test / operator override — do not require a real jax stack.
+        return {"ok": True, "skipped": True, "reasons": [], "backend": None, "jax_version": None}
+    try:
+        import jax
+    except ImportError:
+        return {
+            "ok": False,
+            "skipped": False,
+            "reasons": [
+                "jax is not installed. "
+                "pip install -e '.[playground]' && pip install 'jax[cuda12]==0.9.2'"
+            ],
+            "backend": None,
+            "jax_version": None,
+        }
+    reasons: list[str] = []
+    version = getattr(jax, "__version__", "unknown")
+    if not hasattr(jax, "device_put_replicated"):
+        reasons.append(
+            f"jax {version} is too new for Playground/brax "
+            "(missing jax.device_put_replicated). "
+            "Pin: pip install 'jax[cuda12]==0.9.2' 'jaxlib==0.9.2'"
+        )
+    backend = None
+    try:
+        backend = str(jax.default_backend())
+    except Exception:  # noqa: BLE001 — surface as unknown
+        backend = "unknown"
+    if gpu_available() and backend == "cpu":
+        reasons.append(
+            "nvidia-smi sees a GPU but jax default_backend() is cpu "
+            "(CUDA jaxlib missing). "
+            "Install: pip install 'jax[cuda12]==0.9.2'"
+        )
+    return {
+        "ok": not reasons,
+        "skipped": False,
+        "reasons": reasons,
+        "backend": backend,
+        "jax_version": version,
+    }
+
+
 def playground_ready() -> bool:
-    """Can Phase 3a launch G1 walk here? Needs the CLI and a GPU."""
-    return playground_cli() is not None and gpu_available()
+    """Can Phase 3a launch G1 walk here? Needs CLI, GPU, and a compatible jax."""
+    if playground_cli() is None or not gpu_available():
+        return False
+    return bool(playground_jax_stack().get("ok"))
 
 
 def mjlab_cli() -> str | None:
@@ -180,6 +233,50 @@ def osmo_ready() -> bool:
     return osmo_cli() is not None
 
 
+def hf_cli() -> str | None:
+    """Hugging Face CLI (`hf` or `huggingface-cli`)."""
+    override = _cli_from_env("HT_HF_CLI")
+    if os.environ.get("HT_HF_CLI") is not None:
+        return override
+    return shutil.which("hf") or shutil.which("huggingface-cli")
+
+
+def hf_token_present() -> bool:
+    """True when HF_TOKEN / HUGGING_FACE_HUB_TOKEN is set (non-empty)."""
+    for name in ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"):
+        raw = os.environ.get(name)
+        if raw is not None and raw.strip() and raw.strip().lower() not in _FALSE:
+            return True
+    return False
+
+
+def hf_jobs_ready() -> bool:
+    """Host can attempt HF Jobs submit (CLI + token). Live harvest still separate."""
+    if _env_bool("HT_HF_JOBS") is False:
+        return False
+    return hf_cli() is not None and hf_token_present()
+
+
+def mjlab_motion_ready() -> bool:
+    """Motion-imitation mjlab tasks need a WandB registry / motion pin."""
+    for name in ("HT_MJLAB_MOTION", "WANDB_MOTION_REGISTRY"):
+        raw = os.environ.get(name)
+        if raw is not None and raw.strip() and raw.strip().lower() not in _FALSE:
+            return True
+    return False
+
+
+def groot_stack_hint() -> dict[str, Any]:
+    """Cheap probes for NVIDIA GR00T / Arena path — not a live train."""
+    return {
+        "gpu": gpu_available(),
+        "isaac_local_ready": isaac_local_ready(),
+        "isaac_cli": isaac_cli(),
+        "lerobot_ready": lerobot_ready(),
+        "hf_token": hf_token_present(),
+    }
+
+
 def docker_bin() -> str | None:
     return shutil.which("docker")
 
@@ -188,11 +285,18 @@ def docker_gpu_requested() -> bool:
     return _env_bool("HT_DOCKER_GPU") is True
 
 
-def isaac_launch_ready() -> bool:
-    """Isaac can launch here: local GPU CLI/Docker, or OSMO remote harvest."""
+def isaac_local_ready() -> bool:
+    """Local Isaac path only (CLI or GPU Docker) — not OSMO remote harvest."""
     if isaac_cli() and gpu_available():
         return True
     if docker_bin() is not None and docker_gpu_requested() and gpu_available():
+        return True
+    return False
+
+
+def isaac_launch_ready() -> bool:
+    """Isaac can launch here: local GPU CLI/Docker, or OSMO remote harvest."""
+    if isaac_local_ready():
         return True
     return osmo_ready()
 
@@ -216,17 +320,25 @@ def engine_status() -> dict[str, Any]:
     isa = isaac_cli()
     osmo = osmo_cli()
     lr = lerobot_cli()
+    hf = hf_cli()
+    jax_stack = playground_jax_stack()
     return {
         "gpu": gpu_available(),
         "playground": playground_installed(),
         "playground_cli": pg,
-        "playground_ready": bool(pg) and gpu_available(),
+        "playground_ready": playground_ready(),
+        "playground_jax": jax_stack,
         "mjlab_cli": mj,
         "mjlab_ready": bool(mj) and gpu_available(),
+        "mjlab_motion_ready": mjlab_motion_ready(),
         "isaac_cli": isa,
         "osmo_cli": osmo,
         "osmo_ready": osmo_ready(),
+        "isaac_local_ready": isaac_local_ready(),
         "isaac_launch_ready": isaac_launch_ready(),
         "lerobot_cli": lr,
         "lerobot_ready": bool(lr) and gpu_available(),
+        "hf_cli": hf,
+        "hf_token": hf_token_present(),
+        "hf_jobs_ready": hf_jobs_ready(),
     }

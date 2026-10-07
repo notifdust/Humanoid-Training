@@ -1,12 +1,16 @@
 # Job spec
 
-The studio's source of truth. See [ARCHITECTURE.md](../docs/ARCHITECTURE.md).
+The studio’s source of truth. UI and CLI both expand a short document
+against a recipe, then adapters compile it. See
+[ARCHITECTURE.md](../docs/ARCHITECTURE.md).
 
-- `job_spec.schema.json` — draft JSON Schema (`spec_version` 0.1.x)
-- `examples/` — documents a UI would write
+| Path | Role |
+|---|---|
+| `job_spec.schema.json` | Draft JSON Schema (`spec_version` 0.1.x) |
+| `examples/` | Specs a beginner UI / CLI would write |
 
 Unknown fields are allowed. Adapters must ignore what they cannot honor
-and record that in the run manifest.
+and record that in the run manifest (`facts` + notes).
 
-This schema is not frozen. Change it in breaking ways only with a
-`spec_version` bump and an adapter note.
+This schema is not frozen. Breaking changes need a `spec_version` bump
+and an adapter note.
