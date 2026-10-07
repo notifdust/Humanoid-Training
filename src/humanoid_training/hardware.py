@@ -89,9 +89,62 @@ def playground_installed() -> bool:
     return True
 
 
+def playground_jax_stack() -> dict[str, Any]:
+    """Detect jax/brax pins that make train-jax-ppo exit 1.
+
+    Playground (brax 0.14) still calls ``jax.device_put_replicated``, removed
+    in jax 0.10+. A bare ``pip install playground`` can pull jax 0.11 and
+    a CPU-only jaxlib even when nvidia-smi sees a GPU.
+    """
+    if os.environ.get("HT_PLAYGROUND_CLI") is not None:
+        # Test / operator override — do not require a real jax stack.
+        return {"ok": True, "skipped": True, "reasons": [], "backend": None, "jax_version": None}
+    try:
+        import jax
+    except ImportError:
+        return {
+            "ok": False,
+            "skipped": False,
+            "reasons": [
+                "jax is not installed. "
+                "pip install -e '.[playground]' && pip install 'jax[cuda12]==0.9.2'"
+            ],
+            "backend": None,
+            "jax_version": None,
+        }
+    reasons: list[str] = []
+    version = getattr(jax, "__version__", "unknown")
+    if not hasattr(jax, "device_put_replicated"):
+        reasons.append(
+            f"jax {version} is too new for Playground/brax "
+            "(missing jax.device_put_replicated). "
+            "Pin: pip install 'jax[cuda12]==0.9.2' 'jaxlib==0.9.2'"
+        )
+    backend = None
+    try:
+        backend = str(jax.default_backend())
+    except Exception:  # noqa: BLE001 — surface as unknown
+        backend = "unknown"
+    if gpu_available() and backend == "cpu":
+        reasons.append(
+            "nvidia-smi sees a GPU but jax default_backend() is cpu "
+            "(CUDA jaxlib missing). "
+            "Install: pip install 'jax[cuda12]==0.9.2'"
+        )
+    return {
+        "ok": not reasons,
+        "skipped": False,
+        "reasons": reasons,
+        "backend": backend,
+        "jax_version": version,
+    }
+
+
 def playground_ready() -> bool:
-    """Can Phase 3a launch G1 walk here? Needs the CLI and a GPU."""
-    return playground_cli() is not None and gpu_available()
+    """Can Phase 3a launch G1 walk here? Needs CLI, GPU, and a compatible jax."""
+    if playground_cli() is None or not gpu_available():
+        return False
+    return bool(playground_jax_stack().get("ok"))
 
 
 def mjlab_cli() -> str | None:
@@ -268,11 +321,13 @@ def engine_status() -> dict[str, Any]:
     osmo = osmo_cli()
     lr = lerobot_cli()
     hf = hf_cli()
+    jax_stack = playground_jax_stack()
     return {
         "gpu": gpu_available(),
         "playground": playground_installed(),
         "playground_cli": pg,
-        "playground_ready": bool(pg) and gpu_available(),
+        "playground_ready": playground_ready(),
+        "playground_jax": jax_stack,
         "mjlab_cli": mj,
         "mjlab_ready": bool(mj) and gpu_available(),
         "mjlab_motion_ready": mjlab_motion_ready(),

@@ -304,8 +304,10 @@ is still unproven on a real GPU. Each phase has an exit test.
 **Exit test.** On a machine with an NVIDIA GPU:
 
 ```bash
-pip install playground   # or mjlab / Isaac Lab
-ht proof walk
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e '.[playground]'
+pip install 'jax[cuda12]==0.9.2'   # pin — jax 0.10+ breaks brax; need CUDA jaxlib
+python -m humanoid_training.cli proof walk
 # optional: ht proof walk --prefer mjlab
 # optional: HT_ISAAC_CLI=/path/to/isaaclab.sh ht proof walk --prefer isaaclab
 # readiness only (no train): ht proof walk --check

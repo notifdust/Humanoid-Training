@@ -41,10 +41,11 @@ def n1b_operator_handoff() -> dict[str, Any]:
                 "id": "A",
                 "title": "Local NVIDIA GPU box",
                 "commands": [
-                    "pip install -e .",
-                    "pip install playground",
-                    "ht proof walk --check",
-                    "ht proof walk",
+                    "python3 -m venv .venv && source .venv/bin/activate",
+                    "pip install -e '.[playground]'",
+                    "pip install 'jax[cuda12]==0.9.2'",
+                    "python -m humanoid_training.cli proof walk --check",
+                    "python -m humanoid_training.cli proof walk",
                 ],
                 "done_when": "proof_3c.json with live_clip:true and a walking eval.mp4",
             },
@@ -117,7 +118,9 @@ def _blocked_message(ready: dict[str, bool]) -> str:
         f"osmo_ready={status.get('osmo_ready')} (OSMO is Phase 3d, not 3c)",
         "",
         "On a GPU box, pick one:",
-        "  pip install playground && ht proof walk",
+        "  python3 -m venv .venv && source .venv/bin/activate",
+        "  pip install -e '.[playground]' && pip install 'jax[cuda12]==0.9.2'",
+        "  python -m humanoid_training.cli proof walk",
         "  # mjlab installed → ht proof walk --prefer mjlab",
         "  # HT_ISAAC_CLI=/path/to/isaaclab.sh → ht proof walk --prefer isaaclab",
         "",
@@ -139,6 +142,15 @@ def assess_walk_proof_host(*, prefer: list[str] | None = None) -> dict[str, Any]
     reasons: list[str] = []
     if not status.get("gpu"):
         reasons.append("No NVIDIA GPU detected on this machine.")
+    jax_stack = status.get("playground_jax") or {}
+    if (
+        status.get("playground_cli")
+        and status.get("gpu")
+        and not ready.get("playground")
+        and isinstance(jax_stack, dict)
+        and jax_stack.get("reasons")
+    ):
+        reasons.extend(str(r) for r in jax_stack["reasons"])
     if not any(ready.values()):
         reasons.append(
             "No local walk engine ready (Playground, mjlab, or local Isaac Lab)."

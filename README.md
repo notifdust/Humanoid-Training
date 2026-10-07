@@ -70,14 +70,19 @@ python -m humanoid_training.cli train spec/examples/cartpole-balance.json --dock
 GPU recipes are refused there. If Docker is missing it stops with a next
 step; in-process Train still works.
 
-On a machine with an NVIDIA GPU:
+On a machine with an NVIDIA GPU (use a venv — Debian/Ubuntu block system pip):
 
 ```bash
-pip install playground
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[playground]"
+pip install "jax[cuda12]==0.9.2"   # brax needs jax 0.9.x; CUDA jaxlib required
 python -m humanoid_training.cli proof walk
 # or: train the full beginner spec
 python -m humanoid_training.cli train spec/examples/g1-walk.json
 ```
+
+Bare `pip install playground` can pull jax 0.11 (breaks brax) and a CPU-only
+jaxlib (ignores your NVIDIA GPU). Always pin `jax[cuda12]==0.9.2`.
 
 `ht proof walk` is the Phase 3c exit command: short train, require
 `eval.mp4`, stamp `facts.engine`, write `proof_3c.json`. Without a GPU
@@ -89,7 +94,7 @@ Train can still harvest a remote Isaac walk clip (Phase 3d).
 
 CPU studio work is locked. To finish the humanoid wedge exit test, pick one:
 
-1. **GPU box:** `pip install playground && ht proof walk` → send back the run id / `proof_3c.json`.
+1. **GPU box:** venv + `pip install -e '.[playground]'` + `pip install 'jax[cuda12]==0.9.2'` → `ht proof walk` → send back the run id / `proof_3c.json`.
 2. **Self-hosted Cursor worker** on that GPU → Cloud Agent runs the same command.
 3. **No GPU:** add OSMO or `HF_TOKEN` secrets → pursue Phase 3d harvest instead.
 

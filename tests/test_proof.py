@@ -62,7 +62,7 @@ def test_cli_proof_walk_blocked(tmp_path: Path, capsys: pytest.CaptureFixture[st
     assert main(["proof", "walk", "--out", str(tmp_path)]) == 12
     err = capsys.readouterr().err
     assert "Phase 3c" in err
-    assert "pip install playground" in err
+    assert "jax[cuda12]" in err or "playground" in err
 
 
 def test_cli_help_lists_proof(capsys: pytest.CaptureFixture[str]) -> None:
@@ -109,7 +109,9 @@ def test_assess_walk_proof_host_blocked_on_cpu() -> None:
     assert {p["id"] for p in handoff["paths"]} == {"A", "B", "C"}
     locked = n1b_operator_handoff()
     assert locked["paths"][0]["id"] == "A"
-    assert "ht proof walk" in " ".join(locked["paths"][0]["commands"])
+    cmds = " ".join(locked["paths"][0]["commands"])
+    assert "proof walk" in cmds
+    assert "jax[cuda12]" in cmds
 
 
 def test_cli_proof_walk_check_blocked(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

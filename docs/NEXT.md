@@ -62,11 +62,13 @@ Do not reopen:            B6 theme, more Hub pins, or fifth room until N1b lands
 **A — Local NVIDIA GPU box**
 
 ```bash
-git clone https://github.com/notifdust/Humanoid-Training && cd Humanoid-Training
-pip install -e .
-pip install playground          # or mjlab / Isaac Lab
-ht proof walk --check           # want ok:true
-ht proof walk                   # walking eval.mp4 + proof_3c.json
+cd Humanoid-Training   # existing clone is fine
+git fetch origin && git checkout cursor/n1b-jax-pin-197a   # or main after merge
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e '.[playground]'
+pip install 'jax[cuda12]==0.9.2'   # required — bare playground pulls jax 0.11 + CPU jaxlib
+python -m humanoid_training.cli proof walk --check   # want ok:true, jax backend gpu
+python -m humanoid_training.cli proof walk
 ```
 
 Paste the run id (or `proof_3c.json`) back into the agent/PR thread so
