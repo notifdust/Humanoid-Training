@@ -14,6 +14,51 @@ simulator, policy family, or dataset format.
 
 ![Studio tasks](docs/assets/studio-tasks.png)
 
+## Ultimate goal
+
+**A non-expert can open a browser, pick a Unitree-class humanoid task, train it,
+and judge success from video — then, later, try that policy on a real robot
+without becoming an Isaac Lab engineer first.**
+
+Today the industry has excellent *engines* (MuJoCo, Isaac Lab, Playground) and
+partial *workflows* (LeRobot/LeLab for arms, OSMO for cluster jobs, vendor
+one-click stacks for a single robot). Nobody owns a humanoid-capable,
+engine-agnostic studio whose success metric is “the robot did the task on
+camera,” not TensorBoard curves.
+
+This repo aims to be that studio: **Canva on top of the engines, not Photoshop.**
+Beginners compose recipes. Researchers still drop into the engine when they need
+to. We refuse to own new physics, new policy families, new dataset formats, or
+fleet ops — we compile a job spec into software that already exists.
+
+### Where we are going
+
+| Horizon | Outcome |
+|---|---|
+| **Now (laptop)** | Cartpole, G1 stand, mustard→bowl with gold videos — the Train → video loop is real |
+| **Next (GPU)** | Live G1 walking eval (`ht proof walk`) — the humanoid wedge, not a stand clip |
+| **Then** | Remote GPU harvest so beginners need not install CUDA; ACT on the same demos |
+| **Later** | Fail-closed deploy to a real G1/H1 at reduced speed, only after sim walk is proven |
+
+The north star is still a person who has never heard of PPO watching a humanoid
+complete a canned task on video, then promoting that run toward hardware. Full
+positioning: [docs/VISION.md](docs/VISION.md). Ordered next steps:
+[docs/NEXT.md](docs/NEXT.md).
+
+## Context
+
+Robot learning is stuck between two audiences:
+
+1. **Researchers** who live in Python configs, WandB, and GPU clusters
+2. **Teachers, lab techs, and builders** who want a working template and a clear
+   pass/fail clip
+
+Dragging reward sliders onto a humanoid and hoping PPO works is the wrong
+product. What works for non-experts is narrower and more honest: **fine-tune or
+run a known robot on a known class of task from a recipe or demos**, then show
+the result. Humanoid Training is that wedge — Unitree G1 first — with a compiler
+underneath so Playground, mjlab, Isaac Lab, and LeRobot stay swappable backends.
+
 ## Features
 
 - **CPU loop that works today** — Cartpole, Unitree G1 stand, and mustard→bowl
