@@ -34,58 +34,51 @@ not just code.
 
 ---
 
-## Conclusion (2026-09-30) — **LOCKED**
+## Conclusion (2026-10-07) — **N1b / Phase 3c CLOSED**
 
-**Can you conclude without a GPU?** Yes — on architecture, honesty, and
-CPU-safe paper wraps. **No** — on the humanoid wedge exit test (live walking
-`eval.mp4`). That remains the only gate that matters for claiming Phase 3c.
+**Can you conclude without a GPU?** Architecture and CPU-safe wraps were
+already locked. The humanoid wedge exit test is now closed on a live GPU.
 
 | Question | Answer |
 |---|---|
 | Did we stay a studio/compiler over engines? | **Yes** |
 | Did we fake walk / ACT / OSMO / GR00T on CPU? | **No** |
 | Is the laptop Canva loop done? | **Yes** (Cartpole, stand, mustard + gold + CI) |
-| Is G1 walk a product video yet? | **No** — needs `ht proof walk` on NVIDIA GPU |
-| Are SOTA papers “implemented”? | **Pinned / harnessed**, not live-trained: Playground/mjlab walk, BeyondMimic→`g1-track`+LAFAN1 Hub, ACT check, Isaac Mimic pins, GR00T-via-LeRobot check, HF Jobs check |
-| What closes the story? | One GPU operator run of N1b, then N2b OSMO (or HF) harvest |
+| Is G1 walk a product video yet? | **Yes** — live Playground proof (see below) |
+| Are SOTA papers “implemented”? | Walk is live; others remain pinned / harnessed until their live proofs |
+| What closes the next chapter? | N2b OSMO (or HF Jobs) harvest from a laptop without CUDA |
+
+**Operator evidence (path A — local NVIDIA GPU):**
+
+| Field | Value |
+|---|---|
+| Run id | `20261007T193550Z-g1-walk-9e796b` |
+| Engine | `playground` (`G1JoystickFlatTerrain`, PPO, 2048 timesteps) |
+| Jax | `0.9.2` backend `gpu` (`jax[cuda12]==0.9.2`) |
+| Artifacts | `eval.mp4` harvested + `proof_3c.json` (`status=passed`, `live_clip=true`) |
+| Note | `cuda_executor` driver-version warnings are noisy but non-blocking |
 
 ```
-CPU-safe work:            DONE (harness, pins, Hub, intuition, honesty) — LOCKED
-Live wedge (N1b→N5):      BLOCKED here — no NVIDIA GPU / OSMO / robot
+CPU-safe work:            DONE — LOCKED
+N1b / Phase 3c live walk: DONE (Playground on operator GPU)
+Live wedge next:          N2b remote harvest → N3b ACT → N4b Robomimic → N5 hardware
 Mission alignment:        HIGH
-Mission completion:       PARTIAL — stop polishing; run N1b on a GPU box
-Do not reopen:            B6 theme, more Hub pins, or fifth room until N1b lands
+Do not reopen:            B6 theme, fake walk gold in git, or “more pins” before N2
 ```
 
-### Operator handoff — close N1b (pick one)
+### Operator handoff — N1b (closed)
 
-**A — Local NVIDIA GPU box**
+Path **A** succeeded. Reproduce anytime with the same jax pin:
 
 ```bash
-cd Humanoid-Training   # existing clone is fine
-git pull
-python3 -m venv .venv && source .venv/bin/activate
 pip install -e '.[playground]'
-pip install 'jax[cuda12]==0.9.2'   # required — bare playground pulls jax 0.11 + CPU jaxlib
-python -m humanoid_training.cli proof walk --check   # want ok:true, jax backend gpu
+pip install 'jax[cuda12]==0.9.2'
+python -m humanoid_training.cli proof walk --check
 python -m humanoid_training.cli proof walk
 ```
 
-Paste the run id (or `proof_3c.json`) into an issue/PR so ROADMAP Phase 3c
-can flip to done.
-
-**B — Remote GPU host over SSH**
-
-Same commands as A on any NVIDIA box you can reach. Copy `proof_3c.json`
-back when finished.
-
-**C — No local GPU (Phase 3d instead)**
-
-Add OSMO credentials, or `HF_TOKEN` + Hugging Face CLI, then pursue **N2**
-live harvest — not a fake local Phase 3c.
-
-Until A, B, or C finishes: do not mark Phase 3c done; do not check in a
-stand clip as walk gold.
+Paths **B** (SSH GPU) and **C** (skip local GPU → Phase 3d) remain valid
+for other operators. Do not check in a stand clip as walk gold.
 
 ---
 
@@ -170,27 +163,11 @@ studio projection — so a GPU operator has a clear path and evidence file.
 | Studio G1 walk Train page shows Phase 3c readiness | done |
 | Still no fake walk success on CPU CI | held |
 
-**N1b — live clip (next; needs NVIDIA GPU).** ← **current focus**
+**N1b — live clip (done 2026-10-07).** Playground on operator GPU;
+run `20261007T193550Z-g1-walk-9e796b`; `proof_3c.json` passed with
+`live_clip=true`. Still **no** gold walk clip in git.
 
-```bash
-pip install playground   # or mjlab / Isaac Lab
-ht proof walk --check    # should report ok:true on the GPU box
-ht proof walk
-```
-
-Must produce a **walking** `eval.mp4`, stamp `facts.engine`, write
-`proof_3c.json`, studio Plays it with a backend badge.
-
-| Work | Notes |
-|---|---|
-| Run `ht proof walk` on a real GPU | Capture run id, engine, duration |
-| Fix any harvest / facts bugs found live | Only if proof fails honestly |
-| Document “verified on &lt;GPU&gt; / &lt;engine&gt;” in ROADMAP | Date + hardware note |
-| Still **no** gold walk clip in git | Keep |
-
-This CPU environment cannot close N1b. Do not claim Phase 3c done.
-
-### N2 — Phase 3d: live OSMO (or equivalent) harvest
+### N2 — Phase 3d: live OSMO (or equivalent) harvest ← **current focus**
 
 **Exit test.** From a machine **without** CUDA, with OSMO logged in:
 `ht train` on `g1-walk` submits → polls → rsyncs `eval.mp4`, studio shows
@@ -286,14 +263,14 @@ Do **not** start a B6 theme rewrite or fifth room.
 | Robomimic exit 0 + no mp4 → status `blocked` | Pass with `facts.video=missing` + honest note |
 | Pill said "works on this GPU" on OSMO-only | Pill projects GPU vs OSMO from health |
 
-Still open (needs hardware): N1b live walk, N2b OSMO live, N3b ACT live, N4b Robomimic live.
+Still open (needs credentials / hardware): N2b OSMO live, N3b ACT live, N4b Robomimic live, N5 robot.
 
 ## Further roadmap (operator order)
 
 | Priority | Item | Needs | Status |
 |---|---|---|---|
-| **1** | **N1b** live `ht proof walk` on a GPU box | NVIDIA GPU + Playground/mjlab/Isaac | **next** |
-| 2 | **N2b** live OSMO harvest from a laptop | OSMO credentials + pool | harness ready (`ht proof osmo`) |
+| 1 | **N1b** live `ht proof walk` on a GPU box | NVIDIA GPU + Playground | **done** (`20261007T193550Z-g1-walk-9e796b`) |
+| **2** | **N2b** live OSMO harvest from a laptop | OSMO credentials + pool | **next** — harness ready (`ht proof osmo`) |
 | 3 | **N2c** live HF Jobs harvest (same contract) | HF_TOKEN + `hf` CLI | harness ready (`ht proof hf-jobs`); live harvest TODO |
 | 4 | **N3b** live ACT on pick-and-place demos | GPU + `lerobot[training]` | harness ready (`ht proof act`) |
 | 5 | N4b live Robomimic train for `g1-pickplace` | Isaac Lab + `HT_ISAAC_DATASET` | pin done (+ fixed-base sibling) |
