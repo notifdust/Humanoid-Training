@@ -2,6 +2,7 @@ const state = {
   view: "tasks",
   recipes: [],
   robots: [],
+  health: null,
   robot: null,
   selected: null,
   starter: null,
@@ -17,6 +18,7 @@ const state = {
   recording: false,
   pendingTrajectories: [],
   lastDemoMessage: "",
+  visitedData: false,
   trainBusy: false,
   teleopRaf: 0,
   teleopPath: null,
@@ -42,29 +44,63 @@ async function api(path, options) {
 }
 
 function worksHere(recipe) {
-  return Boolean(recipe && recipe.launch_here);
+  // Local laptop/GPU only — OSMO harvest is a separate Tasks group.
+  if (typeof HTGates !== "undefined" && HTGates.isLocalLaunch) {
+    return HTGates.isLocalLaunch(recipe);
+  }
+  return Boolean(recipe && recipe.launch_here && recipe.launch_path !== "osmo");
+}
+
+function harvestHere(recipe) {
+  if (typeof HTGates !== "undefined" && HTGates.isHarvestLaunch) {
+    return HTGates.isHarvestLaunch(recipe);
+  }
+  return Boolean(recipe && recipe.launch_here && recipe.launch_path === "osmo");
 }
 
 function recipeById(id) {
   return (state.recipes || []).find((r) => r.id === id) || null;
 }
 
+function groupRecipes(list) {
+  const source = list || recipesForRobot();
+  if (typeof HTGates !== "undefined" && HTGates.groupCatalogRecipes) {
+    return HTGates.groupCatalogRecipes(source);
+  }
+  return {
+    ready: source.filter((r) => worksHere(r)),
+    harvest: source.filter((r) => harvestHere(r)),
+    later: source.filter((r) => !r.launch_here),
+  };
+}
+
 function readyRecipes(list) {
-  return (list || recipesForRobot()).filter((r) => worksHere(r));
+  return groupRecipes(list).ready;
+}
+
+function harvestRecipes(list) {
+  return groupRecipes(list).harvest;
 }
 
 function laterRecipes(list) {
-  return (list || recipesForRobot()).filter((r) => !worksHere(r));
+  return groupRecipes(list).later;
 }
 
 function firstReadyRecipe() {
-  const all = state.recipes || [];
-  return all.find((r) => r.start_here) || all.find((r) => worksHere(r)) || all[0] || null;
+  const all = readyRecipes(state.recipes || []);
+  return all.find((r) => r.start_here) || all[0] || null;
 }
 
 function firstImitateRecipe() {
   const all = state.recipes || [];
   return all.find((r) => r.imitate && worksHere(r)) || all.find((r) => r.imitate) || null;
+}
+
+function nextLadderRecipe(currentRecipeId) {
+  if (typeof HTGates !== "undefined" && HTGates.nextLadderRecipe) {
+    return HTGates.nextLadderRecipe(state.recipes || [], state.runs || [], currentRecipeId);
+  }
+  return null;
 }
 
 function englishList(items) {
@@ -77,15 +113,25 @@ function englishList(items) {
 
 function pill(recipe) {
   if (worksHere(recipe) && recipe.availability === "gpu") {
-    return `<span class="pill live">works on this GPU</span>`;
+    // Prefer catalog launch_path (local_gpu vs osmo) over bare health.gpu.
+    if (recipe.launch_path === "osmo") {
+      return `<span class="pill live">works via OSMO harvest</span>`;
+    }
+    if (recipe.launch_path === "local_gpu") {
+      return `<span class="pill live">works on this GPU</span>`;
+    }
+    return `<span class="pill live">can launch here</span>`;
   }
   if (worksHere(recipe)) return `<span class="pill live">works on this computer</span>`;
-  if (recipe.availability === "gpu") return `<span class="pill blocked">needs a GPU — skip for now</span>`;
+  if (recipe.availability === "gpu") {
+    return `<span class="pill blocked">needs a GPU — skip for now</span>`;
+  }
   return `<span class="pill blocked">later</span>`;
 }
 
 function stepsHTML(active, opts) {
   const imitate = Boolean(opts && opts.imitate);
+  const demosReady = Boolean(opts && opts.demosReady);
   const items = imitate
     ? [
         ["task", "1. Task"],
@@ -109,11 +155,23 @@ function stepsHTML(active, opts) {
   const now = map[active] || active;
   const order = items.map(([id]) => id);
   const nowIdx = order.indexOf(now);
+  const dataDone =
+    typeof HTGates !== "undefined" && HTGates.dataStepDone
+      ? HTGates.dataStepDone(
+          state.selected,
+          state.starter?.data?.datasets || [],
+          demosReady || state.visitedData
+        )
+      : demosReady || state.visitedData || Boolean(state.starter?.data?.datasets?.length);
   return `<ol class="steps" aria-label="Progress">${items
     .map(([id, label], i) => {
       const classes = [];
       if (id === now) classes.push("active");
-      else if (i < nowIdx) classes.push("done");
+      else if (i < nowIdx) {
+        // Do not paint Data "done" when the beginner jumped straight to Train.
+        if (id === "data" && imitate && !dataDone) classes.push("skipped");
+        else classes.push("done");
+      }
       const current = id === now ? ' aria-current="step"' : "";
       return `<li class="${classes.join(" ")}" data-step="${id}" tabindex="0" role="link"${current}>${escapeHtml(
         label
@@ -278,14 +336,22 @@ function renderRobots() {
   bindStepNav();
 }
 
+function recipeCardCTA(r) {
+  if (r.imitate && worksHere(r)) return "Demos →";
+  if (harvestHere(r)) return "Harvest →";
+  if (worksHere(r)) return "Train →";
+  return "Why blocked?";
+}
+
 function renderRecipes() {
   const list = recipesForRobot();
-  const ready = readyRecipes(list);
-  const later = laterRecipes(list);
+  const { ready, harvest, later } = groupRecipes(list);
   const firstId = firstReadyRecipe()?.id;
+  const hasImitateReady = ready.some((r) => r.imitate);
   const readyCards = ready
     .map((r) => {
       const tryFirst = r.id === firstId;
+      const cta = recipeCardCTA(r);
       return `
       <article class="card hero-card card-open${tryFirst ? " try-first" : ""}" data-open="${escapeHtml(r.id)}" tabindex="0">
         ${tryFirst ? `<span class="card-kicker">Try this first</span>` : ""}
@@ -293,10 +359,23 @@ function renderRecipes() {
         <h2>${escapeHtml(r.title)}</h2>
         <p>${escapeHtml(r.promise || r.summary)}</p>
         <div class="actions">
-          <button class="primary" data-open="${escapeHtml(r.id)}">Train →</button>
+          <button class="${worksHere(r) || harvestHere(r) ? "primary" : "ghost"}" data-open="${escapeHtml(r.id)}">${escapeHtml(cta)}</button>
         </div>
       </article>`;
     })
+    .join("");
+  const harvestCards = harvest
+    .map(
+      (r) => `
+      <article class="card card-open" data-open="${escapeHtml(r.id)}" tabindex="0">
+        ${pill(r)}
+        <h2>${escapeHtml(r.title)}</h2>
+        <p>${escapeHtml(r.promise || r.summary)}</p>
+        <div class="actions">
+          <button class="primary" data-open="${escapeHtml(r.id)}">Harvest →</button>
+        </div>
+      </article>`
+    )
     .join("");
   const laterCards = later
     .map(
@@ -311,31 +390,53 @@ function renderRecipes() {
       </article>`
     )
     .join("");
+  const globalReadyTitles = readyRecipes(state.recipes || []).map((r) => r.title);
   const filter = state.robot
     ? state.robot.catalog_only
-      ? ` ${escapeHtml(state.robot.name || state.robot.id)} is catalog-only — no train recipes yet. Pick G1 or CartPole.`
+      ? ` ${escapeHtml(state.robot.name || state.robot.id)} is catalog-only — no train recipes yet.${
+          globalReadyTitles.length
+            ? ` Try ${escapeHtml(englishList(globalReadyTitles))} from the full list.`
+            : ""
+        }`
       : ` Showing tasks for ${escapeHtml(state.robot.name || state.robot.id)}, plus the laptop smoke tests.`
     : "";
   const emptyReady =
     !readyCards && state.robot && state.robot.catalog_only
-      ? `<div class="empty-state"><p>No recipes for ${escapeHtml(state.robot.name)}. Use Unitree G1 or CartPole.</p>
+      ? `<div class="empty-state"><p>No recipes for ${escapeHtml(state.robot.name)}.${
+          globalReadyTitles.length
+            ? ` Clear the filter and try ${escapeHtml(englishList(globalReadyTitles))}.`
+            : " Pick another robot from Robots."
+        }</p>
          <div class="actions"><button class="primary" id="goto-robots">Choose a robot</button></div></div>`
       : readyCards || `<div class="empty-state"><p>No recipes for this robot yet.</p></div>`;
+  const tasksCue = hasImitateReady
+    ? "Pick a ready task. Imitation tasks open Data for demos first."
+    : "Pick a ready task, then click Train.";
+  const loopLine = hasImitateReady
+    ? "One loop: task → demos (if imitation) → Train → video."
+    : "One loop: task → Train → video.";
   main.innerHTML = `
     ${stepsHTML("task")}
     <p class="eyebrow">Start here</p>
     <h1>What should the robot do?</h1>
-    ${nextCueHTML("Pick a ready task, then click Train.")}
+    ${nextCueHTML(tasksCue)}
     <p class="lede" id="start-here">
-      One loop: task → Train → video.${filter}
+      ${escapeHtml(loopLine)}${filter}
     </p>
     ${readyCards ? `<p class="eyebrow">Ready on this computer</p>` : ""}
     <div class="grid">${emptyReady}</div>
     ${
+      harvestCards
+        ? `<p class="eyebrow">Can harvest remotely</p>
+           <p class="lede">Submits to OSMO — not a local Train → video loop on this laptop.</p>
+           <div class="grid">${harvestCards}</div>`
+        : ""
+    }
+    ${
       laterCards
         ? `<details class="later-fold">
              <summary>Needs a GPU — skip for now (${later.length})</summary>
-             <p class="lede">These compile a job for another machine. Train will stop with a next step, not a fake success clip.</p>
+             <p class="lede">These compile a job for another machine. Opening them offers a ready task, not a fake success clip.</p>
              <div class="grid">${laterCards}</div>
            </details>`
         : ""
@@ -360,7 +461,8 @@ function renderRecipes() {
   bindStepNav();
 }
 
-async function openRecipe(id) {
+async function openRecipe(id, opts) {
+  const forceTrain = Boolean(opts && opts.forceTrain);
   const prevId = state.selected?.id;
   if (prevId && prevId !== id) {
     clearDemoSession();
@@ -377,6 +479,15 @@ async function openRecipe(id) {
     rebindDatasetOntoStarter();
   }
   await refreshExpanded();
+  // Imitation: open Data first so beginners see demos before Train.
+  if (detail.recipe.imitate && worksHere(detail.recipe) && !forceTrain) {
+    state.visitedData = true;
+    state.view = "data";
+    setActive("data");
+    renderData();
+    flashMain();
+    return;
+  }
   state.view = "recipe";
   setActive("tasks");
   renderRecipe();
@@ -387,6 +498,7 @@ function clearDemoSession() {
   state.dataset = null;
   state.datasetUri = "";
   state.keepEpisodes = null;
+  state.visitedData = false;
   state.pendingTrajectories = [];
   state.recording = false;
   state.lastDemoMessage = "";
@@ -556,8 +668,12 @@ function renderRecipe() {
   const r = state.selected;
   const spec = state.expanded?.spec || state.starter;
   const hasScene = Boolean(spec?.scene?.objects?.length);
+  const firstLocal = firstReadyRecipe();
+  const primary =
+    typeof HTGates !== "undefined" && HTGates.decideRecipePrimary
+      ? HTGates.decideRecipePrimary(r, firstLocal)
+      : { action: r.launch_here ? "train" : "back_tasks", label: r.launch_here ? "Train" : "Back to tasks" };
   const canLaunch = Boolean(r.launch_here);
-  const trainLabel = canLaunch ? "Train" : "Compile (will stop — needs GPU)";
   const hintText = r.train_hint || r.promise || r.summary || "";
   const trainHint = hintText ? `<p class="hint-callout">${escapeHtml(hintText)}</p>` : "";
   const nTakes = state.pendingTrajectories.length;
@@ -575,11 +691,43 @@ function renderRecipe() {
         <p class="status" id="demo-status">${escapeHtml(state.lastDemoMessage || pendingTakeMessage())}</p>
         <p class="error" id="demo-error"></p>`
     : "";
-  const cue = canLaunch
-    ? r.imitate && nTakes
-      ? "Save demos if you want them, then click Train."
-      : "Click Train — watch the result in Runs."
-    : "Compile only — this task needs a GPU box.";
+  const cue =
+    primary.action === "open_ready"
+      ? `This task cannot train here. Try ${firstLocal?.title || "a ready task"} instead.`
+      : harvestHere(r)
+        ? "Submit for OSMO harvest — not a local video loop."
+        : r.imitate && nTakes
+          ? "Save demos if you want them, then click Train."
+          : "Click Train — watch the result in Runs.";
+  const proofKind = r.proof || "";
+  const proofBlock =
+    proofKind === "walk"
+      ? `<div class="proof-block" id="proof-preflight">
+           <p class="eyebrow">Phase 3c · walk proof</p>
+           <p class="lede" id="proof-note">Checking whether this machine can prove a walking clip…</p>
+           <p class="meta" id="proof-command"></p>
+           <ul class="reasons" id="proof-reasons" hidden></ul>
+           <div id="proof-handoff" hidden></div>
+           <p class="meta" id="proof-osmo" hidden></p>
+         </div>`
+      : proofKind === "act"
+        ? `<div class="proof-block" id="act-preflight">
+             <p class="eyebrow">Phase 3e · ACT readiness</p>
+             <p class="lede" id="act-note">Checking whether this machine can launch ACT…</p>
+             <p class="meta" id="act-command"></p>
+             <ul class="reasons" id="act-reasons" hidden></ul>
+           </div>`
+        : "";
+  const primaryBtn =
+    primary.action === "train"
+      ? `<button class="primary train-cta" id="train">${escapeHtml(primary.label)}</button>`
+      : primary.action === "open_ready"
+        ? `<button class="primary" id="open-ready">${escapeHtml(primary.label)}</button>`
+        : `<button class="primary" id="back">${escapeHtml(primary.label)}</button>`;
+  const compileBtn =
+    !canLaunch && primary.action !== "train"
+      ? `<button class="ghost" id="train">Compile only (will stop)</button>`
+      : "";
   main.innerHTML = `
     ${stepsHTML("train", { imitate: Boolean(r.imitate) })}
     <p class="eyebrow">${r.imitate ? "Step 3 · Train" : "Step 2 · Train"}</p>
@@ -590,13 +738,15 @@ function renderRecipe() {
       <section class="panel">
         <div class="panel-head">${pill(r)}</div>
         <div class="actions recipe-bar train-actions">
-          <button class="primary train-cta" id="train">${trainLabel}</button>
+          ${primaryBtn}
+          ${compileBtn}
           ${r.imitate ? `<button class="ghost" id="goto-data">Edit demos</button>` : ""}
-          <button class="ghost" id="back">Back to tasks</button>
+          <button class="ghost" id="back-tasks">Back to tasks</button>
         </div>
         <p class="status" id="train-status"></p>
         <p class="error" id="train-error"></p>
         ${trainHint}
+        ${proofBlock}
         ${r.has_gold
           ? `<div class="gold-block">
                <p class="eyebrow">What success looks like</p>
@@ -622,8 +772,13 @@ function renderRecipe() {
       </section>
     </div>
   `;
-  document.getElementById("train").addEventListener("click", trainCurrent);
-  document.getElementById("back").addEventListener("click", () => switchView("tasks"));
+  document.getElementById("train")?.addEventListener("click", trainCurrent);
+  document.getElementById("open-ready")?.addEventListener("click", () => {
+    if (primary.recipeId) openRecipe(primary.recipeId);
+    else switchView("tasks");
+  });
+  document.getElementById("back")?.addEventListener("click", () => switchView("tasks"));
+  document.getElementById("back-tasks")?.addEventListener("click", () => switchView("tasks"));
   document.getElementById("goto-data")?.addEventListener("click", () => switchView("data"));
   document.getElementById("apply-spec").addEventListener("click", applySpecEditor);
   document.getElementById("toggle-record")?.addEventListener("click", () => {
@@ -648,6 +803,125 @@ function renderRecipe() {
   if (state.recording) startTeleopLoop();
   else stopTeleopLoop();
   bindStepNav();
+  if (proofKind === "walk") loadProofPreflight();
+  if (proofKind === "act") loadActPreflight();
+}
+
+function renderProofHandoff(report) {
+  const host = document.getElementById("proof-handoff");
+  if (!host) return;
+  const handoff = report && report.handoff;
+  const paths = handoff && Array.isArray(handoff.paths) ? handoff.paths : [];
+  if (report.ok || !paths.length) {
+    host.hidden = true;
+    host.innerHTML = "";
+    return;
+  }
+  host.hidden = false;
+  host.innerHTML = `
+    <p class="eyebrow">How to close Phase 3c</p>
+    <ol class="handoff-list">
+      ${paths
+        .map((p) => {
+          const cmds = Array.isArray(p.commands)
+            ? p.commands.filter((c) => c && !String(c).startsWith("#"))
+            : [];
+          const cmdLine = cmds.length ? `<code>${escapeHtml(cmds.join(" && "))}</code>` : "";
+          return `<li>
+            <strong>${escapeHtml(p.id)}. ${escapeHtml(p.title || "")}</strong>
+            ${cmdLine ? `<div class="meta">${cmdLine}</div>` : ""}
+            <div class="meta">${escapeHtml(p.done_when || "")}</div>
+          </li>`;
+        })
+        .join("")}
+    </ol>
+    ${(handoff.refuse || [])
+      .slice(0, 2)
+      .map((r) => `<p class="meta">${escapeHtml(r)}</p>`)
+      .join("")}
+  `;
+}
+
+async function loadProofPreflight() {
+  const note = document.getElementById("proof-note");
+  const cmd = document.getElementById("proof-command");
+  const reasonsEl = document.getElementById("proof-reasons");
+  const osmoEl = document.getElementById("proof-osmo");
+  if (!note) return;
+  try {
+    const report = await api("/api/proof/walk");
+    if (report.ok) {
+      note.textContent =
+        report.note ||
+        `This machine can run the Phase 3c walk proof via ${report.engine}.`;
+    } else {
+      note.textContent =
+        report.note ||
+        "This machine cannot complete Phase 3c — need an NVIDIA GPU and a walk engine.";
+    }
+    if (cmd && report.command) {
+      cmd.textContent = report.ok
+        ? `On this box: ${report.command}`
+        : `On a GPU box: ${report.command}`;
+    }
+    if (reasonsEl) {
+      const reasons = Array.isArray(report.reasons) ? report.reasons : [];
+      if (reasons.length) {
+        reasonsEl.hidden = false;
+        reasonsEl.innerHTML = reasons.map((r) => `<li>${escapeHtml(r)}</li>`).join("");
+      } else {
+        reasonsEl.hidden = true;
+        reasonsEl.innerHTML = "";
+      }
+    }
+    renderProofHandoff(report);
+    if (osmoEl) {
+      try {
+        const osmo = await api("/api/proof/osmo");
+        osmoEl.hidden = false;
+        osmoEl.textContent = osmo.ok
+          ? `OSMO harvest ready (path C): ${osmo.command}`
+          : `Path C later: ${osmo.note || "need osmo CLI + pool (or HF_TOKEN)"}`;
+      } catch {
+        osmoEl.hidden = true;
+      }
+    }
+  } catch (error) {
+    note.textContent = error.message || "Could not check walk-proof readiness.";
+    renderProofHandoff({ ok: false, handoff: null });
+  }
+}
+
+async function loadActPreflight() {
+  const note = document.getElementById("act-note");
+  const cmd = document.getElementById("act-command");
+  const reasonsEl = document.getElementById("act-reasons");
+  if (!note) return;
+  try {
+    const report = await api("/api/proof/act");
+    note.textContent =
+      report.note ||
+      (report.ok
+        ? "This machine can launch LeRobot ACT — Train pick-and-place (ht proof act only checks)."
+        : "ACT needs a GPU + LeRobot — CPU keeps linear-BC.");
+    if (cmd && report.command) {
+      cmd.textContent = report.ok
+        ? `To train ACT: ${report.command}`
+        : `On a GPU box: ${report.command}`;
+    }
+    if (reasonsEl) {
+      const reasons = Array.isArray(report.reasons) ? report.reasons : [];
+      if (reasons.length) {
+        reasonsEl.hidden = false;
+        reasonsEl.innerHTML = reasons.map((r) => `<li>${escapeHtml(r)}</li>`).join("");
+      } else {
+        reasonsEl.hidden = true;
+        reasonsEl.innerHTML = "";
+      }
+    }
+  } catch (error) {
+    note.textContent = error.message || "Could not check ACT readiness.";
+  }
 }
 
 async function applySpecEditor() {
@@ -954,8 +1228,17 @@ async function saveCanvasDemos() {
     }
     state.pendingTrajectories = [];
     state.recording = false;
+    state.visitedData = true;
     state.lastDemoMessage = demoSaveSummary(result);
-    renderRecipe();
+    // After Save, send beginners to Data to drop misses before Train.
+    state.view = "data";
+    setActive("data");
+    renderData();
+    flashMain();
+    const cue = document.querySelector(".next-cue");
+    if (cue) {
+      /* renderData sets the cue; reinforce save → review → train */
+    }
   } catch (error) {
     if (err) err.textContent = error.message;
     if (status) status.textContent = "";
@@ -984,12 +1267,36 @@ async function trainCurrent() {
       ? gateFn(state.pendingTrajectories.length)
       : state.pendingTrajectories.length
         ? {
-            action: "confirm_discard_or_cancel",
-            message: "You have unsaved demo takes. Save them first.",
-            confirmLabel: "Discard unsaved and train on built-in scripted demos",
-            cancelLabel: "Cancel — go Save first",
+            action: "block_save_first",
+            message: "You have unsaved demo takes. Click Save first.",
+            scriptedLabel: "Discard unsaved and train on built-in scripted demos",
           }
         : { action: "proceed" };
+    if (gate.action === "block_save_first") {
+      if (status) status.textContent = "";
+      if (err) {
+        err.textContent = "";
+        err.innerHTML = `${escapeHtml(gate.message)} `;
+        const escape = document.createElement("button");
+        escape.type = "button";
+        escape.className = "ghost";
+        escape.id = "train-scripted-escape";
+        escape.textContent = gate.scriptedLabel || "Train on scripted demos";
+        err.appendChild(escape);
+        escape.addEventListener("click", () => {
+          state.pendingTrajectories = [];
+          state.lastDemoMessage =
+            "Discarded unsaved takes — training on built-in scripted demos.";
+          trainCurrent();
+        });
+      }
+      if (btn) {
+        btn.disabled = false;
+        btn.classList.remove("busy");
+      }
+      return;
+    }
+    // Legacy confirm path (older gates.js) — keep discard explicit.
     if (gate.action === "confirm_discard_or_cancel") {
       const ok = window.confirm(
         `${gate.message}\n\nOK = ${gate.confirmLabel}\nCancel = ${gate.cancelLabel}`
@@ -1087,14 +1394,16 @@ function successCheckPhrase() {
 }
 
 function renderData() {
+  state.visitedData = true;
   const imitateOpen = Boolean(state.selected?.imitate);
   const datasets = state.starter?.data?.datasets || state.expanded?.spec?.data?.datasets || [];
+  const hasSavedDemos = datasets.length > 0 || Boolean(state.dataset?.ok);
   const datasetList = datasets.length
     ? `<ul class="runs">${datasets
         .map((d) => `<li class="run-row"><code>${escapeHtml(d)}</code></li>`)
         .join("")}</ul>`
     : imitateOpen
-      ? `<p class="lede">No demos on this job yet. Train still works — it writes built-in takes. Record here when you want to keep or drop episodes.</p>`
+      ? `<p class="lede">No demos on this job yet. You can Train on built-in scripted takes, or record your own below / on the Train canvas.</p>`
       : `<p class="lede">No demos on this job yet.</p>`;
   const inspected = state.dataset;
   let body = "";
@@ -1135,6 +1444,7 @@ function renderData() {
       <div class="actions">
         <button class="primary" id="train-from-data" ${emptyKeep ? "disabled" : ""}>Train (${keep.length} kept)</button>
         <button class="ghost" id="keep-successes">Keep successes only</button>
+        <button class="ghost" id="goto-train-canvas">Record on canvas</button>
       </div>
     `;
   } else if (inspected && inspected.error) {
@@ -1145,8 +1455,15 @@ function renderData() {
     .map((r) => r.title);
   const recordActions = imitateOpen
     ? `<div class="actions" style="margin-top:12px">
-        <button class="primary" id="record-ds">Record scripted demos</button>
-      </div>`
+        <button class="primary" id="record-ds">Record built-in scripted demos</button>
+        <button class="ghost" id="goto-train-canvas">Record on canvas</button>
+        ${
+          !hasSavedDemos
+            ? `<button class="ghost" id="train-scripted-now">Train on built-in demos</button>`
+            : ""
+        }
+      </div>
+      <p class="meta">Scripted demos are auto-generated takes. Canvas demos are ones you drag yourself — Save them before Train.</p>`
     : `<div class="actions" style="margin-top:12px">
         <button class="primary" id="open-imitate">Open an imitation task</button>
       </div>
@@ -1158,39 +1475,62 @@ function renderData() {
       ? state.selected.record_hint
       : "This room is for demonstration data. Open an imitation task, record takes, uncheck the bad ones, then Train.";
   const dataCue = imitateOpen
-    ? "Record or inspect demos, then Train."
+    ? hasSavedDemos
+      ? "Uncheck misses if you want, then Train."
+      : "Record demos (or Train on built-in takes), then Train."
     : "Open an imitation task to record demos — or Train a ready task from Tasks.";
+  const stepStrip = imitateOpen
+    ? `${stepsHTML("data", { imitate: true, demosReady: hasSavedDemos })}
+    <p class="eyebrow">Step 2 · Data</p>`
+    : `<p class="eyebrow">Demos</p>`;
   main.innerHTML = `
-    ${stepsHTML("data", { imitate: true })}
-    <p class="eyebrow">Step 2 · Data</p>
+    ${stepStrip}
     <h1>Data</h1>
     ${nextCueHTML(dataCue)}
     <p class="lede">
       ${escapeHtml(dataLede)}
     </p>
+    ${
+      imitateOpen && state.selected
+        ? `<p class="meta">Task: <strong>${escapeHtml(state.selected.title)}</strong></p>`
+        : ""
+    }
     <section class="panel">
       <h2>On this job</h2>
       ${datasetList}
       ${recordActions}
-      <p class="status" id="record-status"></p>
+      <p class="status" id="record-status">${escapeHtml(state.lastDemoMessage || "")}</p>
       <p class="error" id="record-error"></p>
     </section>
     <section class="panel section-gap">
+      <h2>Hub pins</h2>
+      <p class="lede">Curated Hugging Face shortcuts. Motion pins are LAFAN1 CSVs for <code>g1-track</code> — not ACT inputs. GR00T stays on NVIDIA’s course via LeRobot.</p>
+      <div id="hub-pins-body"><p class="meta">Loading pins…</p></div>
+    </section>
+    <section class="panel section-gap">
       <h2>Inspect local dataset</h2>
-      <p class="lede">Path to a directory that contains <code>meta/info.json</code>.</p>
+      <p class="lede">Local path with <code>meta/info.json</code>, or a Hub id like <code>hf:user/dataset</code> (caches under <code>~/.cache/humanoid-training/datasets</code>).</p>
       <div class="actions">
-        <input class="path-input" id="dataset-uri" placeholder="file:/path/to/lerobot_dataset" value="${escapeHtml(state.datasetUri)}" />
+        <input class="path-input" id="dataset-uri" placeholder="file:/path/to/lerobot_dataset or hf:user/dataset" value="${escapeHtml(state.datasetUri)}" />
         <button class="primary" id="inspect-ds">Inspect</button>
       </div>
       <div id="dataset-body">${body}</div>
     </section>
   `;
   document.getElementById("inspect-ds").addEventListener("click", inspectDataset);
+  loadHubPins();
   document.getElementById("record-ds")?.addEventListener("click", recordDemos);
   document.getElementById("open-imitate")?.addEventListener("click", () => {
     const imitate = firstImitateRecipe();
     if (imitate) openRecipe(imitate.id);
     else switchView("tasks");
+  });
+  document.getElementById("goto-train-canvas")?.addEventListener("click", () => {
+    if (state.selected) openRecipe(state.selected.id, { forceTrain: true });
+    else switchView("tasks");
+  });
+  document.getElementById("train-scripted-now")?.addEventListener("click", () => {
+    if (state.selected) openRecipe(state.selected.id, { forceTrain: true }).then(() => trainCurrent());
   });
   document.getElementById("train-from-data")?.addEventListener("click", trainCurrent);
   document.getElementById("keep-successes")?.addEventListener("click", () => {
@@ -1273,6 +1613,74 @@ async function recordDemos() {
   } catch (error) {
     err.textContent = error.message;
     status.textContent = "";
+  }
+}
+
+async function loadHubPins() {
+  const host = document.getElementById("hub-pins-body");
+  if (!host) return;
+  try {
+    const data = await api("/api/datasets/pins");
+    const pins = data.pins || [];
+    if (!pins.length) {
+      host.innerHTML = `<p class="meta">No curated Hub pins.</p>`;
+      return;
+    }
+    host.innerHTML = `
+      <ul class="pin-list">
+        ${pins
+          .map((p) => {
+            const uri = p.uri ? `<code>${escapeHtml(p.uri)}</code>` : "<em>upstream course</em>";
+            const kind = escapeHtml(p.kind || "");
+            const useBtn =
+              p.format === "lerobot_v2" && p.uri
+                ? `<button type="button" class="ghost" data-pin-uri="${escapeHtml(p.uri)}">Use in inspect</button>`
+                : p.kind === "motion" && p.uri
+                  ? `<button type="button" class="ghost" data-motion-pin="${escapeHtml(p.id)}">Check motion cache</button>`
+                  : "";
+            return `<li class="pin-item">
+              <strong>${escapeHtml(p.title || p.id)}</strong>
+              <span class="meta"> · ${kind}${p.recipe_hint ? ` → ${escapeHtml(p.recipe_hint)}` : ""}</span>
+              <div class="meta">${uri}</div>
+              <p>${escapeHtml(p.summary || "")}</p>
+              ${useBtn}
+            </li>`;
+          })
+          .join("")}
+      </ul>
+      <p class="meta">${escapeHtml(data.note || "")}</p>
+      <p class="status" id="motion-pin-status"></p>
+    `;
+    host.querySelectorAll("[data-pin-uri]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const input = document.getElementById("dataset-uri");
+        if (input) input.value = btn.getAttribute("data-pin-uri") || "";
+        inspectDataset();
+      });
+    });
+    host.querySelectorAll("[data-motion-pin]").forEach((btn) => {
+      btn.addEventListener("click", () => checkMotionPin(btn.getAttribute("data-motion-pin")));
+    });
+  } catch (error) {
+    host.innerHTML = `<p class="error">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function checkMotionPin(pinId) {
+  const status = document.getElementById("motion-pin-status");
+  if (status) status.textContent = "Resolving Hub motion…";
+  try {
+    const out = await api("/api/datasets/motion", {
+      method: "POST",
+      body: JSON.stringify({ uri: pinId || "" }),
+    });
+    if (status) {
+      status.textContent = out.ok
+        ? `Cached ${out.csv_count || 0} CSV / ${out.npz_count || 0} NPZ under ${out.path || "cache"} — still need mjlab convert + HT_MJLAB_MOTION.`
+        : out.error || "Motion resolve failed.";
+    }
+  } catch (error) {
+    if (status) status.textContent = error.message;
   }
 }
 
@@ -1438,6 +1846,56 @@ function factsListHTML(facts) {
   return `<div class="facts-list">${rows}</div>`;
 }
 
+function englishFromFacts(facts, run) {
+  // Fallback when API omitted `run.english` (older server). Prefer runEnglish().
+  const kind = String((facts && facts.kind) || "");
+  const engine = String((facts && facts.engine) || "");
+  const policy = String((facts && facts.policy) || "");
+  const status = String((run && run.status) || "").toLowerCase();
+  const err = (run && (run.error || run.message)) || "";
+  if ((status === "blocked" || status === "queued") && err) {
+    return String(err).split("\n")[0].slice(0, 200);
+  }
+  if (status === "failed" || status === "error") {
+    return err ? `Run broke: ${String(err).split("\n")[0].slice(0, 180)}` : "Run finished but did not pass.";
+  }
+  if (facts && facts.video === "missing") {
+    return "Engine finished but wrote no eval.mp4 — not a headless skip, not a stand substitute.";
+  }
+  const sim = facts && facts.sim_only === true ? " Still sim-only — not cleared for hardware." : "";
+  if (kind === "hold") {
+    return `Held a pinned pose${engine ? ` via ${engine}` : ""} — not walking.${sim}`.trim();
+  }
+  if (kind === "scene_preview") {
+    return `Scene preview${engine ? ` via ${engine}` : ""} — not a trained policy.${sim}`.trim();
+  }
+  if (kind === "rl") {
+    let bit = `${engine || "engine"} RL`;
+    if (policy) bit += ` (${policy})`;
+    if (facts.device === "remote") bit += " on remote GPU";
+    else if (facts.device === "gpu") bit += " on GPU";
+    return `Locomotion / RL rollout from ${bit}.${sim}`.trim();
+  }
+  if (kind === "imitation") {
+    const label = { act: "ACT", "linear-bc": "linear-BC", bc: "BC" }[policy] || policy || "imitation";
+    return `Imitation (${label}) via ${engine || "local"} — demos, not finger grasping.${sim}`.trim();
+  }
+  if (kind === "gym" || engine === "gymnasium") {
+    return `Gymnasium rollout${policy ? ` (${policy})` : ""}.${sim}`.trim();
+  }
+  if (status === "passed" || status === "completed") {
+    return `Finished${engine ? ` on ${engine}` : ""}.${sim}`.trim();
+  }
+  return "";
+}
+
+function runEnglish(run) {
+  if (run && typeof run.english === "string" && run.english.trim()) {
+    return run.english.trim();
+  }
+  return englishFromFacts(runFacts(run), run);
+}
+
 function paintCompareColumn(run) {
   const facts = runFacts(run);
   const statusClass = runStatusClass(run);
@@ -1453,11 +1911,13 @@ function paintCompareColumn(run) {
     isSimOnly(facts)
       ? `<p class="meta">sim-only — not cleared for hardware</p>`
       : "";
+  const english = runEnglish(run);
   return `
     <section class="compare-col" data-compare-run="${escapeHtml(run.run_id)}">
       <h2>${escapeHtml(prettyRecipe(run.recipe))}</h2>
       <p class="meta">${escapeHtml(run.run_id)}</p>
       <p class="status-chip ${statusClass}">${escapeHtml(englishRunStatus(run))}</p>
+      ${english ? `<p class="lede">${escapeHtml(english)}</p>` : ""}
       ${metrics}
       ${simOnly}
       ${backendBadge(facts)}
@@ -1663,6 +2123,13 @@ function paintRun(run, logText) {
       ? `<p class="meta" id="sim-only-badge">sim-only — not cleared for hardware</p>`
       : "";
   const headline = englishRunStatus(run);
+  const factsEnglish = runEnglish(run);
+  const firstLocal = firstReadyRecipe();
+  const ladderNext = nextLadderRecipe(run.recipe);
+  const runPrimary =
+    typeof HTGates !== "undefined" && HTGates.decideRunPrimary
+      ? HTGates.decideRunPrimary(run, firstLocal, ladderNext)
+      : { action: "train_again", label: "Train again" };
   const readyTitles = readyRecipes(state.recipes).map((r) => r.title);
   const laterTitles = laterRecipes(state.recipes).map((r) => r.title);
   const blockedHelp =
@@ -1678,7 +2145,9 @@ function paintRun(run, logText) {
       ? "No video — this task cannot train on this computer."
       : ["queued", "running"].includes(run.status)
         ? "Video appears when training finishes."
-        : hasMetrics && (run.metrics.passed === true || run.status === "passed")
+        : facts.video === "missing"
+          ? "No eval.mp4 — the engine finished but play wrote no clip (not a headless skip). Not a stand substitute."
+          : hasMetrics && (run.metrics.passed === true || run.status === "passed")
           ? "No eval.mp4 — training scored success but rendering was skipped (headless / HT_NO_RENDER). Use a display or xvfb for a clip."
           : "No eval video. On a machine without a display, Train may still score success but skip the clip.";
   const video = run.artifacts && run.artifacts["eval.mp4"]
@@ -1686,24 +2155,40 @@ function paintRun(run, logText) {
     : `<p class="lede">${emptyVideo}</p>`;
   const videoCue =
     run.status === "blocked"
-      ? "Pick a ready task from Tasks — this one cannot train here."
+      ? firstLocal
+        ? `Try ${firstLocal.title} — this task cannot train here.`
+        : "Pick a ready task from Tasks — this one cannot train here."
       : ["queued", "running"].includes(run.status)
         ? "Training… video appears when it finishes."
-        : run.artifacts && run.artifacts["eval.mp4"]
-          ? "Watch the clip below. Train again or pick another task."
-          : "No clip this time — Train again with a display, or try another task.";
+        : ladderNext
+          ? `Watch the clip, then try ${ladderNext.title}.`
+          : run.artifacts && run.artifacts["eval.mp4"]
+            ? "Watch the clip below. Train again or pick another task."
+            : "No clip this time — Train again with a display, or try another task.";
+  const primaryRunBtn =
+    runPrimary.action === "open_ready"
+      ? `<button class="primary" id="open-ready-run">${escapeHtml(runPrimary.label)}</button>`
+      : runPrimary.action === "wait"
+        ? `<button class="primary" id="train-again" disabled>${escapeHtml(runPrimary.label)}</button>`
+        : `<button class="primary" id="train-again">${escapeHtml(runPrimary.label)}</button>`;
+  const trainAgainGhost =
+    runPrimary.action === "open_ready" && run.status !== "blocked"
+      ? `<button class="ghost" id="train-again">Train again</button>`
+      : "";
   main.innerHTML = `
     ${stepsHTML("video", { imitate: imitateRun })}
     <p class="eyebrow">Step ${imitateRun ? "4" : "3"} · Video</p>
     <h1>${escapeHtml(prettyRecipe(run.recipe))}</h1>
     <p class="status-chip ${statusClass}">${escapeHtml(headline)}</p>
+    ${factsEnglish ? `<p class="lede" id="facts-english">${escapeHtml(factsEnglish)}</p>` : ""}
     ${nextCueHTML(videoCue)}
     ${metrics}
     ${simOnly}
     ${run.error ? `<p class="error">${escapeHtml(plainError(run.error))}</p>` : ""}
     ${blockedHelp}
     <div class="actions recipe-bar">
-      <button class="primary" id="train-again">Train again</button>
+      ${primaryRunBtn}
+      ${trainAgainGhost}
       <button class="ghost" id="deploy-run" ${deployBtn.disabled ? "disabled" : ""} title="${escapeHtml(deployBtn.title)}">Deploy to robot</button>
       <button class="ghost" id="back-runs">Back to runs</button>
       <button class="ghost" id="back-tasks">Back to tasks</button>
@@ -1727,6 +2212,10 @@ function paintRun(run, logText) {
     </div>
   `;
   document.getElementById("train-again")?.addEventListener("click", trainCurrent);
+  document.getElementById("open-ready-run")?.addEventListener("click", () => {
+    if (runPrimary.recipeId) openRecipe(runPrimary.recipeId);
+    else switchView("tasks");
+  });
   document.getElementById("back-runs")?.addEventListener("click", () => switchView("runs"));
   document.getElementById("back-tasks")?.addEventListener("click", () => switchView("tasks"));
   document.getElementById("deploy-run")?.addEventListener("click", () => attemptDeploy(run.run_id));
@@ -1851,6 +2340,7 @@ async function showRun(runId) {
       run.artifacts = msg.artifacts || run.artifacts;
       if (msg.notes) run.notes = msg.notes;
       if (msg.facts) run.facts = msg.facts;
+      if (typeof msg.english === "string") run.english = msg.english;
       const logEl = document.getElementById("run-log");
       if (logEl) {
         logEl.textContent = logText;
@@ -1952,12 +2442,14 @@ function formatHealthStrip(health) {
   if (e.osmo_ready) walk.push("osmo");
   bits.push(walk.length ? `walk:${walk.join("+")}` : "walk:later");
   if (e.lerobot_ready) bits.push("ACT:ready");
+  if (e.hf_jobs_ready) bits.push("HF:ready");
   return bits.join(" · ");
 }
 
 async function boot() {
   try {
     const health = await api("/api/health");
+    state.health = health;
     document.getElementById("health").textContent = formatHealthStrip(health);
     const [recipes, robots] = await Promise.all([
       api("/api/recipes"),

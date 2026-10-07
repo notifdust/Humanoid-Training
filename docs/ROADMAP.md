@@ -11,10 +11,10 @@ Phase 2   demonstration data (LeRobot)       ← done with substitutions (linear
 Phase 2.5 recipe gold + CI videos            ← done
 Phase 3a  first real G1 walk (Playground)    ← launch path done
 Phase 3b  mjlab / Isaac G1 walk + OSMO       ← launch path done (no G1 reach env upstream)
-Phase 3c  GPU-box walk proof                 ← next (`ht proof walk`; live clip still needs a GPU)
+Phase 3c  GPU-box walk proof                 ← next live clip (`ht proof walk`; harness + preflight done)
 Phase 3d  remote harvest (OSMO / GPU queue)  ← launch path done (needs OSMO pool for live proof)
 Phase 3e  ACT on the same demos                 ← launch path done (needs GPU for live ACT)
-Phase 3f  honest G1 manipulation recipe     ← done (deleted dishonest g1-reach)
+Phase 3f  honest G1 manipulation recipe     ← done (deleted g1-reach; pinned `g1-pickplace` Isaac Robomimic)
 Phase 3g  compare two runs in Runs           ← done (side-by-side in Runs room)
 Phase 4   real G1/H1 deploy with safety gates ← gate done (live torque **not** wired)
 Phase 4b  proof/deploy honesty + Runs projects gate ← done
@@ -25,9 +25,10 @@ from the original vision’s wish list. Vision still says where the product
 is going ([VISION.md](./VISION.md)). Architecture still says how
 ([ARCHITECTURE.md](./ARCHITECTURE.md)).
 
-To **improve the CPU studio that already ships** (honesty, Train UX, copy,
-Deploy affordances) follow [BETTERMENT.md](./BETTERMENT.md) — tracks B0–B5.
-Do not mix those polish tracks with live GPU / hardware exit tests here.
+CPU-studio polish tracks B0–B5 are **done** — see [BETTERMENT.md](./BETTERMENT.md).
+For **mission alignment vs the original prompts** and the ordered next
+implementation steps (N1 = live GPU walk proof), see [NEXT.md](./NEXT.md).
+Do not mix leftover polish with live GPU / hardware exit tests here.
 
 ---
 
@@ -126,11 +127,15 @@ pass. ACT is **not** that exit test.
 | `g1-stand` | yes (CPU) | mujoco + Menagerie G1 | Stand + both-arm wave, pelvis pinned. Gold clip. |
 | `pick-and-place` | yes (CPU linear-BC; ACT on GPU+LeRobot) | lerobot / mujoco | Same demos. `facts.policy=act` or `linear-bc`. Gold clip is CPU linear-BC. |
 | `g1-walk` | yes on GPU + Playground, mjlab, or Isaac Lab; blocked on CPU | playground / mjlab / isaaclab | Walking eval from the engine that launched. No gold clip. |
+| `g1-walk-rough` | yes on GPU + mjlab or Isaac Lab; blocked on CPU | mjlab / isaaclab | Rough terrain walk. No gold clip. |
+| `g1-pickplace` | yes on GPU + Isaac Lab + `HT_ISAAC_DATASET`; blocked on CPU | isaaclab (Robomimic BC) | Pinned `Isaac-PickPlace-Locomanipulation-G1-Abs-v0`. No gold clip. |
+| `g1-pickplace-fixed` | yes on GPU + Isaac + dataset; blocked on CPU | isaaclab (Robomimic BC) | Fixed-base upper-body PickPlace. No gold clip. |
+| `g1-track` | yes on GPU + mjlab + `HT_MJLAB_MOTION`; blocked on CPU | mjlab Tracking | BeyondMimic-style; LAFAN1 Hub pin (CSV→WandB). No gold clip. |
 | Unitree H1 | catalog only | — | No recipe. Do not add one until G1 walk trains for real. |
 
 `g1-reach` was deleted in Phase 3f. There is no upstream G1 reach env
 to pin; do not invent `G1Reach-v0` / `Isaac-Reach-G1-v0`. CPU arm motion
-is `pick-and-place`.
+is `pick-and-place`. Isaac G1 PickPlace is `g1-pickplace`.
 
 Gold notes live in each `recipe.yaml`. CPU recipes also ship
 `gold/eval.mp4` + `gold/notes.md`. CI’s `gold` job retrains those recipes
@@ -290,7 +295,11 @@ an mp4. A live walking video is still the GPU-box proof.
 Do not skip ahead to ACT, grasping, or hardware while the walk path
 is still unproven on a real GPU. Each phase has an exit test.
 
-### Phase 3c — GPU-box walk proof (next)
+### Phase 3c — GPU-box walk proof (locked: awaiting live clip)
+
+**Status.** Operator harness is **done**. Live walking `eval.mp4` is
+**not done**. CPU Cloud Agents cannot close this phase — see
+[NEXT.md](./NEXT.md) operator handoff (paths A / B / C).
 
 **Exit test.** On a machine with an NVIDIA GPU:
 
@@ -299,22 +308,28 @@ pip install playground   # or mjlab / Isaac Lab
 ht proof walk
 # optional: ht proof walk --prefer mjlab
 # optional: HT_ISAAC_CLI=/path/to/isaaclab.sh ht proof walk --prefer isaaclab
+# readiness only (no train): ht proof walk --check
 ```
 
 That must write a **walking** `eval.mp4`, stamp `facts.engine` to the
-engine that ran, and the studio must Play it with a backend badge.
-`ht proof walk` fails closed on a CPU laptop (exit 12) with the next
-step — that is expected.
+engine that ran, persist `proof_3c.json` beside the run, and the studio
+must Play the video with a backend badge. `ht proof walk` fails closed on
+a CPU laptop (exit 12) with the next step — that is expected.
 
 | Deliverable | Status |
 |---|---|
 | `ht proof walk` operator command | done (harness) |
 | Short proof train + require `eval.mp4` + `facts.engine` | done (harness) |
-| Live walk clip from a real GPU box | **not done** (needs GPU) |
+| Host preflight (`assess_walk_proof_host`, `ht proof walk --check`, `GET /api/proof/walk`) | done |
+| Durable `proof_3c.json` on the run | done |
+| Studio G1 walk page projects proof readiness | done |
+| Operator handoff A/B/C in NEXT.md | done |
+| Live walk clip from a real GPU box | **not done** (needs GPU — path A or B) |
 | Still no gold walk clip checked into the repo | keep |
 
 Do **not** declare Phase 3c complete from fake-CLI unit tests alone.
 Do **not** check in a stand clip as walk gold.
+Do **not** open more CPU polish tracks while this live clip is open.
 
 ### Phase 3d — Remote harvest (OSMO / hosted GPU)
 
@@ -366,13 +381,14 @@ task id under an honest name. No invented env ids.
 | Deliverable | Status |
 |---|---|
 | Delete `recipes/g1-reach` + `spec/examples/g1-reach.json` | done |
-| Catalog `later` is only `g1-walk` on CPU | done |
+| Catalog `later` is only GPU recipes on CPU hosts | done (`g1-walk`, `g1-walk-rough`, `g1-pickplace`) |
 | Unknown `g1-reach` recipe id fails closed (`RecipeError`) | done |
 | Do not invent `G1Reach-v0` / `Isaac-Reach-G1-v0` | done |
-| Pin Isaac G1 PickPlace under a new honest recipe | **not done** (no confirmed upstream task id in-repo) |
+| Pin Isaac G1 PickPlace under a new honest recipe | done (`g1-pickplace` → `Isaac-PickPlace-Locomanipulation-G1-Abs-v0`, Robomimic workflow) |
 
-CPU arm motion stays `pick-and-place`. Add a PickPlace recipe only after
-confirming a real Isaac/mjlab task string on a GPU box.
+CPU arm motion stays `pick-and-place`. Isaac G1 PickPlace is
+`g1-pickplace` (Robomimic BC, needs `HT_ISAAC_DATASET`). Do not invent
+reach env ids.
 
 ### Phase 3g — Compare two runs (Evaluate in Runs)
 
@@ -431,7 +447,9 @@ is still unwired on purpose.
 - Finger grasping before ACT ships
 - Hardware deploy before a live walk clip exists
 
-For polish of the existing four rooms, see [BETTERMENT.md](./BETTERMENT.md).
+For completed polish of the existing four rooms, see [BETTERMENT.md](./BETTERMENT.md).
+For what to implement next and how far we drifted from the original mission,
+see [NEXT.md](./NEXT.md).
 
 ---
 

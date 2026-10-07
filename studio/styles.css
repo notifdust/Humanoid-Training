@@ -238,6 +238,21 @@ button.ghost:focus-visible,
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  #main.enter {
+    animation: none;
+  }
+}
+
 .eyebrow {
   margin: 0 0 6px;
   font-family: var(--mono);
@@ -427,6 +442,43 @@ h2 {
   margin-top: 8px;
 }
 
+.proof-block {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+}
+
+.proof-block .lede {
+  margin: 4px 0 6px;
+}
+
+.proof-block .reasons {
+  margin: 8px 0 0;
+  padding-left: 1.2em;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.proof-block .handoff-list {
+  margin: 8px 0 0;
+  padding-left: 1.2em;
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+.proof-block .handoff-list li {
+  margin: 0.55rem 0;
+}
+
+.proof-block .handoff-list code {
+  display: inline-block;
+  margin-top: 0.2rem;
+  font-size: 0.82rem;
+  word-break: break-word;
+}
+
 .status-chip {
   font-family: var(--mono);
   font-size: 12px;
@@ -558,6 +610,30 @@ button.busy:disabled {
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
   gap: 24px;
   align-items: start;
+}
+
+.pin-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.pin-item {
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.pin-item:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.pin-item p {
+  margin: 0.35rem 0 0.5rem;
+  color: var(--muted);
+  max-width: 42rem;
 }
 
 .panel {
@@ -950,6 +1026,12 @@ textarea.spec {
   color: var(--ok);
   border-color: rgba(26, 154, 92, 0.35);
   background: rgba(26, 154, 92, 0.08);
+}
+
+.steps li.skipped {
+  color: var(--muted);
+  border-style: dashed;
+  opacity: 0.85;
 }
 
 .steps li.done::after {

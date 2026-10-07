@@ -12,7 +12,8 @@ from pydantic import BaseModel, Field
 
 from humanoid_training import __version__
 from humanoid_training.catalog import load_robot_catalog
-from humanoid_training.datasets import inspect_lerobot_dataset
+from humanoid_training.datasets import inspect_lerobot_dataset, resolve_hub_motion
+from humanoid_training.hub_pins import public_hub_pins
 from humanoid_training.demos import (
     dataset_cache_dir,
     record_object_trajectories,
@@ -21,9 +22,17 @@ from humanoid_training.demos import (
 from humanoid_training.errors import AdapterUnavailable, RecipeError, SpecError, repo_root
 from humanoid_training.artifacts import SERVED_ARTIFACTS
 from humanoid_training.deploy import assess_deploy, deploy_run
+from humanoid_training.english import english_for_manifest
 from humanoid_training.recipes import default_user_spec, expand_spec, load_recipe, public_catalog
 from humanoid_training.runner import default_runs_dir, load_manifest, new_run_id, run_job, write_manifest
 from humanoid_training.spec import validate_spec
+
+
+def _with_english(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Project beginner English onto a run manifest (Runs UI contract)."""
+    out = dict(manifest)
+    out["english"] = english_for_manifest(out)
+    return out
 
 app = FastAPI(title="Humanoid Training Studio", version="0.1.0")
 
@@ -84,14 +93,85 @@ def health() -> dict[str, Any]:
     }
 
 
+@app.get("/api/proof/walk")
+def assess_walk_proof_api() -> dict[str, Any]:
+    """Phase 3c preflight: can this host prove a G1 walk? Does not train."""
+    from humanoid_training.proof import assess_walk_proof_host
+
+    return assess_walk_proof_host()
+
+
+@app.get("/api/proof/act")
+def assess_act_proof_api() -> dict[str, Any]:
+    """Phase 3e preflight: can this host launch LeRobot ACT? Does not train."""
+    from humanoid_training.readiness import assess_act_host
+
+    return assess_act_host()
+
+
+@app.get("/api/proof/osmo")
+def assess_osmo_proof_api() -> dict[str, Any]:
+    """Phase 3d preflight: can this host OSMO-harvest a walk? Does not train."""
+    from humanoid_training.readiness import assess_osmo_host
+
+    return assess_osmo_host()
+
+
+@app.get("/api/proof/hf-jobs")
+def assess_hf_jobs_proof_api() -> dict[str, Any]:
+    """HF Jobs readiness — check-only; live harvest not wired yet."""
+    from humanoid_training.readiness import assess_hf_jobs_host
+
+    return assess_hf_jobs_host()
+
+
+@app.get("/api/proof/groot")
+def assess_groot_proof_api() -> dict[str, Any]:
+    """GR00T / Arena readiness — check-only; fine-tune stays upstream."""
+    from humanoid_training.readiness import assess_groot_host
+
+    return assess_groot_host()
+
+
+@app.get("/api/proof")
+def assess_all_proof_api() -> dict[str, Any]:
+    """Bundle walk / OSMO / ACT / HF Jobs / GR00T host readiness."""
+    from humanoid_training.readiness import assess_all
+
+    return assess_all()
+
+
 @app.get("/api/robots")
 def robots() -> dict[str, Any]:
     return {"robots": load_robot_catalog()}
 
 
+@app.get("/api/datasets/pins")
+def api_dataset_pins() -> dict[str, Any]:
+    """Curated Hub pins (LAFAN1 motion, LeRobot example, GR00T-via-LeRobot path)."""
+    return public_hub_pins()
+
+
 @app.post("/api/datasets/inspect")
 def api_inspect_dataset(body: DatasetBody) -> dict[str, Any]:
     return inspect_lerobot_dataset(body.uri)
+
+
+@app.post("/api/datasets/motion")
+def api_resolve_motion(body: DatasetBody) -> dict[str, Any]:
+    """Resolve a Hub motion pin (CSV/NPZ). Never claims ACT/LeRobot train-ready."""
+    from humanoid_training.hub_pins import curated_hub_pins
+
+    uri = (body.uri or "").strip()
+    include = None
+    for pin in curated_hub_pins():
+        if pin.get("kind") != "motion":
+            continue
+        if uri in {pin.get("uri"), pin.get("id"), f"hf:{pin.get('repo_id')}"}:
+            uri = str(pin.get("uri") or uri)
+            include = pin.get("include")
+            break
+    return resolve_hub_motion(uri, include=include)
 
 
 @app.post("/api/datasets/record")
@@ -181,7 +261,7 @@ def list_runs() -> dict[str, Any]:
         manifest_path = child / "manifest.json"
         if manifest_path.is_file():
             try:
-                items.append(load_manifest(child))
+                items.append(_with_english(load_manifest(child)))
             except Exception:
                 continue
     return {"runs": items}
@@ -190,7 +270,7 @@ def list_runs() -> dict[str, Any]:
 @app.get("/api/runs/{run_id}")
 def get_run(run_id: str) -> dict[str, Any]:
     path = _find_run(run_id)
-    manifest = load_manifest(path)
+    manifest = _with_english(load_manifest(path))
     log_path = path / "run.log"
     manifest["log"] = log_path.read_text(encoding="utf-8") if log_path.is_file() else ""
     return manifest
@@ -224,6 +304,7 @@ def run_events(run_id: str):
                 "artifacts": man.get("artifacts") or {},
                 "notes": man.get("notes") or [],
                 "facts": man.get("facts") or {},
+                "english": english_for_manifest(man),
             }
             yield f"data: {json.dumps(payload)}\n\n"
             if man.get("status") not in {None, "queued", "running"}:
