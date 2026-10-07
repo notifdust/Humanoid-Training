@@ -298,7 +298,7 @@ is still unproven on a real GPU. Each phase has an exit test.
 ### Phase 3c — GPU-box walk proof (locked: awaiting live clip)
 
 **Status.** Operator harness is **done**. Live walking `eval.mp4` is
-**not done**. CPU Cloud Agents cannot close this phase — see
+**not done**. CPU-only hosts cannot close this phase — see
 [NEXT.md](./NEXT.md) operator handoff (paths A / B / C).
 
 **Exit test.** On a machine with an NVIDIA GPU:

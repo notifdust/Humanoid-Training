@@ -1,15 +1,11 @@
 # Humanoid Training
 
-A studio for training robots without making people become Isaac Lab
-experts first.
+Pick a canned task → click **Train** → watch a video.
 
-**What you do:** pick a canned task → click Train → watch a video.
-That is the product. It is Canva on top of MuJoCo / Isaac Lab, not a
-new simulator.
+A beginner studio over MuJoCo / Isaac Lab / LeRobot — not a new simulator.
+Think Canva on top of existing engines, not Photoshop.
 
-## Run it on your computer
-
-From a **new terminal**:
+## Quick start (CPU laptop)
 
 ```bash
 git clone https://github.com/notifdust/Humanoid-Training.git
@@ -18,43 +14,60 @@ chmod +x run-studio.sh
 ./run-studio.sh
 ```
 
-Then open **http://127.0.0.1:8000**. Click **Cartpole → Train**.
-Wait ~30s. Play the video. That is the loop.
+Open **http://127.0.0.1:8000** → **Cartpole → Train** → play the video (~30s).
 
-`./run-studio.sh` reuses an existing Python install when `humanoid_training`
-is already importable; otherwise it creates `.venv` (and bootstraps pip if
-`ensurepip` is missing). Override host/port with `HT_HOST` / `HT_PORT`, or
-the interpreter with `HT_PYTHON`.
+`./run-studio.sh` creates `.venv` when needed. Overrides: `HT_HOST`, `HT_PORT`, `HT_PYTHON`.
 
-Same steps by hand:
+Manual install (use a venv on Debian/Ubuntu — system pip is blocked):
 
 ```bash
-cd Humanoid-Training          # the folder that contains pyproject.toml
-python3 -m pip install -e ".[dev]"
-python3 -m humanoid_training.cli serve --host 127.0.0.1 --port 8000
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+python -m humanoid_training.cli serve --host 127.0.0.1 --port 8000
 ```
 
-Do **not** `cd /path/to/Humanoid-Training` — that was a placeholder. Do **not**
-install the Ubuntu `ht` TeX package. After `pip install -e ".[dev]"` the
-command is `ht` **or** `python3 -m humanoid_training.cli`.
-
-You need a display for eval video (MuJoCo uses GLFW). Headless:
-`HT_NO_RENDER=1 python -m humanoid_training.cli train spec/examples/cartpole-balance.json`
-still scores success; it will not write `eval.mp4`.
+Do **not** install the Ubuntu TeX package named `ht`. After install, the CLI is
+`ht` or `python -m humanoid_training.cli`.
 
 ### What to click
 
-1. **Cartpole → Train.** Pole stays up. Proves Train → video on your machine.
-2. **G1 stand → Train.** Humanoid holds a pose and waves. Not walking.
-3. **Pick and place → Train.** Mustard goes in the bowl; the arm follows. Not finger grasping.
+1. **Cartpole → Train** — pole stays up. Proves Train → video on this machine.
+2. **G1 stand → Train** — humanoid holds a pose and waves. Not walking.
+3. **Pick and place → Train** — mustard into the bowl. Not finger grasping.
 
-There is no G1 reach task — no upstream env. **G1 walk** stops on a laptop
-(needs an NVIDIA GPU and Playground, mjlab, or Isaac Lab). On a GPU box it
-launches for real — not a stand clip.
+**G1 walk** needs an NVIDIA GPU (see below). There is no G1 reach recipe.
 
-Rooms: Robots · Tasks · Data · Runs (compare two runs of the same task here). Job spec is under **Advanced**.
+Rooms: **Robots · Tasks · Data · Runs**. Job spec is under **Advanced**.
 
-### Same jobs from the CLI
+## GPU: prove a real G1 walk (Phase 3c)
+
+On a machine with an NVIDIA GPU and working network (CUDA wheels are large):
+
+```bash
+cd Humanoid-Training          # existing clone is fine
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[playground]"
+pip install "jax[cuda12]==0.9.2"   # ~1h on a slow link — one-time
+
+python -c "import jax; print(jax.__version__, jax.default_backend())"
+# want: 0.9.2 gpu
+
+python -m humanoid_training.cli proof walk --check   # want ok:true
+python -m humanoid_training.cli proof walk           # writes eval.mp4 + proof_3c.json
+```
+
+Important pins:
+
+- Bare `pip install playground` can pull **jax 0.11** (breaks brax) and a **CPU** jaxlib.
+- Always use `jax[cuda12]==0.9.2`. Confirm `default_backend()` is `gpu` before proving.
+- If the cudnn download stalls, retry with `pip install --resume-retries 50 'jax[cuda12]==0.9.2'`.
+
+Without a local GPU, use OSMO harvest or Hugging Face Jobs when credentials exist
+(`ht proof osmo` / `ht proof hf-jobs`) — that is Phase 3d, not a local walk proof.
+
+Full operator notes: [docs/NEXT.md](docs/NEXT.md).
+
+## CLI
 
 ```bash
 python -m humanoid_training.cli recipes
@@ -62,95 +75,73 @@ python -m humanoid_training.cli train spec/examples/cartpole-balance.json
 python -m humanoid_training.cli fetch-assets unitree_g1
 python -m humanoid_training.cli train spec/examples/g1-stand.json
 python -m humanoid_training.cli train spec/examples/g1-walk.json --compile-only
-python -m humanoid_training.cli train spec/examples/g1-walk.json
 python -m humanoid_training.cli train spec/examples/cartpole-balance.json --docker
 ```
 
-`--docker` is the Phase 1 container runner (CPU image in `Dockerfile`).
-GPU recipes are refused there. If Docker is missing it stops with a next
-step; in-process Train still works.
+`--docker` is the Phase 1 CPU container runner. GPU recipes are refused there.
 
-On a machine with an NVIDIA GPU (use a venv — Debian/Ubuntu block system pip):
+Eval video needs a display (MuJoCo GLFW). Headless scoring without a clip:
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[playground]"
-pip install "jax[cuda12]==0.9.2"   # brax needs jax 0.9.x; CUDA jaxlib required
-python -m humanoid_training.cli proof walk
-# or: train the full beginner spec
-python -m humanoid_training.cli train spec/examples/g1-walk.json
+HT_NO_RENDER=1 python -m humanoid_training.cli train spec/examples/cartpole-balance.json
 ```
 
-Bare `pip install playground` can pull jax 0.11 (breaks brax) and a CPU-only
-jaxlib (ignores your NVIDIA GPU). Always pin `jax[cuda12]==0.9.2`.
+Outputs live under `runs/<id>/` (`eval.mp4`, `manifest.json`). Deploy stays
+fail-closed (`ht deploy <run_id>`) until a hardware profile exists.
 
-`ht proof walk` is the Phase 3c exit command: short train, require
-`eval.mp4`, stamp `facts.engine`, write `proof_3c.json`. Without a GPU
-it exits 12 with the next step. Check readiness only with
-`ht proof walk --check`. With the OSMO CLI logged in (no local GPU),
-Train can still harvest a remote Isaac walk clip (Phase 3d).
+## Recipes
 
-### Close Phase 3c (operator)
+| Recipe | Where it runs | Result |
+|---|---|---|
+| `cartpole-balance` | CPU | Pole stays up. Gold clip in-tree. |
+| `g1-stand` | CPU | Stand + wave. Not walking. Gold clip. |
+| `pick-and-place` | CPU linear-BC; ACT on GPU+LeRobot | Mustard→bowl. Not grasping. |
+| `g1-walk` | GPU + Playground / mjlab / Isaac (or OSMO harvest) | Walking eval from the engine. No gold clip. |
+| `g1-walk-rough` | GPU + mjlab / Isaac | Rough terrain walk. No gold clip. |
+| `g1-track` | GPU + mjlab + `HT_MJLAB_MOTION` | Motion tracking (LAFAN1 Hub pin). No gold clip. |
+| `g1-pickplace` | GPU + Isaac + `HT_ISAAC_DATASET` | Locomanipulation PickPlace. No gold clip. |
+| `g1-pickplace-fixed` | GPU + Isaac + dataset | Fixed-base PickPlace. No gold clip. |
 
-CPU studio work is locked. To finish the humanoid wedge exit test, pick one:
+## Docs
 
-1. **GPU box:** venv + `pip install -e '.[playground]'` + `pip install 'jax[cuda12]==0.9.2'` → `ht proof walk` → send back the run id / `proof_3c.json`.
-2. **Self-hosted Cursor worker** on that GPU → Cloud Agent runs the same command.
-3. **No GPU:** add OSMO or `HF_TOKEN` secrets → pursue Phase 3d harvest instead.
-
-Details: [docs/NEXT.md](docs/NEXT.md) (Conclusion → Operator handoff).
-
-`ht deploy <run_id>` is the Phase 4 gate: it always fails closed until a
-passed hardware eval profile exists and a Unitree driver ships. Every
-run stays `facts.sim_only=true`.
-
-Outputs: `runs/<id>/eval.mp4` and `manifest.json`.
-
-## Read this first
-
-- **[Next](docs/NEXT.md)** — **LOCKED conclusion** + N1b operator handoff + ordered next steps
-- **[Roadmap](docs/ROADMAP.md)** — what is live, phase exit tests (GPU / hardware)
-- **[Betterment](docs/BETTERMENT.md)** — completed CPU-studio polish (B0–B5 done)
-- **[Product vision](docs/VISION.md)** — landscape and why we compile instead of replacing engines
-- **[Architecture](docs/ARCHITECTURE.md)** — job spec, adapters, runners
-
-## What works today
-
-| Recipe | What happens |
+| Doc | What it is |
 |---|---|
-| `cartpole-balance` | Gymnasium RL on CPU, eval video, gold clip |
-| `g1-stand` | MuJoCo G1 from Menagerie, stand + both-arm wave, eval video, gold clip |
-| `g1-walk` | Compile to Playground / mjlab / Isaac Lab. **Launches** the first ready engine (local GPU or OSMO harvest). |
-| `g1-walk-rough` | Rough terrain via mjlab / Isaac Lab. Needs GPU. |
-| `g1-pickplace` | Isaac Lab Mimic / Robomimic BC on `Isaac-PickPlace-Locomanipulation-G1-Abs-v0`. Needs GPU + `HT_ISAAC_DATASET`. |
-| `pick-and-place` | Demos → ACT when LeRobot+GPU; else linear-BC on mujoco. Gold clip is CPU linear-BC. Not finger grasping. |
+| [docs/NEXT.md](docs/NEXT.md) | Mission scorecard + what to do next (N1b walk proof first) |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Phase exit tests (GPU / remote / hardware) |
+| [docs/VISION.md](docs/VISION.md) | Why we compile into engines instead of replacing them |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Job spec, adapters, runners |
+| [docs/BETTERMENT.md](docs/BETTERMENT.md) | Completed CPU-studio polish (B0–B5) |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Local loop and studio gates |
 
-## Non-goals (for now)
+## Non-goals
 
-- A new physics engine
-- A new policy architecture or dataset format
-- Competing with LeLab on SO-ARM101 unboxing
-- Fleet operations (use Foxglove / Formant later)
+- A new physics engine, policy family, or dataset format
+- Competing with LeLab on SO-ARM101
+- Fleet ops (use Foxglove / Formant later)
+- Fake walk / ACT / OSMO success on CPU CI
 
 ## Tests
 
 ```bash
+source .venv/bin/activate   # if you use a venv
 pytest
-# Retrain CPU recipes and compare eval.mp4 to gold clips (needs ffmpeg + a display or xvfb):
+# Optional gold retrain (needs ffmpeg + display or xvfb):
 # HT_GOLD=1 xvfb-run -a pytest -m gold
 ```
 
 ## Troubleshooting
 
-| Symptom | What to do |
+| Symptom | Fix |
 |---|---|
-| First G1 stand train hangs / fails offline | Needs git + network once (~30MB MuJoCo Menagerie). Or `ht fetch-assets unitree_g1`. |
-| Train scores success but no `eval.mp4` | Need a display (or xvfb). Headless: `HT_NO_RENDER=1` skips the clip on purpose. |
-| Docker train says daemon / PATH missing | Install Docker and start the daemon, or use in-process Train (default). |
-| G1 walk exits 12 / “can't train here” | Expected on CPU. Needs NVIDIA GPU + Playground, mjlab, Isaac, or OSMO. Not a stand clip. |
-| Studio port already in use | `HT_PORT=8060 ./run-studio.sh` |
-
-More setup notes: [CONTRIBUTING.md](./CONTRIBUTING.md).
+| `externally-managed-environment` | Use `python3 -m venv .venv && source .venv/bin/activate` |
+| `ht` wants TeX / apt | Wrong package. Use the venv: `pip install -e .` then `ht` or `python -m humanoid_training.cli` |
+| First G1 stand hangs offline | Needs git + network once (~30MB Menagerie). Or `ht fetch-assets unitree_g1` |
+| Success but no `eval.mp4` | Need a display (or xvfb). `HT_NO_RENDER=1` skips the clip on purpose |
+| Docker train missing daemon | Start Docker, or use in-process Train (default) |
+| G1 walk exit 12 on laptop | Expected without GPU. Not a stand clip |
+| `jax … Falling back to cpu` | CUDA wheels incomplete. `pip install --resume-retries 50 'jax[cuda12]==0.9.2'` until `default_backend()` is `gpu` |
+| `device_put_replicated` AttributeError | jax too new. Pin `jax[cuda12]==0.9.2` |
+| Studio port in use | `HT_PORT=8060 ./run-studio.sh` |
 
 ## License
 

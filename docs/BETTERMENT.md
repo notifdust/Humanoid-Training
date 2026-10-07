@@ -218,8 +218,8 @@ Primary paths: `tests/`, `studio/gates.js`, `studio/app.js`, `studio/styles.css`
 
 ## How to work a betterment track
 
-1. Branch off the latest merged betterment / phase tip:
-   `cursor/betterment-bN-<slug>-197a`.
+1. Branch off the latest merged betterment / phase tip
+   (short descriptive name; keep changes small).
 2. Change the **smallest** surface that fixes the exit test (usually
    studio + one contract test). Prefer projecting server facts over
    hardcoding recipe ids in the browser.

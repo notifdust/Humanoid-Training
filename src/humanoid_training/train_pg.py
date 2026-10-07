@@ -57,14 +57,14 @@ def train_linear_policy(
     history: list[float] = []
     best = mean.reshape(obs_dim, n_act).copy()
     best_score = -1.0
-    eval_cursor = seed + 17
+    eval_seed = seed + 17
 
     for gen in range(gens):
         samples = rng.normal(mean, std, size=(pop, mean.size))
         scores = []
         for i, flat in enumerate(samples):
-            eval_cursor += 1
-            score = rollout(flat.reshape(obs_dim, n_act), eval_cursor, greedy=True)
+            eval_seed += 1
+            score = rollout(flat.reshape(obs_dim, n_act), eval_seed, greedy=True)
             scores.append(score)
             history.append(score)
         scores_arr = np.asarray(scores)

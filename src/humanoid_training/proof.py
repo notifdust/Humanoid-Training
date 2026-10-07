@@ -29,7 +29,7 @@ PROOF_REPORT_NAME = "proof_3c.json"
 def n1b_operator_handoff() -> dict[str, Any]:
     """Locked A/B/C paths to close Phase 3c. Not a live train.
 
-    CPU Cloud Agents surface this so operators know what to do next —
+    CPU-only hosts surface this so operators know what to do next —
     permissions do not create a GPU.
     """
     return {
@@ -51,12 +51,13 @@ def n1b_operator_handoff() -> dict[str, Any]:
             },
             {
                 "id": "B",
-                "title": "Self-hosted Cursor worker on a GPU machine",
+                "title": "Remote GPU host (SSH)",
                 "commands": [
-                    "cursor worker start",
-                    "# start Cloud Agent on that worker → ht proof walk",
+                    "# ssh to a machine with NVIDIA GPU + network",
+                    "cd Humanoid-Training && source .venv/bin/activate",
+                    "python -m humanoid_training.cli proof walk",
                 ],
-                "done_when": "Same as path A, harvested by the agent on the worker",
+                "done_when": "Same as path A — copy proof_3c.json / run id back",
             },
             {
                 "id": "C",

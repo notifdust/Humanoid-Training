@@ -63,7 +63,7 @@ Do not reopen:            B6 theme, more Hub pins, or fifth room until N1b lands
 
 ```bash
 cd Humanoid-Training   # existing clone is fine
-git fetch origin && git checkout cursor/n1b-jax-pin-197a   # or main after merge
+git pull
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e '.[playground]'
 pip install 'jax[cuda12]==0.9.2'   # required — bare playground pulls jax 0.11 + CPU jaxlib
@@ -71,19 +71,18 @@ python -m humanoid_training.cli proof walk --check   # want ok:true, jax backend
 python -m humanoid_training.cli proof walk
 ```
 
-Paste the run id (or `proof_3c.json`) back into the agent/PR thread so
-ROADMAP Phase 3c can flip to done.
+Paste the run id (or `proof_3c.json`) into an issue/PR so ROADMAP Phase 3c
+can flip to done.
 
-**B — Cloud Agent on a self-hosted GPU worker**
+**B — Remote GPU host over SSH**
 
-On the GPU machine: `cursor worker start`. Start a Cloud Agent on that
-worker and tell it to run `ht proof walk`.
+Same commands as A on any NVIDIA box you can reach. Copy `proof_3c.json`
+back when finished.
 
 **C — No local GPU (Phase 3d instead)**
 
-Add OSMO credentials, or `HF_TOKEN` + Hugging Face CLI, to the Cloud
-Agent environment. Ask the agent for **N2** live harvest — not a fake
-local Phase 3c.
+Add OSMO credentials, or `HF_TOKEN` + Hugging Face CLI, then pursue **N2**
+live harvest — not a fake local Phase 3c.
 
 Until A, B, or C finishes: do not mark Phase 3c done; do not check in a
 stand clip as walk gold.
@@ -338,7 +337,7 @@ Still open (needs hardware): N1b live walk, N2b OSMO live, N3b ACT live, N4b Rob
 
 ## How to use this file
 
-1. Default agent / PR focus: **N1b**, then N2–N5 in order.
+1. Default PR focus: **N1b**, then N2–N5 in order.
 2. If the environment has no GPU / OSMO / robot, ship harness fixes and
    docs honesty — do not claim the live exit test.
 3. Update [ROADMAP.md](./ROADMAP.md) status tables when an exit test is
