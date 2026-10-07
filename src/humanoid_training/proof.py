@@ -62,7 +62,8 @@ def n1b_operator_handoff() -> dict[str, Any]:
                 "title": "No local GPU — Phase 3d remote harvest",
                 "commands": [
                     "# add OSMO credentials, or HF_TOKEN + hf CLI",
-                    "ht proof osmo   # or: ht proof hf-jobs",
+                    "ht proof osmo",
+                    "ht proof hf-jobs",
                 ],
                 "done_when": "Remote eval.mp4 with facts.launch=osmo (or HF Jobs harvest)",
             },
