@@ -308,13 +308,14 @@ Still open (needs credentials / hardware): N2b OSMO live, N3b ACT live, N4b Robo
 - Finger grasping before live ACT
 - New physics / policy / dataset format / cluster product
 - Competing with LeLab on SO-ARM101
-- Another long polish-only train while N1b is still open
+- Another long polish-only train while N2 remote harvest is still open
+- Browser WASM physics / scene-editor clone (SimArena turf)
 
 ---
 
 ## How to use this file
 
-1. Default PR focus: **N1b**, then N2–N5 in order.
+1. Default PR focus: **N2b** (remote harvest), then N2c → N3–N5 in order.
 2. If the environment has no GPU / OSMO / robot, ship harness fixes and
    docs honesty — do not claim the live exit test.
 3. Update [ROADMAP.md](./ROADMAP.md) status tables when an exit test is
@@ -322,3 +323,13 @@ Still open (needs credentials / hardware): N2b OSMO live, N3b ACT live, N4b Robo
 4. Keep [BETTERMENT.md](./BETTERMENT.md) as historical polish — reopen
    only for new CPU honesty holes.
 5. After each shipped track, refresh the **Further roadmap** table above.
+6. External context (repos / papers / books): [inspiration/](./inspiration/).
+   Research implications: [inspiration/IMPLICATIONS.md](./inspiration/IMPLICATIONS.md).
+
+---
+
+## Inspiration refresh (2026-10-13)
+
+Added [docs/inspiration/](./inspiration/) after N1b closed. Review verdict:
+architecture held; live walk held; **open product hole is beginner remote
+GPU** (OSMO / HF Jobs). See IMPLICATIONS for the ordered cut.
