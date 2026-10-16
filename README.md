@@ -184,6 +184,7 @@ see [docs/NEXT.md](docs/NEXT.md).
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Phase exit tests |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Spec, adapters, runners |
 | [docs/BETTERMENT.md](docs/BETTERMENT.md) | Completed CPU polish (B0–B5) |
+| [docs/inspiration/](docs/inspiration/) | Curated repos, papers, books + implications |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Local development |
 
 ## Development
